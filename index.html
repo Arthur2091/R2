@@ -520,11 +520,15 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button id="btnExtraer" class="btn btn-primary" onclick="extraerBoleta()" disabled>✦ Extraer con IA</button>
     <button id="btnConfirmar" class="btn btn-primary" onclick="confirmarBoleta()" style="display:none;background:var(--info)">✓ Confirmar y guardar</button>
   </div>
-  <div id="boletaQueueBar" style="display:none;align-items:center;gap:12px;padding:10px 0;font-size:13px;color:var(--ink2)">
-    <div style="flex:1;background:var(--surface2);border-radius:999px;height:6px;overflow:hidden">
+  <div id="boletaQueueBar" style="display:none;flex-direction:column;gap:6px;padding:10px 0">
+    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)">
+      <span id="boletaQueueText" style="flex:1"></span>
+      <span id="boletaQueueCount" style="white-space:nowrap;font-weight:600;color:var(--ink)"></span>
+    </div>
+    <div style="background:var(--surface2);border-radius:999px;height:6px;overflow:hidden">
       <div id="boletaQueueProgress" style="height:100%;background:var(--accent);border-radius:999px;transition:width .3s;width:0%"></div>
     </div>
-    <span id="boletaQueueText" style="white-space:nowrap;min-width:120px;text-align:right"></span>
+    <div id="boletaQueueStep" style="font-size:12px;color:var(--ink3)"></div>
   </div>
   <div id="boletaDupBanner" style="display:none;margin-bottom:12px;background:#FFF7ED;border:1.5px solid var(--warn);border-radius:var(--radius);padding:12px 16px;gap:12px;align-items:center;flex-wrap:wrap;font-size:13px">
     <span id="boletaDupText" style="flex:1;color:var(--ink2)"></span>
@@ -1674,14 +1678,17 @@ async function _procesarColaBoletas(idx, ok, err) {
     return;
   }
 
+  const file = _boletaQueue[idx];
   const pct = Math.round((idx / total) * 100);
   document.getElementById('boletaQueueProgress').style.width = pct + '%';
-  document.getElementById('boletaQueueText').textContent = `Procesando ${idx + 1} de ${total}…`;
+  document.getElementById('boletaQueueText').textContent = file.name;
+  document.getElementById('boletaQueueCount').textContent = `${idx + 1} / ${total}`;
+  document.getElementById('boletaQueueStep').textContent = 'Enviando a IA…';
 
-  const file = _boletaQueue[idx];
   const result = await _extraerYGuardar(file);
   if (result) ok++; else err++;
 
+  document.getElementById('boletaQueueStep').textContent = result ? '✓ Guardada' : '✗ Error';
   document.getElementById('boletaQueueProgress').style.width = Math.round(((idx + 1) / total) * 100) + '%';
   _procesarColaBoletas(idx + 1, ok, err);
 }
