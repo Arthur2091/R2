@@ -461,6 +461,11 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewPrecios">Precios</button>
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
   </nav>
+  <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+    <button class="btn btn-outline btn-sm" onclick="exportarDatos()">↑ Exportar</button>
+    <button class="btn btn-outline btn-sm" onclick="document.getElementById('importFileInput').click()">↓ Importar</button>
+    <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importarDatos(this)">
+  </div>
 </header>
 
 <!-- INSUMOS -->
@@ -874,6 +879,43 @@ function hydrate() {
   try { proveedores = JSON.parse(localStorage.getItem('cons_proveedores') || '[]'); } catch { proveedores = []; }
   try { precios     = JSON.parse(localStorage.getItem('cons_precios')     || '[]'); } catch { precios = []; }
   try { facturas    = JSON.parse(localStorage.getItem('cons_facturas')    || '[]'); } catch { facturas = []; }
+}
+
+/* ── EXPORT / IMPORT ────────────────────────────────────────────── */
+const EXPORT_KEYS = [
+  'cons_insumos','cons_proveedores','cons_precios','cons_facturas',
+  'cons_ventas','cons_sueldos','cons_otros','cons_prod_rubros',
+  'cons_apikey','boletaArchivos','cons_mes','cons_anio'
+];
+
+function exportarDatos() {
+  const data = {};
+  EXPORT_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'consolidado-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Datos exportados correctamente', 'success');
+}
+
+function importarDatos(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      EXPORT_KEYS.forEach(k => { if (data[k] !== undefined) localStorage.setItem(k, data[k]); });
+      toast('Datos importados. Recargando…', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } catch {
+      toast('Archivo inválido', 'error');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 /* ── NAVIGATION ─────────────────────────────────────────────────── */
