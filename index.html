@@ -1490,7 +1490,9 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       .map(it => it.nombreBoleta.toLowerCase())
   );
 
-  const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(n.toLowerCase()));
+  const nuevos = nombresEnFacturas.filter(n =>
+    !yaMapados.has(n.toLowerCase())
+  );
 
   if (!nuevos.length) {
     if (!silent) toast('Todos los productos ya están dados de alta en Insumos', 'success');
@@ -1534,11 +1536,20 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     const precioSinIva   = precioReciente != null && tasaIva > 0 ? Math.round(precioReciente / (1 + tasaIva / 100) * 100) / 100 : precioReciente;
     const unidadReciente = ultimoItem?.unidad || '';
 
-    const insumoId = crypto.randomUUID();
-    insumos.push({
-      id: insumoId, nombre, unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
-      precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [],
-    });
+    const existente = insumos.find(i => i.nombre.toLowerCase() === nombre.toLowerCase());
+    let insumoId;
+    if (existente) {
+      insumoId = existente.id;
+      if (precioReciente != null) {
+        existente.precioConIVA = precioReciente;
+        existente.precioSinIVA = precioSinIva;
+      }
+      if (!existente.unidad && unidadReciente) existente.unidad = unidadReciente;
+    } else {
+      insumoId = crypto.randomUUID();
+      insumos.push({ id: insumoId, nombre, unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
+        precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
+    }
 
     // Registrar en historial de precios
     todasLasFacturas.forEach(f => {
