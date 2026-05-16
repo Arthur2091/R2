@@ -501,6 +501,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- PROVEEDORES -->
 <div id="viewProveedores" class="view">
+  <div class="toolbar" style="margin-bottom:16px">
+    <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
+  </div>
   <div id="proveedoresScreen"></div>
 </div>
 
@@ -1461,7 +1464,17 @@ function renderProveedorFacturas(provId) {
         </div>`}`;
 }
 
-function altaInsumosDesdeFacturas(provId) {
+function altaTodosLosInsumos() {
+  if (!proveedores.length) { toast('No hay proveedores cargados', 'warn'); return; }
+  let totalCreados = 0;
+  proveedores.forEach(p => { totalCreados += altaInsumosDesdeFacturas(p.id, true); });
+  persist();
+  renderInsumos();
+  renderProveedores();
+  toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', totalCreados ? 'success' : 'success');
+}
+
+function altaInsumosDesdeFacturas(provId, silent = false) {
   const prov = proveedores.find(p => p.id === provId);
   if (!prov) return;
 
@@ -1480,8 +1493,8 @@ function altaInsumosDesdeFacturas(provId) {
   const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(n.toLowerCase()));
 
   if (!nuevos.length) {
-    toast('Todos los productos ya están dados de alta en Insumos', 'success');
-    return;
+    if (!silent) toast('Todos los productos ya están dados de alta en Insumos', 'success');
+    return 0;
   }
 
   const getPrecioUnitario = (i) => {
@@ -1552,9 +1565,12 @@ function altaInsumosDesdeFacturas(provId) {
     creados++;
   });
 
-  persist();
-  renderInsumos();
-  toast(`${creados} insumo${creados !== 1 ? 's' : ''} dados de alta`, 'success');
+  if (!silent) {
+    persist();
+    renderInsumos();
+    toast(`${creados} insumo${creados !== 1 ? 's' : ''} dados de alta`, 'success');
+  }
+  return creados;
 }
 
 function renderFacturaDetalle(facturaId, provId) {
