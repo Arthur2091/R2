@@ -471,9 +471,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
     <span id="syncDot" class="sync-dot sync-idle" title="Guardado en GitHub"></span>
-    <button class="btn btn-outline btn-sm" onclick="exportarDatos()">↑ Exportar</button>
-    <button class="btn btn-outline btn-sm" onclick="document.getElementById('importFileInput').click()">↓ Importar</button>
-    <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importarDatos(this)">
+
   </div>
 </header>
 
@@ -993,19 +991,7 @@ const EXPORT_KEYS = [
   'cons_apikey','boletaArchivos','cons_mes','cons_anio'
 ];
 
-function exportarDatos() {
-  const data = {};
-  EXPORT_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'consolidado-backup-' + new Date().toISOString().slice(0,10) + '.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast('Datos exportados correctamente', 'success');
-}
-
-function importarDatos(input) {
+function _importarDatosLegacy(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
