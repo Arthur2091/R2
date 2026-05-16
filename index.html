@@ -504,12 +504,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="toolbar" style="margin-bottom:16px">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
   </div>
-  <div id="similarBanner" style="display:none;margin-bottom:12px;background:var(--surface);border:2px solid var(--warn);border-radius:var(--radius);padding:14px 16px;gap:10px;flex-wrap:wrap">
-    <div style="font-size:13px;font-weight:600;color:var(--ink);flex:0 0 100%">⚠ Producto similar encontrado</div>
-    <div id="similarText" style="font-size:13px;color:var(--ink2);flex:0 0 100%"></div>
-    <button class="btn btn-primary btn-sm" onclick="_similarCrearNuevo()">Crear nuevo</button>
-    <button class="btn btn-outline btn-sm" onclick="_similarUsarExistente()">Usar existente</button>
-  </div>
   <div id="proveedoresScreen"></div>
 </div>
 
@@ -874,6 +868,27 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </div>
 
 <div id="toast" class="toast"></div>
+
+<div id="modalSimilar" class="overlay">
+  <div class="modal" style="width:520px">
+    <h2>Producto similar encontrado</h2>
+    <p id="similarPct" style="color:var(--ink3);font-size:13px;margin-bottom:20px"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+      <div style="background:var(--bg);border:2px solid var(--warn);border-radius:var(--radius);padding:16px">
+        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Nuevo (de la boleta)</div>
+        <div id="similarNuevo" style="font-weight:600;font-size:15px"></div>
+      </div>
+      <div style="background:var(--bg);border:2px solid var(--accent);border-radius:var(--radius);padding:16px">
+        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Existente en insumos</div>
+        <div id="similarExistente" style="font-weight:600;font-size:15px"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="_similarUsarExistente()">Usar existente</button>
+      <button class="btn btn-primary" onclick="_similarCrearNuevo()">Crear nuevo</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -1474,13 +1489,14 @@ let _similarResolve = null;
 function _pedirConfirmacionSimilar(nuevo, existente, pct) {
   return new Promise(resolve => {
     _similarResolve = resolve;
-    document.getElementById('similarText').innerHTML =
-      `<b>"${nuevo}"</b> es similar a <b>"${existente}"</b> (${pct}% coincidencia). ¿Qué hacemos?`;
-    document.getElementById('similarBanner').style.display = 'flex';
+    document.getElementById('similarNuevo').textContent    = nuevo;
+    document.getElementById('similarExistente').textContent = existente;
+    document.getElementById('similarPct').textContent      = `${pct}% de coincidencia — ¿son el mismo producto?`;
+    openModal('modalSimilar');
   });
 }
-function _similarCrearNuevo()    { document.getElementById('similarBanner').style.display='none'; if(_similarResolve){_similarResolve(true);_similarResolve=null;} }
-function _similarUsarExistente() { document.getElementById('similarBanner').style.display='none'; if(_similarResolve){_similarResolve(false);_similarResolve=null;} }
+function _similarCrearNuevo()    { closeModal('modalSimilar'); if(_similarResolve){_similarResolve(true);_similarResolve=null;} }
+function _similarUsarExistente() { closeModal('modalSimilar'); if(_similarResolve){_similarResolve(false);_similarResolve=null;} }
 
 async function altaTodosLosInsumos() {
   if (!proveedores.length) { toast('No hay proveedores cargados', 'warn'); return; }
