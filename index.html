@@ -479,6 +479,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <option value="">Todas las categorías</option>
     </select>
     <button class="btn btn-outline" onclick="openModal('modalImport')">Importar Excel</button>
+    <button class="btn btn-outline" onclick="buscarDuplicados()">Buscar duplicados</button>
     <button class="btn btn-outline" onclick="clearAll()" style="color:var(--danger)">Limpiar todo</button>
     <button class="btn btn-primary" onclick="openAddModal()">+ Insumo</button>
   </div>
@@ -505,7 +506,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <div id="viewProveedores" class="view">
   <div class="toolbar" style="margin-bottom:16px">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
-    <button class="btn btn-outline" onclick="buscarDuplicados()">Buscar duplicados</button>
   </div>
   <div id="proveedoresScreen"></div>
 </div>
