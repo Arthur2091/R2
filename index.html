@@ -1641,7 +1641,7 @@ async function altaInsumosDesdeFacturas(provId, silent = false) {
   });
 
   let creados = 0;
-  nuevos.forEach(nombre => {
+  for (const nombre of nuevos) {
     const todasLasFacturas = facturas.filter(f => f.proveedorId === provId);
     const itemsConPrecio = todasLasFacturas
       .flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase()))
@@ -1702,7 +1702,7 @@ async function altaInsumosDesdeFacturas(provId, silent = false) {
       if (it) it.insumoId = insumoId;
     }
     creados++;
-  });
+  }
 
   if (!silent) {
     persist();
