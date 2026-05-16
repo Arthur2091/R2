@@ -952,6 +952,15 @@ function setSyncStatus(s) {
   dot.title = s === 'idle' ? 'Sincronizado con GitHub' : s === 'syncing' ? 'Sincronizando…' : 'Error al sincronizar';
 }
 
+function hasLocalData() {
+  return EXPORT_KEYS.some(k => {
+    const v = localStorage.getItem(k);
+    if (!v) return false;
+    try { const p = JSON.parse(v); return Array.isArray(p) ? p.length > 0 : (p && typeof p === 'object' && Object.keys(p).length > 0); }
+    catch { return !!v; }
+  });
+}
+
 async function loadFromGitHub() {
   const token = getGhToken();
   if (!token) { document.getElementById('ghBanner').style.display = 'flex'; return false; }
@@ -959,12 +968,15 @@ async function loadFromGitHub() {
     const res = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
       headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github.v3+json' }
     });
-    if (res.status === 404) return false;
+    if (res.status === 404) { if (hasLocalData()) scheduleSync(); return false; }
     if (!res.ok) { setSyncStatus('error'); return false; }
     const meta = await res.json();
     _ghSha = meta.sha;
     localStorage.setItem('cons_github_sha', _ghSha);
+    if (hasLocalData()) { scheduleSync(); return false; }
     const content = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\n/g, '')))));
+    const ghHasData = EXPORT_KEYS.some(k => { const v = content[k]; if (!v) return false; try { const p = JSON.parse(v); return Array.isArray(p) ? p.length > 0 : false; } catch { return false; } });
+    if (!ghHasData) { setSyncStatus('idle'); return false; }
     EXPORT_KEYS.forEach(k => { if (content[k] !== undefined) localStorage.setItem(k, content[k]); });
     setSyncStatus('idle');
     return true;
