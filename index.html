@@ -976,6 +976,12 @@ async function syncToGitHub() {
   if (!token) return;
   setSyncStatus('syncing');
   try {
+    if (!_ghSha) {
+      const meta = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
+        headers: { Authorization: `token ${token}` }
+      }).then(r => r.ok ? r.json() : null);
+      if (meta && meta.sha) { _ghSha = meta.sha; localStorage.setItem('cons_github_sha', _ghSha); }
+    }
     const data = {};
     EXPORT_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
     const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
@@ -997,7 +1003,18 @@ async function syncToGitHub() {
       }).then(r => r.json());
       _ghSha = meta.sha;
       localStorage.setItem('cons_github_sha', _ghSha);
-      scheduleSync();
+      const body2 = { message: 'sync: auto-save', content, sha: _ghSha };
+      const res2 = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
+        method: 'PUT',
+        headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body2)
+      });
+      if (res2.ok) {
+        const json2 = await res2.json();
+        _ghSha = json2.content.sha;
+        localStorage.setItem('cons_github_sha', _ghSha);
+        setSyncStatus('idle');
+      } else { setSyncStatus('error'); }
     } else { setSyncStatus('error'); }
   } catch { setSyncStatus('error'); }
 }
