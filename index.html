@@ -1484,7 +1484,8 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
   )];
 
   // Los que ya tienen insumo mapeado Y el insumo existe
-  const normNombre = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const limpiarNombre = s => s.replace(/^\[[^\]]*\]\s*/, '').trim();
+  const normNombre = s => limpiarNombre(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const yaMapados = new Set(
     (prov.items || [])
@@ -1547,7 +1548,7 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       if (!existente.unidad && unidadReciente) existente.unidad = unidadReciente;
     } else {
       insumoId = crypto.randomUUID();
-      insumos.push({ id: insumoId, nombre, unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
+      insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
         precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
     }
 
