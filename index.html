@@ -1484,7 +1484,7 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
   )];
 
   // Los que ya tienen insumo mapeado Y el insumo existe
-  const normNombre = s => s.toLowerCase().replace(/[.\s]+$/, '').replace(/\s+/g, ' ').trim();
+  const normNombre = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const yaMapados = new Set(
     (prov.items || [])
