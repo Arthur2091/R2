@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Consolidado — Arthur</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -439,10 +440,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .period-bar select { padding: 7px 12px; }
 
 /* SYNC DOT */
-.sync-dot { width:8px;height:8px;border-radius:50%;display:inline-block;transition:background .3s; }
-.sync-idle    { background:var(--accent); }
-.sync-syncing { background:var(--warn);animation:pulse 1s infinite; }
-.sync-error   { background:var(--danger); }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
 /* ITEM ADD FORM */
@@ -470,7 +467,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-    <span id="syncDot" class="sync-dot sync-idle" title="Guardado en GitHub"></span>
 
   </div>
 </header>
@@ -509,6 +505,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <div id="viewProveedores" class="view">
   <div class="toolbar" style="margin-bottom:16px">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
+    <button class="btn btn-outline" onclick="buscarDuplicados()">Buscar duplicados</button>
   </div>
   <div id="proveedoresScreen"></div>
 </div>
@@ -875,23 +872,25 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <div id="toast" class="toast"></div>
 
-<div id="modalSimilar" class="overlay">
-  <div class="modal" style="width:520px">
-    <h2>Producto similar encontrado</h2>
-    <p id="similarPct" style="color:var(--ink3);font-size:13px;margin-bottom:20px"></p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
-      <div style="background:var(--bg);border:2px solid var(--warn);border-radius:var(--radius);padding:16px">
-        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Nuevo (de la boleta)</div>
-        <div id="similarNuevo" style="font-weight:600;font-size:15px"></div>
+<div id="modalDuplicados" class="overlay">
+  <div class="modal" style="width:560px">
+    <h2>Insumos similares</h2>
+    <p id="dupCounter" style="color:var(--ink3);font-size:13px;margin-bottom:16px"></p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div id="dupCardA" style="background:var(--bg);border:2px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:border-color .15s" onclick="_dupSeleccionar('a')">
+        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Insumo A</div>
+        <div id="dupNombreA" style="font-weight:600;font-size:15px;margin-bottom:6px"></div>
+        <div id="dupPrecioA" style="font-size:12px;color:var(--ink2)"></div>
       </div>
-      <div style="background:var(--bg);border:2px solid var(--accent);border-radius:var(--radius);padding:16px">
-        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Existente en insumos</div>
-        <div id="similarExistente" style="font-weight:600;font-size:15px"></div>
+      <div id="dupCardB" style="background:var(--bg);border:2px solid var(--border);border-radius:var(--radius);padding:16px;cursor:pointer;transition:border-color .15s" onclick="_dupSeleccionar('b')">
+        <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Insumo B</div>
+        <div id="dupNombreB" style="font-weight:600;font-size:15px;margin-bottom:6px"></div>
+        <div id="dupPrecioB" style="font-size:12px;color:var(--ink2)"></div>
       </div>
     </div>
+    <p style="font-size:12px;color:var(--ink3);margin-bottom:16px">Hacé clic en el que querés <strong>conservar</strong>. El otro se fusiona en ese.</p>
     <div class="modal-actions">
-      <button class="btn btn-outline" onclick="_similarUsarExistente()">Usar existente</button>
-      <button class="btn btn-primary" onclick="_similarCrearNuevo()">Crear nuevo</button>
+      <button class="btn btn-outline" onclick="_dupSaltar()">Son distintos, saltar</button>
     </div>
   </div>
 </div>
@@ -910,7 +909,6 @@ function persist() {
   localStorage.setItem('cons_proveedores', JSON.stringify(proveedores));
   localStorage.setItem('cons_precios',     JSON.stringify(precios));
   localStorage.setItem('cons_facturas',    JSON.stringify(facturas));
-  scheduleSync();
 }
 
 function hydrate() {
@@ -921,68 +919,6 @@ function hydrate() {
 }
 
 
-/* ── GITHUB SYNC ─────────────────────────────────────────────── */
-const GH_REPO = 'arthur2091/R2';
-const GH_FILE = '_data/consolidado.json';
-const GH_API  = 'https://api.github.com';
-let _syncTimer = null;
-
-function getGhToken() { return localStorage.getItem('cons_github_token') || ''; }
-
-function setSyncStatus(s) {
-  const dot = document.getElementById('syncDot');
-  if (!dot) return;
-  dot.className = 'sync-dot sync-' + s;
-  dot.title = { idle:'Guardado en GitHub', syncing:'Guardando…', error:'Error al guardar' }[s] || s;
-}
-
-async function syncToGitHub() {
-  const token = getGhToken();
-  if (!token || location.protocol !== 'https:') return;
-  setSyncStatus('syncing');
-  try {
-    const metaRes = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
-      headers: { Authorization: `token ${token}` }
-    });
-    const currentSha = metaRes.ok ? (await metaRes.json()).sha : null;
-    const data = {};
-    EXPORT_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
-    const body = { message: 'sync: auto-save', content };
-    if (currentSha) body.sha = currentSha;
-    const res = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
-      method: 'PUT',
-      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (res.ok) { setSyncStatus('idle'); }
-    else { console.error('sync failed:', res.status); setSyncStatus('error'); }
-  } catch(e) { console.error('sync error:', e); setSyncStatus('error'); }
-}
-
-function scheduleSync() {
-  setSyncStatus('syncing');
-  clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(syncToGitHub, 3000);
-}
-
-async function loadFromGitHub() {
-  const token = getGhToken();
-  if (!token || location.protocol !== 'https:') return false;
-  try {
-    const res = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
-      headers: { Authorization: `token ${token}` }
-    });
-    if (!res.ok) return false;
-    const meta = await res.json();
-    const content = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))));
-    const hasData = EXPORT_KEYS.some(k => { try { const p=JSON.parse(content[k]||'null'); return Array.isArray(p)?p.length>0:false; } catch{return false;} });
-    if (!hasData) return false;
-    EXPORT_KEYS.forEach(k => { if (content[k] !== undefined) localStorage.setItem(k, content[k]); });
-    setSyncStatus('idle');
-    return true;
-  } catch { return false; }
-}
 
 /* ── EXPORT / IMPORT ────────────────────────────────────────────── */
 const EXPORT_KEYS = [
@@ -1543,128 +1479,160 @@ function renderProveedorFacturas(provId) {
         </div>`}`;
 }
 
-let _similarResolve = null;
-function _pedirConfirmacionSimilar(nuevo, existente, pct) {
-  return new Promise(resolve => {
-    _similarResolve = resolve;
-    document.getElementById('similarNuevo').textContent    = nuevo;
-    document.getElementById('similarExistente').textContent = existente;
-    document.getElementById('similarPct').textContent      = `${pct}% de coincidencia — ¿son el mismo producto?`;
-    openModal('modalSimilar');
-  });
-}
-function _similarCrearNuevo()    { closeModal('modalSimilar'); if(_similarResolve){_similarResolve(true);_similarResolve=null;} }
-function _similarUsarExistente() { closeModal('modalSimilar'); if(_similarResolve){_similarResolve(false);_similarResolve=null;} }
+/* ── BUSCAR DUPLICADOS ──────────────────────────────────────────── */
+let _dupPares   = [];
+let _dupIdx     = 0;
+let _dupResolve = null;
 
-async function altaTodosLosInsumos() {
+const _normSim = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+const _normEx  = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+const _jaccard = (a, b) => {
+  const wa = new Set(_normSim(a).split(/\s+/).filter(Boolean));
+  const wb = new Set(_normSim(b).split(/\s+/).filter(Boolean));
+  const inter = [...wa].filter(x => wb.has(x)).length;
+  const union = new Set([...wa, ...wb]).size;
+  return union ? inter / union : 0;
+};
+
+function buscarDuplicados() {
+  if (insumos.length < 2) { toast('No hay suficientes insumos para comparar', 'warn'); return; }
+  _dupPares = [];
+  const vistos = new Set();
+  for (let i = 0; i < insumos.length; i++) {
+    for (let j = i + 1; j < insumos.length; j++) {
+      const a = insumos[i], b = insumos[j];
+      if (_normEx(a.nombre) === _normEx(b.nombre)) continue;
+      const key = [a.id, b.id].sort().join('|');
+      if (vistos.has(key)) continue;
+      const pct = _jaccard(a.nombre, b.nombre);
+      if (pct >= 0.6) { _dupPares.push({ a, b, pct: Math.round(pct * 100) }); vistos.add(key); }
+    }
+  }
+  if (!_dupPares.length) { toast('No se encontraron insumos similares', 'success'); return; }
+  _dupIdx = 0;
+  _dupMostrar();
+}
+
+function _dupMostrar() {
+  if (_dupIdx >= _dupPares.length) {
+    closeModal('modalDuplicados');
+    persist(); renderInsumos();
+    toast('Revisión de duplicados terminada', 'success');
+    return;
+  }
+  const { a, b, pct } = _dupPares[_dupIdx];
+  document.getElementById('dupCounter').textContent  = `Par ${_dupIdx + 1} de ${_dupPares.length} — ${pct}% similitud`;
+  document.getElementById('dupNombreA').textContent  = a.nombre;
+  document.getElementById('dupPrecioA').textContent  = a.precioConIVA ? `$${a.precioConIVA}` : 'Sin precio';
+  document.getElementById('dupNombreB').textContent  = b.nombre;
+  document.getElementById('dupPrecioB').textContent  = b.precioConIVA ? `$${b.precioConIVA}` : 'Sin precio';
+  document.getElementById('dupCardA').style.borderColor = 'var(--border)';
+  document.getElementById('dupCardB').style.borderColor = 'var(--border)';
+  openModal('modalDuplicados');
+}
+
+function _dupSeleccionar(cual) {
+  const { a, b } = _dupPares[_dupIdx];
+  const conservar = cual === 'a' ? a : b;
+  const eliminar  = cual === 'a' ? b : a;
+  document.getElementById(cual === 'a' ? 'dupCardA' : 'dupCardB').style.borderColor = 'var(--accent)';
+
+  // Redirigir todas las referencias del eliminado al conservado
+  proveedores.forEach(p => {
+    (p.items || []).forEach(it => { if (it.insumoId === eliminar.id) it.insumoId = conservar.id; });
+  });
+  precios.forEach(pr => { if (pr.insumoId === eliminar.id) pr.insumoId = conservar.id; });
+
+  // Conservar el mejor precio
+  if (eliminar.precioConIVA && (!conservar.precioConIVA || eliminar.precioConIVA > conservar.precioConIVA)) {
+    conservar.precioConIVA = eliminar.precioConIVA;
+    conservar.precioSinIVA = eliminar.precioSinIVA;
+  }
+  if (!conservar.unidad && eliminar.unidad) conservar.unidad = eliminar.unidad;
+
+  // Eliminar el insumo fusionado
+  const idx = insumos.findIndex(i => i.id === eliminar.id);
+  if (idx !== -1) insumos.splice(idx, 1);
+
+  // Filtrar pares que ya no aplican
+  _dupPares = _dupPares.filter((p, i) => i !== _dupIdx && p.a.id !== eliminar.id && p.b.id !== eliminar.id);
+
+  setTimeout(() => _dupMostrar(), 200);
+}
+
+function _dupSaltar() {
+  _dupIdx++;
+  _dupMostrar();
+}
+
+function altaTodosLosInsumos() {
   if (!proveedores.length) { toast('No hay proveedores cargados', 'warn'); return; }
   let totalCreados = 0;
-  for (const p of proveedores) { totalCreados += await altaInsumosDesdeFacturas(p.id, true); }
+  for (const p of proveedores) { totalCreados += altaInsumosDesdeFacturas(p.id, true); }
   persist();
   renderInsumos();
   renderProveedores();
   toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', 'success');
 }
 
-async function altaInsumosDesdeFacturas(provId, silent = false) {
+function altaInsumosDesdeFacturas(provId, silent = false) {
   const prov = proveedores.find(p => p.id === provId);
-  if (!prov) return;
+  if (!prov) return 0;
 
-  // Todos los nombres únicos de las facturas de este proveedor
-  const nombresEnFacturas = [...new Set(
-    facturas.filter(f => f.proveedorId === provId).flatMap(f => f.items.map(i => i.nombre)).filter(Boolean)
-  )];
+  const limpiar  = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim();
+  const norm     = s => limpiar(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  // Los que ya tienen insumo mapeado Y el insumo existe
-  const limpiarNombre = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim();
-  const normNombre = s => limpiarNombre(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-  const normSim = s => limpiarNombre(s).toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-  const similaridad = (a, b) => {
-    const wa = new Set(normSim(a).split(/\s+/).filter(Boolean));
-    const wb = new Set(normSim(b).split(/\s+/).filter(Boolean));
-    const inter = [...wa].filter(x => wb.has(x)).length;
-    const union = new Set([...wa, ...wb]).size;
-    return union ? inter / union : 0;
-  };
-  const insumosDelProv = (prov.items || []).map(it => insumos.find(i => i.id === it.insumoId)).filter(Boolean);
-
-  const yaMapados = new Set(
-    (prov.items || [])
-      .filter(it => it.insumoId && insumos.some(i => i.id === it.insumoId))
-      .map(it => normNombre(it.nombreBoleta))
-  );
-
-  const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(normNombre(n)));
-
-  if (!nuevos.length) {
-    if (!silent) toast('Todos los productos ya están dados de alta en Insumos', 'success');
-    return 0;
-  }
-
-  const getPrecioUnitario = (i) => {
+  const getPrecio = i => {
     if (i.precio_unitario != null && i.precio_unitario > 0) return i.precio_unitario;
     if (i.precio_total != null && i.cantidad > 0) return i.precio_total / i.cantidad;
     if (i.precio_total != null) return i.precio_total;
     return null;
   };
 
-  // Parchear insumos existentes sin precio
-  (prov.items || []).forEach(it => {
-    if (!it.insumoId) return;
-    const ins = insumos.find(i => i.id === it.insumoId);
-    if (!ins) return;
-    const itemsFactura = facturas
-      .filter(f => f.proveedorId === provId)
-      .flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === it.nombreBoleta?.toLowerCase()));
-    const conPrecio = itemsFactura.filter(i => getPrecioUnitario(i) != null);
-    if (conPrecio.length) {
-      const ultimo = conPrecio[conPrecio.length - 1];
-      const tasa   = ultimo.iva ?? 21;
-      ins.precioConIVA = getPrecioUnitario(ultimo);
-      ins.precioSinIVA = tasa > 0 ? Math.round(ins.precioConIVA / (1 + tasa / 100) * 100) / 100 : ins.precioConIVA;
-      if (!ins.unidad) ins.unidad = ultimo.unidad || '';
-    }
-  });
+  const nombresEnFacturas = [...new Set(
+    facturas.filter(f => f.proveedorId === provId).flatMap(f => f.items.map(i => i.nombre)).filter(Boolean)
+  )];
+
+  const yaMapados = new Set(
+    (prov.items || [])
+      .filter(it => it.insumoId && insumos.some(i => i.id === it.insumoId))
+      .map(it => norm(it.nombreBoleta))
+  );
+
+  const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(norm(n)));
+  if (!nuevos.length) {
+    if (!silent) toast('Todos los productos ya están dados de alta', 'success');
+    return 0;
+  }
 
   let creados = 0;
+  const todasLasFacturas = facturas.filter(f => f.proveedorId === provId);
+
   for (const nombre of nuevos) {
-    const todasLasFacturas = facturas.filter(f => f.proveedorId === provId);
     const itemsConPrecio = todasLasFacturas
       .flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase()))
-      .filter(i => getPrecioUnitario(i) != null);
-    const ultimoItem     = itemsConPrecio.length ? itemsConPrecio[itemsConPrecio.length - 1] : null;
-    const precioReciente = ultimoItem ? getPrecioUnitario(ultimoItem) : null;
-    const tasaIva        = ultimoItem?.iva ?? 21;
-    const precioSinIva   = precioReciente != null && tasaIva > 0 ? Math.round(precioReciente / (1 + tasaIva / 100) * 100) / 100 : precioReciente;
-    const unidadReciente = ultimoItem?.unidad || '';
+      .filter(i => getPrecio(i) != null);
+    const ultimo       = itemsConPrecio[itemsConPrecio.length - 1] ?? null;
+    const precioConIVA = ultimo ? getPrecio(ultimo) : null;
+    const tasa         = ultimo?.iva ?? 21;
+    const precioSinIVA = precioConIVA != null && tasa > 0 ? Math.round(precioConIVA / (1 + tasa / 100) * 100) / 100 : precioConIVA;
+    const unidad       = ultimo?.unidad || '';
 
-    const exacto = insumos.find(i => normNombre(i.nombre) === normNombre(nombre));
+    // Reusar si ya existe exacto globalmente
     let insumoId;
+    const exacto = insumos.find(i => norm(i.nombre) === norm(nombre));
     if (exacto) {
       insumoId = exacto.id;
-      if (precioReciente != null) { exacto.precioConIVA = precioReciente; exacto.precioSinIVA = precioSinIva; }
-      if (!exacto.unidad && unidadReciente) exacto.unidad = unidadReciente;
+      if (precioConIVA != null) { exacto.precioConIVA = precioConIVA; exacto.precioSinIVA = precioSinIVA; }
+      if (!exacto.unidad && unidad) exacto.unidad = unidad;
     } else {
-      const similar = insumosDelProv.find(i => normNombre(i.nombre) !== normNombre(nombre) && similaridad(i.nombre, nombre) >= 0.6);
-      if (similar) {
-        const pct = Math.round(similaridad(similar.nombre, nombre) * 100);
-        const crear = await _pedirConfirmacionSimilar(limpiarNombre(nombre), similar.nombre, pct);
-        if (!crear) {
-          insumoId = similar.id;
-          if (precioReciente != null) { similar.precioConIVA = precioReciente; similar.precioSinIVA = precioSinIva; }
-        } else {
-          insumoId = crypto.randomUUID();
-          insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
-            precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
-        }
-      } else {
-        insumoId = crypto.randomUUID();
-        insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
-          precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
-      }
+      insumoId = crypto.randomUUID();
+      insumos.push({ id: insumoId, nombre: limpiar(nombre), unidad, categoria: 'SIN CATEGORÍA',
+        precioConIVA, precioSinIVA, observaciones: '', aliases: [] });
+      creados++;
     }
 
-    // Registrar en historial de precios
+    // Historial de precios
     todasLasFacturas.forEach(f => {
       f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase() && i.precio_unitario != null).forEach(i => {
         precios.push({
@@ -1678,15 +1646,14 @@ async function altaInsumosDesdeFacturas(provId, silent = false) {
       });
     });
 
-    // Mapear en el proveedor
-    const existe = prov.items.some(it => normNombre(it.nombreBoleta) === normNombre(nombre));
+    // Mapear en proveedor
+    const existe = prov.items.some(it => norm(it.nombreBoleta) === norm(nombre));
     if (!existe) {
       prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: '' });
     } else {
-      const it = prov.items.find(it => normNombre(it.nombreBoleta) === normNombre(nombre));
+      const it = prov.items.find(it => norm(it.nombreBoleta) === norm(nombre));
       if (it) it.insumoId = insumoId;
     }
-    creados++;
   }
 
   if (!silent) {
@@ -2386,7 +2353,6 @@ function persistContable() {
   localStorage.setItem('cons_sueldos',        JSON.stringify(sueldos));
   localStorage.setItem('cons_otros',          JSON.stringify(otrosEgresos));
   localStorage.setItem('cons_prod_rubros',    JSON.stringify(productosRubros));
-  scheduleSync();
 }
 function hydrateContable() {
   try { ventas          = JSON.parse(localStorage.getItem('cons_ventas')       || '[]'); } catch { ventas = []; }
@@ -2967,14 +2933,10 @@ function deleteEgreso(id) {
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
-(async () => {
-  const loaded = await loadFromGitHub();
-  hydrate();
-  hydrateContable();
-  renderInsumos();
-  renderProveedores();
-  if (loaded) toast('Datos cargados desde GitHub ✓', 'success');
-})();
+hydrate();
+hydrateContable();
+renderInsumos();
+renderProveedores();
 </script>
 </body>
 </html>
