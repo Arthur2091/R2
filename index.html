@@ -1501,11 +1501,15 @@ function buscarDuplicados() {
   for (let i = 0; i < insumos.length; i++) {
     for (let j = i + 1; j < insumos.length; j++) {
       const a = insumos[i], b = insumos[j];
-      if (_normEx(a.nombre) === _normEx(b.nombre)) continue;
       const key = [a.id, b.id].sort().join('|');
       if (vistos.has(key)) continue;
-      const pct = _jaccard(a.nombre, b.nombre);
-      if (pct >= 0.6) { _dupPares.push({ a, b, pct: Math.round(pct * 100) }); vistos.add(key); }
+      vistos.add(key);
+      if (_normEx(a.nombre) === _normEx(b.nombre)) {
+        _dupPares.push({ a, b, pct: 100 });
+      } else {
+        const pct = _jaccard(a.nombre, b.nombre);
+        if (pct >= 0.5) _dupPares.push({ a, b, pct: Math.round(pct * 100) });
+      }
     }
   }
   if (!_dupPares.length) { toast('No se encontraron insumos similares', 'success'); return; }
@@ -2296,10 +2300,12 @@ function confirmarBoleta() {
         const sumaNuevos = itemsNuevos.reduce((acc, i) => acc + (Number(i.precio_total) || 0), 0);
         if (sumaNuevos > 0) existente.importeTotal = (existente.importeTotal || 0) + sumaNuevos;
       }
+      const creados = altaInsumosDesdeFacturas(_boletaProvId, true);
       persist(); renderInsumos(); renderProveedores(); renderBoletaHistorial();
       const msg = [
         itemsNuevos.length ? `${itemsNuevos.length} ítem${itemsNuevos.length !== 1 ? 's' : ''} agregado${itemsNuevos.length !== 1 ? 's' : ''}` : '',
         itemsActualizados.length ? `${itemsActualizados.length} precio${itemsActualizados.length !== 1 ? 's' : ''} actualizado${itemsActualizados.length !== 1 ? 's' : ''}` : '',
+        creados ? `${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta` : '',
       ].filter(Boolean).join(' · ');
       toast(msg, 'success');
       resetBoleta();
@@ -2324,8 +2330,9 @@ function confirmarBoleta() {
 
   if (_boletaFotoNombre) _registrarArchivoSubido(_boletaFotoNombre);
 
+  const creados = altaInsumosDesdeFacturas(_boletaProvId, true);
   persist(); renderInsumos(); renderProveedores(); renderBoletaHistorial();
-  toast(`Factura guardada — ${itemsFactura.length} ítems`, 'success');
+  toast(`Factura guardada — ${itemsFactura.length} ítems${creados ? ` · ${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta` : ''}`, 'success');
   resetBoleta();
 }
 
