@@ -535,11 +535,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-sm" style="background:var(--warn);color:#fff" onclick="_confirmarDuplicado()">Subir igual</button>
     <button class="btn btn-sm btn-outline" onclick="_cancelarDuplicado()">Cancelar</button>
   </div>
-  <div id="boletaNewProvBanner" style="display:none;margin-bottom:12px;background:var(--surface);border:2px solid var(--info);border-radius:var(--radius);padding:14px 16px;gap:12px;align-items:center;flex-wrap:wrap">
-    <div style="font-size:13px;color:var(--ink2);flex:0 0 100%">⏸ Cola pausada — proveedor nuevo detectado. Confirmá el nombre antes de continuar:</div>
-    <input id="boletaNewProvInput" type="text" style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none">
-    <button class="btn btn-primary" style="background:var(--info)" onclick="_confirmarNuevoProv()">✓ Dar de alta y continuar</button>
-    <button class="btn btn-outline" onclick="_saltearBoleta()">Saltear esta boleta</button>
+  <div id="boletaNewProvBanner" style="display:none;margin-bottom:12px;background:var(--surface);border:2px solid var(--info);border-radius:var(--radius);padding:14px 16px;gap:10px;align-items:center;flex-wrap:wrap">
+    <div style="font-size:13px;color:var(--ink2);flex:0 0 100%">⏸ Cola pausada — proveedor no reconocido. Asigná a uno existente o confirmá el nombre nuevo:</div>
+    <select id="boletaProvSelect" style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none" onchange="_onProvSelectChange()">
+      <option value="">— Crear nuevo —</option>
+    </select>
+    <input id="boletaNewProvInput" type="text" style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none" placeholder="Nombre del proveedor nuevo">
+    <button class="btn btn-primary" style="background:var(--info)" onclick="_confirmarNuevoProv()">✓ Confirmar y continuar</button>
+    <button class="btn btn-outline" onclick="_saltearBoleta()">Saltear</button>
   </div>
 
   <div id="boletaDetected" style="display:none;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;display:none;gap:16px;align-items:center;flex-wrap:wrap">
@@ -1771,13 +1774,15 @@ Si no podés leer algún campo con certeza, ponés null.`;
   const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   let prov = proveedores.find(p => norm(p.nombre).includes(norm(parsed.proveedor)) || norm(parsed.proveedor).includes(norm(p.nombre)));
   if (!prov) {
-    let nombreConfirmado;
-    try {
-      nombreConfirmado = await _pedirNuevoProv(parsed.proveedor);
-    } catch { return false; }
-    prov = { id: crypto.randomUUID(), nombre: nombreConfirmado.toUpperCase(), telefono: '', email: '', notas: '', pago: 'transferencia', items: [] };
-    proveedores.push(prov);
-    toast(`Proveedor "${prov.nombre}" dado de alta`, 'success');
+    let confirmado;
+    try { confirmado = await _pedirNuevoProv(parsed.proveedor); } catch { return false; }
+    if (confirmado && typeof confirmado === 'object' && confirmado.id) {
+      prov = proveedores.find(p => p.id === confirmado.id);
+    } else {
+      prov = { id: crypto.randomUUID(), nombre: String(confirmado).toUpperCase(), telefono: '', email: '', notas: '', pago: 'transferencia', items: [] };
+      proveedores.push(prov);
+      toast(`Proveedor "${prov.nombre}" dado de alta`, 'success');
+    }
   }
 
   const itemsFactura = parsed.items.map(item => {
@@ -1823,17 +1828,32 @@ function _pedirNuevoProv(nombreDetectado) {
   return new Promise((resolve, reject) => {
     _boletaProvResolve = resolve;
     _boletaProvReject  = reject;
+    const sel = document.getElementById('boletaProvSelect');
+    sel.innerHTML = '<option value="">— Crear nuevo —</option>';
+    [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
+      .forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.nombre; sel.appendChild(o); });
+    sel.value = '';
     document.getElementById('boletaNewProvInput').value = nombreDetectado || '';
+    document.getElementById('boletaNewProvInput').style.display = '';
     document.getElementById('boletaNewProvBanner').style.display = 'flex';
     document.getElementById('boletaQueueText').textContent = 'En espera…';
   });
 }
 
+function _onProvSelectChange() {
+  const sel = document.getElementById('boletaProvSelect');
+  document.getElementById('boletaNewProvInput').style.display = sel.value ? 'none' : '';
+}
+
 function _confirmarNuevoProv() {
+  const sel    = document.getElementById('boletaProvSelect');
   const nombre = document.getElementById('boletaNewProvInput').value.trim();
-  if (!nombre) { toast('Ingresá un nombre', 'error'); return; }
+  if (!sel.value && !nombre) { toast('Seleccioná un proveedor o ingresá un nombre nuevo', 'error'); return; }
   document.getElementById('boletaNewProvBanner').style.display = 'none';
-  if (_boletaProvResolve) { _boletaProvResolve(nombre); _boletaProvResolve = null; }
+  if (_boletaProvResolve) {
+    _boletaProvResolve(sel.value ? { id: sel.value } : nombre);
+    _boletaProvResolve = null;
+  }
 }
 
 function _saltearBoleta() {
