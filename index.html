@@ -438,6 +438,13 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .period-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; }
 .period-bar select { padding: 7px 12px; }
 
+/* SYNC DOT */
+.sync-dot { width:8px;height:8px;border-radius:50%;display:inline-block;transition:background .3s; }
+.sync-idle    { background:var(--accent); }
+.sync-syncing { background:var(--warn);animation:pulse 1s infinite; }
+.sync-error   { background:var(--danger); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
 /* ITEM ADD FORM */
 .item-form {
   background: var(--bg);
@@ -462,7 +469,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewPrecios">Precios</button>
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
   </nav>
-  <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <span id="syncDot" class="sync-dot sync-idle" title="Guardado en GitHub"></span>
     <button class="btn btn-outline btn-sm" onclick="exportarDatos()">↑ Exportar</button>
     <button class="btn btn-outline btn-sm" onclick="document.getElementById('importFileInput').click()">↓ Importar</button>
     <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importarDatos(this)">
@@ -904,6 +912,7 @@ function persist() {
   localStorage.setItem('cons_proveedores', JSON.stringify(proveedores));
   localStorage.setItem('cons_precios',     JSON.stringify(precios));
   localStorage.setItem('cons_facturas',    JSON.stringify(facturas));
+  scheduleSync();
 }
 
 function hydrate() {
@@ -913,6 +922,69 @@ function hydrate() {
   try { facturas    = JSON.parse(localStorage.getItem('cons_facturas')    || '[]'); } catch { facturas = []; }
 }
 
+
+/* ── GITHUB SYNC ─────────────────────────────────────────────── */
+const GH_REPO = 'arthur2091/R2';
+const GH_FILE = '_data/consolidado.json';
+const GH_API  = 'https://api.github.com';
+let _syncTimer = null;
+
+function getGhToken() { return localStorage.getItem('cons_github_token') || ''; }
+
+function setSyncStatus(s) {
+  const dot = document.getElementById('syncDot');
+  if (!dot) return;
+  dot.className = 'sync-dot sync-' + s;
+  dot.title = { idle:'Guardado en GitHub', syncing:'Guardando…', error:'Error al guardar' }[s] || s;
+}
+
+async function syncToGitHub() {
+  const token = getGhToken();
+  if (!token || location.protocol !== 'https:') return;
+  setSyncStatus('syncing');
+  try {
+    const metaRes = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
+      headers: { Authorization: `token ${token}` }
+    });
+    const currentSha = metaRes.ok ? (await metaRes.json()).sha : null;
+    const data = {};
+    EXPORT_KEYS.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    const body = { message: 'sync: auto-save', content };
+    if (currentSha) body.sha = currentSha;
+    const res = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
+      method: 'PUT',
+      headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) { setSyncStatus('idle'); }
+    else { console.error('sync failed:', res.status); setSyncStatus('error'); }
+  } catch(e) { console.error('sync error:', e); setSyncStatus('error'); }
+}
+
+function scheduleSync() {
+  setSyncStatus('syncing');
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(syncToGitHub, 3000);
+}
+
+async function loadFromGitHub() {
+  const token = getGhToken();
+  if (!token || location.protocol !== 'https:') return false;
+  try {
+    const res = await fetch(`${GH_API}/repos/${GH_REPO}/contents/${GH_FILE}`, {
+      headers: { Authorization: `token ${token}` }
+    });
+    if (!res.ok) return false;
+    const meta = await res.json();
+    const content = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\n/g,'')))));
+    const hasData = EXPORT_KEYS.some(k => { try { const p=JSON.parse(content[k]||'null'); return Array.isArray(p)?p.length>0:false; } catch{return false;} });
+    if (!hasData) return false;
+    EXPORT_KEYS.forEach(k => { if (content[k] !== undefined) localStorage.setItem(k, content[k]); });
+    setSyncStatus('idle');
+    return true;
+  } catch { return false; }
+}
 
 /* ── EXPORT / IMPORT ────────────────────────────────────────────── */
 const EXPORT_KEYS = [
@@ -2329,6 +2401,7 @@ function persistContable() {
   localStorage.setItem('cons_sueldos',        JSON.stringify(sueldos));
   localStorage.setItem('cons_otros',          JSON.stringify(otrosEgresos));
   localStorage.setItem('cons_prod_rubros',    JSON.stringify(productosRubros));
+  scheduleSync();
 }
 function hydrateContable() {
   try { ventas          = JSON.parse(localStorage.getItem('cons_ventas')       || '[]'); } catch { ventas = []; }
@@ -2909,10 +2982,14 @@ function deleteEgreso(id) {
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
-hydrate();
-hydrateContable();
-renderInsumos();
-renderProveedores();
+(async () => {
+  const loaded = await loadFromGitHub();
+  hydrate();
+  hydrateContable();
+  renderInsumos();
+  renderProveedores();
+  if (loaded) toast('Datos cargados desde GitHub ✓', 'success');
+})();
 </script>
 </body>
 </html>
