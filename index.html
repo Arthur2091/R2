@@ -1410,15 +1410,28 @@ function renderProveedores() {
       ${lista.map(p => {
         const nFacturas = facturas.filter(f => f.proveedorId === p.id).length;
         const ultima    = facturas.filter(f => f.proveedorId === p.id).sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
-        return `<button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem" onclick="renderProveedorFacturas('${p.id}')">
-          <div style="font-size:1rem;font-weight:700">${p.nombre}</div>
-          <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">
-            ${nFacturas} factura${nFacturas !== 1 ? 's' : ''}
-            ${ultima ? ' · Última: ' + ultima.fecha : ''}
-          </div>
-        </button>`;
+        return `<div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;flex:1" onclick="renderProveedorFacturas('${p.id}')">
+            <div style="font-size:1rem;font-weight:700">${p.nombre}</div>
+            <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">
+              ${nFacturas} factura${nFacturas !== 1 ? 's' : ''}
+              ${ultima ? ' · Última: ' + ultima.fecha : ''}
+            </div>
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}','${p.nombre}')">Eliminar</button>
+        </div>`;
       }).join('')}
     </div>`;
+}
+
+function eliminarProveedor(id, nombre) {
+  if (!confirm(`¿Eliminás a "${nombre}"? Se borran también sus facturas y precios.`)) return;
+  proveedores = proveedores.filter(p => p.id !== id);
+  facturas    = facturas.filter(f => f.proveedorId !== id);
+  precios     = precios.filter(p => p.proveedorId !== id);
+  persist();
+  renderProveedores();
+  toast(`Proveedor "${nombre}" eliminado`, 'success');
 }
 
 function renderProveedorFacturas(provId) {
