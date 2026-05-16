@@ -1484,15 +1484,15 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
   )];
 
   // Los que ya tienen insumo mapeado Y el insumo existe
+  const normNombre = s => s.toLowerCase().replace(/[.\s]+$/, '').replace(/\s+/g, ' ').trim();
+
   const yaMapados = new Set(
     (prov.items || [])
       .filter(it => it.insumoId && insumos.some(i => i.id === it.insumoId))
-      .map(it => it.nombreBoleta.toLowerCase())
+      .map(it => normNombre(it.nombreBoleta))
   );
 
-  const nuevos = nombresEnFacturas.filter(n =>
-    !yaMapados.has(n.toLowerCase())
-  );
+  const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(normNombre(n)));
 
   if (!nuevos.length) {
     if (!silent) toast('Todos los productos ya están dados de alta en Insumos', 'success');
@@ -1536,7 +1536,7 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     const precioSinIva   = precioReciente != null && tasaIva > 0 ? Math.round(precioReciente / (1 + tasaIva / 100) * 100) / 100 : precioReciente;
     const unidadReciente = ultimoItem?.unidad || '';
 
-    const existente = insumos.find(i => i.nombre.toLowerCase() === nombre.toLowerCase());
+    const existente = insumos.find(i => normNombre(i.nombre) === normNombre(nombre));
     let insumoId;
     if (existente) {
       insumoId = existente.id;
@@ -1566,11 +1566,11 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     });
 
     // Mapear en el proveedor
-    const existe = prov.items.some(it => it.nombreBoleta.toLowerCase() === nombre.toLowerCase());
+    const existe = prov.items.some(it => normNombre(it.nombreBoleta) === normNombre(nombre));
     if (!existe) {
       prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: '' });
     } else {
-      const it = prov.items.find(it => it.nombreBoleta.toLowerCase() === nombre.toLowerCase());
+      const it = prov.items.find(it => normNombre(it.nombreBoleta) === normNombre(nombre));
       if (it) it.insumoId = insumoId;
     }
     creados++;
