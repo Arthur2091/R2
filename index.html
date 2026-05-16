@@ -1553,7 +1553,8 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       if (precioReciente != null) { exacto.precioConIVA = precioReciente; exacto.precioSinIVA = precioSinIva; }
       if (!exacto.unidad && unidadReciente) exacto.unidad = unidadReciente;
     } else {
-      const similar = insumosDelProv.find(i => similaridad(i.nombre, nombre) >= 0.6);
+      const insumosActuales = [...insumosDelProv, ...insumos.filter(i => !insumosDelProv.some(x => x.id === i.id))];
+      const similar = insumosActuales.find(i => normNombre(i.nombre) !== normNombre(nombre) && similaridad(i.nombre, nombre) >= 0.6);
       if (similar) {
         const pct = Math.round(similaridad(similar.nombre, nombre) * 100);
         const crear = confirm(`"${limpiarNombre(nombre)}" es similar a "${similar.nombre}" (${pct}% coincidencia).\n¿Crear como insumo nuevo?\n[Cancelar = usar el existente]`);
