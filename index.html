@@ -1486,6 +1486,15 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
   // Los que ya tienen insumo mapeado Y el insumo existe
   const limpiarNombre = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim();
   const normNombre = s => limpiarNombre(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normSim = s => limpiarNombre(s).toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const similaridad = (a, b) => {
+    const wa = new Set(normSim(a).split(/\s+/).filter(Boolean));
+    const wb = new Set(normSim(b).split(/\s+/).filter(Boolean));
+    const inter = [...wa].filter(x => wb.has(x)).length;
+    const union = new Set([...wa, ...wb]).size;
+    return union ? inter / union : 0;
+  };
+  const insumosDelProv = (prov.items || []).map(it => insumos.find(i => i.id === it.insumoId)).filter(Boolean);
 
   const yaMapados = new Set(
     (prov.items || [])
@@ -1537,19 +1546,30 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     const precioSinIva   = precioReciente != null && tasaIva > 0 ? Math.round(precioReciente / (1 + tasaIva / 100) * 100) / 100 : precioReciente;
     const unidadReciente = ultimoItem?.unidad || '';
 
-    const existente = insumos.find(i => normNombre(i.nombre) === normNombre(nombre));
+    const exacto = insumos.find(i => normNombre(i.nombre) === normNombre(nombre));
     let insumoId;
-    if (existente) {
-      insumoId = existente.id;
-      if (precioReciente != null) {
-        existente.precioConIVA = precioReciente;
-        existente.precioSinIVA = precioSinIva;
-      }
-      if (!existente.unidad && unidadReciente) existente.unidad = unidadReciente;
+    if (exacto) {
+      insumoId = exacto.id;
+      if (precioReciente != null) { exacto.precioConIVA = precioReciente; exacto.precioSinIVA = precioSinIva; }
+      if (!exacto.unidad && unidadReciente) exacto.unidad = unidadReciente;
     } else {
-      insumoId = crypto.randomUUID();
-      insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
-        precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
+      const similar = insumosDelProv.find(i => similaridad(i.nombre, nombre) >= 0.6);
+      if (similar) {
+        const pct = Math.round(similaridad(similar.nombre, nombre) * 100);
+        const crear = confirm(`"${limpiarNombre(nombre)}" es similar a "${similar.nombre}" (${pct}% coincidencia).\n¿Crear como insumo nuevo?\n[Cancelar = usar el existente]`);
+        if (!crear) {
+          insumoId = similar.id;
+          if (precioReciente != null) { similar.precioConIVA = precioReciente; similar.precioSinIVA = precioSinIva; }
+        } else {
+          insumoId = crypto.randomUUID();
+          insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
+            precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
+        }
+      } else {
+        insumoId = crypto.randomUUID();
+        insumos.push({ id: insumoId, nombre: limpiarNombre(nombre), unidad: unidadReciente, categoria: 'SIN CATEGORÍA',
+          precioConIVA: precioReciente, precioSinIVA: precioSinIva, observaciones: '', aliases: [] });
+      }
     }
 
     // Registrar en historial de precios
