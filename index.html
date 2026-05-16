@@ -504,6 +504,12 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="toolbar" style="margin-bottom:16px">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
   </div>
+  <div id="similarBanner" style="display:none;margin-bottom:12px;background:var(--surface);border:2px solid var(--warn);border-radius:var(--radius);padding:14px 16px;gap:10px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:600;color:var(--ink);flex:0 0 100%">⚠ Producto similar encontrado</div>
+    <div id="similarText" style="font-size:13px;color:var(--ink2);flex:0 0 100%"></div>
+    <button class="btn btn-primary btn-sm" onclick="_similarCrearNuevo()">Crear nuevo</button>
+    <button class="btn btn-outline btn-sm" onclick="_similarUsarExistente()">Usar existente</button>
+  </div>
   <div id="proveedoresScreen"></div>
 </div>
 
@@ -1464,17 +1470,29 @@ function renderProveedorFacturas(provId) {
         </div>`}`;
 }
 
-function altaTodosLosInsumos() {
+let _similarResolve = null;
+function _pedirConfirmacionSimilar(nuevo, existente, pct) {
+  return new Promise(resolve => {
+    _similarResolve = resolve;
+    document.getElementById('similarText').innerHTML =
+      `<b>"${nuevo}"</b> es similar a <b>"${existente}"</b> (${pct}% coincidencia). ¿Qué hacemos?`;
+    document.getElementById('similarBanner').style.display = 'flex';
+  });
+}
+function _similarCrearNuevo()    { document.getElementById('similarBanner').style.display='none'; if(_similarResolve){_similarResolve(true);_similarResolve=null;} }
+function _similarUsarExistente() { document.getElementById('similarBanner').style.display='none'; if(_similarResolve){_similarResolve(false);_similarResolve=null;} }
+
+async function altaTodosLosInsumos() {
   if (!proveedores.length) { toast('No hay proveedores cargados', 'warn'); return; }
   let totalCreados = 0;
-  proveedores.forEach(p => { totalCreados += altaInsumosDesdeFacturas(p.id, true); });
+  for (const p of proveedores) { totalCreados += await altaInsumosDesdeFacturas(p.id, true); }
   persist();
   renderInsumos();
   renderProveedores();
-  toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', totalCreados ? 'success' : 'success');
+  toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', 'success');
 }
 
-function altaInsumosDesdeFacturas(provId, silent = false) {
+async function altaInsumosDesdeFacturas(provId, silent = false) {
   const prov = proveedores.find(p => p.id === provId);
   if (!prov) return;
 
@@ -1557,7 +1575,7 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       const similar = insumosActuales.find(i => normNombre(i.nombre) !== normNombre(nombre) && similaridad(i.nombre, nombre) >= 0.6);
       if (similar) {
         const pct = Math.round(similaridad(similar.nombre, nombre) * 100);
-        const crear = confirm(`"${limpiarNombre(nombre)}" es similar a "${similar.nombre}" (${pct}% coincidencia).\n¿Crear como insumo nuevo?\n[Cancelar = usar el existente]`);
+        const crear = await _pedirConfirmacionSimilar(limpiarNombre(nombre), similar.nombre, pct);
         if (!crear) {
           insumoId = similar.id;
           if (precioReciente != null) { similar.precioConIVA = precioReciente; similar.precioSinIVA = precioSinIva; }
