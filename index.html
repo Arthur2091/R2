@@ -872,6 +872,27 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <div id="toast" class="toast"></div>
 
+<div id="modalRevision" class="overlay">
+  <div class="modal" style="width:640px;max-height:85vh;display:flex;flex-direction:column;gap:0">
+    <h2 style="margin-bottom:6px">Revisión de nombres</h2>
+    <p style="color:var(--ink3);font-size:13px;margin-bottom:20px">Algunos productos necesitan tu atención antes de darse de alta.</p>
+    <div style="overflow-y:auto;flex:1;padding-right:4px">
+      <div id="revSecCodigo" style="display:none;margin-bottom:20px">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:10px">Tienen código interno — editá el nombre</div>
+        <div id="revListaCodigo" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+      <div id="revSecIlegible" style="display:none">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:10px">No se pudo leer el nombre — escribilo o descartá</div>
+        <div id="revListaIlegible" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn btn-outline" onclick="closeModal('modalRevision')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_revisionConfirmar()">Confirmar y dar de alta</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalDuplicados" class="overlay">
   <div class="modal" style="width:560px">
     <h2>Insumos similares</h2>
@@ -1572,19 +1593,28 @@ function _dupSaltar() {
 function altaTodosLosInsumos() {
   if (!proveedores.length) { toast('No hay proveedores cargados', 'warn'); return; }
   let totalCreados = 0;
-  for (const p of proveedores) { totalCreados += altaInsumosDesdeFacturas(p.id, true); }
-  persist();
-  renderInsumos();
-  renderProveedores();
-  toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', 'success');
+  const todosPendientes = [];
+  for (const p of proveedores) {
+    const { creados, pendientes } = altaInsumosDesdeFacturas(p.id, true);
+    totalCreados += creados;
+    todosPendientes.push(...pendientes);
+  }
+  persist(); renderInsumos(); renderProveedores();
+  if (todosPendientes.length) {
+    toast(`${totalCreados} dados de alta · ${todosPendientes.length} requieren revisión`, 'warn', 4000);
+    _mostrarRevisionNombres(todosPendientes);
+  } else {
+    toast(totalCreados ? `${totalCreados} insumo${totalCreados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', 'success');
+  }
 }
 
 function altaInsumosDesdeFacturas(provId, silent = false) {
   const prov = proveedores.find(p => p.id === provId);
-  if (!prov) return 0;
+  if (!prov) return { creados: 0, pendientes: [] };
 
-  const limpiar  = s => s.replace(/^[\[(][^\])]*[\])]\s*[-\s]*/, '').trim();
-  const norm     = s => limpiar(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tienePrefijo = s => /^[\[(][^\])]*[\])][\s\-]*/.test(s) || /^\(\d+\)\s+/.test(s);
+  const limpiar      = s => s.replace(/^[\[(][^\])]*[\])][\s\-]*/, '').replace(/^\(\d+\)\s+/, '').trim();
+  const norm         = s => limpiar(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const getPrecio = i => {
     if (i.precio_unitario != null && i.precio_unitario > 0) return i.precio_unitario;
@@ -1593,79 +1623,156 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     return null;
   };
 
-  const nombresEnFacturas = [...new Set(
-    facturas.filter(f => f.proveedorId === provId).flatMap(f => f.items.map(i => i.nombre)).filter(Boolean)
-  )];
+  const todasLasFacturas = facturas.filter(f => f.proveedorId === provId);
 
   const yaMapados = new Set(
     (prov.items || [])
       .filter(it => it.insumoId && insumos.some(i => i.id === it.insumoId))
-      .map(it => norm(it.nombreBoleta))
+      .map(it => norm(it.nombreBoleta || ''))
   );
 
-  const nuevos = nombresEnFacturas.filter(n => !yaMapados.has(norm(n)));
-  if (!nuevos.length) {
-    if (!silent) toast('Todos los productos ya están dados de alta', 'success');
-    return 0;
+  const todosLosNombres = [...new Set(
+    todasLasFacturas.flatMap(f => f.items.map(i => i.nombre))
+  )];
+
+  const pendientes = [];
+  const limpios    = [];
+
+  for (const nombre of todosLosNombres) {
+    if (!nombre || !nombre.trim()) {
+      pendientes.push({ nombreOriginal: nombre, nombreSugerido: '', tipo: 'ilegible', provId, precioConIVA: null, precioSinIVA: null, unidad: '', todasLasFacturas });
+      continue;
+    }
+    if (yaMapados.has(norm(nombre))) continue;
+    if (tienePrefijo(nombre)) {
+      const sugerido = limpiar(nombre);
+      const con = todasLasFacturas.flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase())).filter(i => getPrecio(i) != null);
+      const ult = con[con.length - 1] ?? null;
+      const pConIVA = ult ? getPrecio(ult) : null;
+      const tasa    = ult?.iva ?? 21;
+      const pSinIVA = pConIVA != null && tasa > 0 ? Math.round(pConIVA / (1 + tasa / 100) * 100) / 100 : pConIVA;
+      pendientes.push({ nombreOriginal: nombre, nombreSugerido: sugerido, tipo: 'codigo', provId, precioConIVA: pConIVA, precioSinIVA: pSinIVA, unidad: ult?.unidad || '', todasLasFacturas });
+      continue;
+    }
+    limpios.push(nombre);
   }
 
   let creados = 0;
-  const todasLasFacturas = facturas.filter(f => f.proveedorId === provId);
-
-  for (const nombre of nuevos) {
-    const itemsConPrecio = todasLasFacturas
-      .flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase()))
-      .filter(i => getPrecio(i) != null);
-    const ultimo       = itemsConPrecio[itemsConPrecio.length - 1] ?? null;
-    const precioConIVA = ultimo ? getPrecio(ultimo) : null;
-    const tasa         = ultimo?.iva ?? 21;
+  for (const nombre of limpios) {
+    const con = todasLasFacturas.flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase())).filter(i => getPrecio(i) != null);
+    const ult = con[con.length - 1] ?? null;
+    const precioConIVA = ult ? getPrecio(ult) : null;
+    const tasa         = ult?.iva ?? 21;
     const precioSinIVA = precioConIVA != null && tasa > 0 ? Math.round(precioConIVA / (1 + tasa / 100) * 100) / 100 : precioConIVA;
-    const unidad       = ultimo?.unidad || '';
+    const unidad       = ult?.unidad || '';
 
-    // Reusar si ya existe exacto globalmente
-    let insumoId;
     const exacto = insumos.find(i => norm(i.nombre) === norm(nombre));
+    let insumoId;
     if (exacto) {
       insumoId = exacto.id;
       if (precioConIVA != null) { exacto.precioConIVA = precioConIVA; exacto.precioSinIVA = precioSinIVA; }
       if (!exacto.unidad && unidad) exacto.unidad = unidad;
     } else {
       insumoId = crypto.randomUUID();
-      insumos.push({ id: insumoId, nombre: limpiar(nombre), unidad, categoria: 'SIN CATEGORÍA',
-        precioConIVA, precioSinIVA, observaciones: '', aliases: [] });
+      insumos.push({ id: insumoId, nombre: limpiar(nombre), unidad, categoria: 'SIN CATEGORÍA', precioConIVA, precioSinIVA, observaciones: '', aliases: [] });
       creados++;
     }
 
-    // Historial de precios
     todasLasFacturas.forEach(f => {
       f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase() && i.precio_unitario != null).forEach(i => {
-        precios.push({
-          id: crypto.randomUUID(), insumoId, proveedorId: provId,
-          fecha: f.fecha, nroBoleta: f.nroBoleta || null, nombreBoleta: nombre,
-          cantidad: i.cantidad, unidad: i.unidad,
-          precioUnitario: Number(i.precio_unitario),
-          precioTotal: i.precio_total != null ? Number(i.precio_total) : null,
-          fuente: 'foto',
-        });
+        precios.push({ id: crypto.randomUUID(), insumoId, proveedorId: provId, fecha: f.fecha, nroBoleta: f.nroBoleta || null, nombreBoleta: nombre, cantidad: i.cantidad, unidad: i.unidad, precioUnitario: Number(i.precio_unitario), precioTotal: i.precio_total != null ? Number(i.precio_total) : null, fuente: 'foto' });
       });
     });
 
-    // Mapear en proveedor
     const existe = prov.items.some(it => norm(it.nombreBoleta) === norm(nombre));
-    if (!existe) {
-      prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: '' });
-    } else {
-      const it = prov.items.find(it => norm(it.nombreBoleta) === norm(nombre));
-      if (it) it.insumoId = insumoId;
-    }
+    if (!existe) prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: '' });
+    else { const it = prov.items.find(it => norm(it.nombreBoleta) === norm(nombre)); if (it) it.insumoId = insumoId; }
   }
 
-  if (!silent) {
-    persist();
-    renderInsumos();
-    toast(`${creados} insumo${creados !== 1 ? 's' : ''} dados de alta`, 'success');
-  }
-  return creados;
+  return { creados, pendientes };
+}
+
+let _revisionPendientes = [];
+
+function _mostrarRevisionNombres(pendientes) {
+  _revisionPendientes = pendientes;
+  const conCodigo  = pendientes.filter(p => p.tipo === 'codigo');
+  const ilegibles  = pendientes.filter(p => p.tipo === 'ilegible');
+
+  const secCod = document.getElementById('revSecCodigo');
+  const secIle = document.getElementById('revSecIlegible');
+
+  if (conCodigo.length) {
+    secCod.style.display = 'block';
+    document.getElementById('revListaCodigo').innerHTML = conCodigo.map(p => {
+      const idx = pendientes.indexOf(p);
+      return `<div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--ink3);width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace" title="${p.nombreOriginal}">${p.nombreOriginal}</span>
+        <input type="text" data-rev-idx="${idx}" value="${p.nombreSugerido}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+      </div>`;
+    }).join('');
+  } else { secCod.style.display = 'none'; }
+
+  if (ilegibles.length) {
+    secIle.style.display = 'block';
+    document.getElementById('revListaIlegible').innerHTML = ilegibles.map(p => {
+      const idx = pendientes.indexOf(p);
+      return `<div style="display:flex;gap:8px;align-items:center">
+        <input type="text" data-rev-idx="${idx}" placeholder="Escribí el nombre…" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+        <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;font-size:13px;cursor:pointer">
+          <input type="checkbox" data-rev-discard="${idx}"> Descartar
+        </label>
+      </div>`;
+    }).join('');
+  } else { secIle.style.display = 'none'; }
+
+  openModal('modalRevision');
+}
+
+function _revisionConfirmar() {
+  const discardSet = new Set([...document.querySelectorAll('[data-rev-discard]')].filter(c => c.checked).map(c => parseInt(c.dataset.revDiscard)));
+  const names = {};
+  document.querySelectorAll('[data-rev-idx]').forEach(inp => { names[parseInt(inp.dataset.revIdx)] = inp.value.trim(); });
+
+  let creados = 0;
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  _revisionPendientes.forEach((p, idx) => {
+    if (discardSet.has(idx)) return;
+    const nombreFinal = names[idx] || '';
+    if (!nombreFinal) return;
+    const prov = proveedores.find(pr => pr.id === p.provId);
+    if (!prov) return;
+
+    const exacto = insumos.find(i => norm(i.nombre) === norm(nombreFinal));
+    let insumoId;
+    if (exacto) {
+      insumoId = exacto.id;
+      if (p.precioConIVA != null) { exacto.precioConIVA = p.precioConIVA; exacto.precioSinIVA = p.precioSinIVA; }
+      if (!exacto.unidad && p.unidad) exacto.unidad = p.unidad;
+    } else {
+      insumoId = crypto.randomUUID();
+      insumos.push({ id: insumoId, nombre: nombreFinal, unidad: p.unidad, categoria: 'SIN CATEGORÍA', precioConIVA: p.precioConIVA, precioSinIVA: p.precioSinIVA, observaciones: '', aliases: [] });
+      creados++;
+    }
+
+    if (p.nombreOriginal && p.todasLasFacturas) {
+      p.todasLasFacturas.forEach(f => {
+        f.items.filter(i => i.nombre?.toLowerCase() === p.nombreOriginal?.toLowerCase() && i.precio_unitario != null).forEach(i => {
+          precios.push({ id: crypto.randomUUID(), insumoId, proveedorId: p.provId, fecha: f.fecha, nroBoleta: f.nroBoleta || null, nombreBoleta: p.nombreOriginal, cantidad: i.cantidad, unidad: i.unidad, precioUnitario: Number(i.precio_unitario), precioTotal: i.precio_total != null ? Number(i.precio_total) : null, fuente: 'foto' });
+        });
+      });
+    }
+
+    const key = norm(p.nombreOriginal || nombreFinal);
+    const existe = prov.items.some(it => norm(it.nombreBoleta) === key);
+    if (!existe) prov.items.push({ id: crypto.randomUUID(), nombreBoleta: p.nombreOriginal || nombreFinal, insumoId, unidad: '' });
+    else { const it = prov.items.find(it => norm(it.nombreBoleta) === key); if (it) it.insumoId = insumoId; }
+  });
+
+  closeModal('modalRevision');
+  persist(); renderInsumos(); renderProveedores();
+  if (creados) toast(`${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta`, 'success');
 }
 
 function renderFacturaDetalle(facturaId, provId) {
@@ -2300,14 +2407,16 @@ function confirmarBoleta() {
         const sumaNuevos = itemsNuevos.reduce((acc, i) => acc + (Number(i.precio_total) || 0), 0);
         if (sumaNuevos > 0) existente.importeTotal = (existente.importeTotal || 0) + sumaNuevos;
       }
-      const creados = altaInsumosDesdeFacturas(_boletaProvId, true);
+      const { creados, pendientes } = altaInsumosDesdeFacturas(_boletaProvId, true);
       persist(); renderInsumos(); renderProveedores(); renderBoletaHistorial();
       const msg = [
         itemsNuevos.length ? `${itemsNuevos.length} ítem${itemsNuevos.length !== 1 ? 's' : ''} agregado${itemsNuevos.length !== 1 ? 's' : ''}` : '',
         itemsActualizados.length ? `${itemsActualizados.length} precio${itemsActualizados.length !== 1 ? 's' : ''} actualizado${itemsActualizados.length !== 1 ? 's' : ''}` : '',
         creados ? `${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta` : '',
+        pendientes.length ? `${pendientes.length} requieren revisión` : '',
       ].filter(Boolean).join(' · ');
-      toast(msg, 'success');
+      toast(msg, pendientes.length ? 'warn' : 'success');
+      if (pendientes.length) _mostrarRevisionNombres(pendientes);
       resetBoleta();
       return;
     }
@@ -2330,9 +2439,10 @@ function confirmarBoleta() {
 
   if (_boletaFotoNombre) _registrarArchivoSubido(_boletaFotoNombre);
 
-  const creados = altaInsumosDesdeFacturas(_boletaProvId, true);
+  const { creados, pendientes } = altaInsumosDesdeFacturas(_boletaProvId, true);
   persist(); renderInsumos(); renderProveedores(); renderBoletaHistorial();
-  toast(`Factura guardada — ${itemsFactura.length} ítems${creados ? ` · ${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta` : ''}`, 'success');
+  toast(`Factura guardada — ${itemsFactura.length} ítems${creados ? ` · ${creados} insumos de alta` : ''}${pendientes.length ? ` · ${pendientes.length} requieren revisión` : ''}`, pendientes.length ? 'warn' : 'success');
+  if (pendientes.length) _mostrarRevisionNombres(pendientes);
   resetBoleta();
 }
 
