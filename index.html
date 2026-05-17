@@ -318,13 +318,13 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  min-height: 300px;
+  min-height: 500px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
 }
-.boleta-photo img { width: 100%; height: 100%; object-fit: contain; max-height: 480px; }
+.boleta-photo img { width: 100%; height: 100%; object-fit: contain; max-height: 720px; }
 .boleta-photo .no-photo { color: var(--ink3); font-size: 13px; text-align: center; padding: 20px; }
 .extracting-overlay {
   position: absolute;
@@ -1689,6 +1689,15 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
     else { const it = prov.items.find(it => norm(it.nombreBoleta) === norm(nombre)); if (it) it.insumoId = insumoId; }
   }
 
+  if (!silent) {
+    persist(); renderInsumos(); renderProveedores();
+    if (pendientes.length) {
+      toast(`${creados} dados de alta · ${pendientes.length} requieren revisión`, 'warn', 4000);
+      _mostrarRevisionNombres(pendientes);
+    } else {
+      toast(creados ? `${creados} insumo${creados !== 1 ? 's' : ''} dados de alta` : 'Todos los insumos ya estaban cargados', 'success');
+    }
+  }
   return { creados, pendientes };
 }
 
@@ -1899,16 +1908,24 @@ function _iniciarColaBoletas(files) {
   document.getElementById('btnExtraer').disabled = true;
   document.getElementById('btnConfirmar').style.display = 'none';
   document.getElementById('boletaQueueBar').style.display = 'flex';
-  _procesarColaBoletas(0, 0, 0);
+  _procesarColaBoletas(0, 0, []);
 }
 
-async function _procesarColaBoletas(idx, ok, err) {
+async function _procesarColaBoletas(idx, ok, errores) {
   const total = _boletaQueue.length;
   if (idx >= total) {
     _boletaQueueRunning = false;
     document.getElementById('boletaQueueBar').style.display = 'none';
     document.getElementById('btnExtraer').disabled = true;
-    toast(`Cola finalizada — ${ok} guardadas${err ? ', ' + err + ' errores' : ''}`, err ? 'error' : 'success');
+    toast(`Cola finalizada — ${ok} guardadas${errores.length ? `, ${errores.length} errores` : ''}`, errores.length ? 'warn' : 'success');
+    if (errores.length) {
+      const lista = errores.map(n => `• ${n}`).join('\n');
+      const wrap = document.getElementById('boletaItemsWrap');
+      wrap.innerHTML = `<div style="padding:16px;background:var(--danger-light);border-radius:var(--radius);border:1px solid var(--danger)">
+        <div style="font-weight:600;color:var(--danger);margin-bottom:8px">No se pudieron procesar (${errores.length}):</div>
+        ${errores.map(n => `<div style="font-size:13px;color:var(--danger);padding:2px 0">• ${n}</div>`).join('')}
+      </div>`;
+    }
     return;
   }
 
@@ -1920,11 +1937,11 @@ async function _procesarColaBoletas(idx, ok, err) {
   document.getElementById('boletaQueueStep').textContent = 'Enviando a IA…';
 
   const result = await _extraerYGuardar(file);
-  if (result) ok++; else err++;
+  if (result) ok++; else errores.push(file.name);
 
   document.getElementById('boletaQueueStep').textContent = result ? '✓ Guardada' : '✗ Error';
   document.getElementById('boletaQueueProgress').style.width = Math.round(((idx + 1) / total) * 100) + '%';
-  _procesarColaBoletas(idx + 1, ok, err);
+  _procesarColaBoletas(idx + 1, ok, errores);
 }
 
 function _loadFileB64(file) {
@@ -2003,16 +2020,30 @@ Si no podés leer algún campo con certeza, ponés null.`;
   const fecha = parsed.fecha || new Date().toISOString().slice(0, 10);
 
   const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  let prov = proveedores.find(p => norm(p.nombre).includes(norm(parsed.proveedor)) || norm(parsed.proveedor).includes(norm(p.nombre)));
+  let prov = proveedores.find(p => {
+    const aliases = p.aliases || [];
+    return norm(p.nombre).includes(norm(parsed.proveedor)) ||
+           norm(parsed.proveedor).includes(norm(p.nombre)) ||
+           aliases.some(a => norm(a) === norm(parsed.proveedor));
+  });
   if (!prov) {
     let confirmado;
     try { confirmado = await _pedirNuevoProv(parsed.proveedor); } catch { return false; }
     if (confirmado && typeof confirmado === 'object' && confirmado.id) {
       prov = proveedores.find(p => p.id === confirmado.id);
+      if (prov) {
+        if (!prov.aliases) prov.aliases = [];
+        if (!prov.aliases.includes(parsed.proveedor)) prov.aliases.push(parsed.proveedor);
+      }
     } else {
-      prov = { id: crypto.randomUUID(), nombre: String(confirmado).toUpperCase(), telefono: '', email: '', notas: '', pago: 'transferencia', items: [] };
+      prov = { id: crypto.randomUUID(), nombre: String(confirmado).toUpperCase(), telefono: '', email: '', notas: '', pago: 'transferencia', items: [], aliases: [parsed.proveedor] };
       proveedores.push(prov);
       toast(`Proveedor "${prov.nombre}" dado de alta`, 'success');
+    }
+  } else {
+    if (!prov.aliases) prov.aliases = [];
+    if (!prov.aliases.includes(parsed.proveedor) && norm(prov.nombre) !== norm(parsed.proveedor)) {
+      prov.aliases.push(parsed.proveedor);
     }
   }
 
