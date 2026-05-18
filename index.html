@@ -742,7 +742,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <select id="filterCatReceta" onchange="renderRecetas()">
       <option value="">Todas las categorías</option>
     </select>
-    <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar Excel</button>
+    <button class="btn btn-outline" onclick="document.getElementById('inputInsumosXls').click()">Importar insumos del Excel</button>
+    <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
+    <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
     <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()" style="margin-left:auto">Limpiar recetas</button>
   </div>
@@ -750,11 +752,29 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div id="recetasScreen"></div>
 </div>
 
-<!-- MODAL: Matching ingredientes recetas -->
+<!-- MODAL: Validación de recetas una por una -->
+<div id="modalValidacionReceta" class="overlay">
+  <div class="modal" style="width:680px;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="margin:0">Validar receta</h2>
+      <span id="valCounter" style="font-size:13px;color:var(--ink3)"></span>
+    </div>
+    <div id="valContent" style="overflow-y:auto;flex:1;margin:12px 0"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" style="color:var(--danger)" onclick="_descartarReceta()">✕ Descartar</button>
+      <button class="btn btn-primary" onclick="_aprobarReceta()">✓ Aprobar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Matching ingredientes con buscador -->
 <div id="modalMatchRecetas" class="overlay">
-  <div class="modal" style="width:700px;max-height:82vh;display:flex;flex-direction:column">
-    <h2 style="margin-bottom:4px">Vincular ingredientes</h2>
-    <p style="color:var(--ink2);font-size:13px;margin-bottom:16px">Estos ingredientes del Excel no se encontraron en el sistema. Seleccioná el insumo equivalente o elegí una acción.</p>
+  <div class="modal" style="width:720px;max-height:85vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h2 style="margin:0">Vincular ingredientes</h2>
+      <span id="matchCounter" style="font-size:13px;color:var(--ink3)"></span>
+    </div>
+    <p style="color:var(--ink2);font-size:13px;margin-bottom:12px">Estos ingredientes no se encontraron automáticamente. Buscá el insumo equivalente.</p>
     <div id="matchRecetasList" style="overflow-y:auto;flex:1;margin-bottom:16px"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalMatchRecetas')">Cancelar</button>
@@ -3271,6 +3291,78 @@ function calcCostoIng(ins, cantidad, unidad) {
 /* ── RECETAS ─────────────────────────────────────────────────────── */
 function persistRecetas() { localStorage.setItem('cons_recetas', JSON.stringify(recetas)); }
 
+/* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
+async function importarInsumosExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Leyendo insumos del Excel…');
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const ws = wb.Sheets['INSUMOS'];
+    if (!ws) { toast('No se encontró la hoja INSUMOS', 'error'); return; }
+
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    let catActual = 'Sin categoría';
+    let creados = 0, omitidos = 0;
+
+    rows.forEach(r => {
+      const col0 = String(r[0]).trim();
+      const col1 = String(r[1]).trim();
+      const col3 = r[3];
+
+      // Category header: all-caps text, col1 empty or also caps, not "ITEM"
+      if (col0 && col0 === col0.toUpperCase() && !col0.includes(' S/IVA') && col1 === '' && col0 !== 'ITEM' && isNaN(col0)) {
+        const mapped = {
+          'VERDULERIA':'Frutas y Verduras','PASTAS':'Harinas y Cereales',
+          'LACTEOS':'Lácteos','VARIOS':'Otros','FIAMBRES Y QUESOS':'Carnes y Fiambres',
+          'ALMACEN':'Aceites y Condimentos','CARNES':'Carnes y Fiambres',
+          'PANADERIA':'Panadería','LIMPIEZA':'Limpieza','DESCARTABLES':'Descartables',
+          'CHOCOLATES Y COBERTURAS':'Chocolates y Coberturas','BEBIDAS':'Bebidas',
+          'AZUCARES':'Azúcares y Dulces','CAFE':'Café e Infusiones',
+          'HUEVOS':'Huevos','CONGELADOS':'Congelados'
+        };
+        catActual = mapped[col0] || categorizarInsumo(col0) || col0;
+        return;
+      }
+
+      // Insumo row: col0 = name, col1 = unit, col3 = price (or might be empty)
+      if (!col0 || col0 === 'ITEM' || col0 === 'INSUMOS & COSTOS' || col0 === 'Actualizacion:') return;
+      if (col0 === col0.toUpperCase() && !col1 && isNaN(col0)) return; // another header
+
+      const nombre = col0;
+      const unidad = col1 || '';
+      const precio = typeof col3 === 'number' && col3 > 0 ? col3 : null;
+
+      // Try to match existing
+      const existente = insumos.find(i => _normIng(i.nombre) === _normIng(nombre));
+      if (existente) {
+        // Update price if we have one and don't have one yet
+        if (precio && !existente.precioSinIVA) existente.precioSinIVA = precio;
+        if (unidad && !existente.unidad) existente.unidad = unidad;
+        omitidos++;
+      } else {
+        insumos.push({
+          id: crypto.randomUUID(), nombre, unidad,
+          categoria: catActual,
+          precioConIVA: null, precioSinIVA: precio,
+          presQty: null, presUnit: 'g',
+          observaciones: '', aliases: []
+        });
+        creados++;
+      }
+    });
+
+    persist();
+    renderInsumos();
+    toast(`${creados} insumos creados, ${omitidos} ya existían`, 'success');
+  } catch(e) {
+    toast('Error al leer el Excel', 'error');
+    console.error(e);
+  }
+  input.value = '';
+}
+
 const _SKIP_SHEETS = new Set(['COSTO EN BLANCO','INSUMOS','Hoja 11','PRECIOS DE CARTA ','PRESUPUESTOS','RESUMEN cafe']);
 
 function _parseExcelRecetas(wb) {
@@ -3340,9 +3432,14 @@ function _matchIngrediente(nombre) {
 function _crearInsumoDesdeNombre(nombre) {
   const id = crypto.randomUUID();
   const limpio = nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase();
-  insumos.push({ id, nombre: limpio, unidad: '', categoria: categorizarInsumo(limpio), precioConIVA: null, precioSinIVA: null, observaciones: '', aliases: [] });
+  insumos.push({ id, nombre: limpio, unidad: '', categoria: categorizarInsumo(limpio), precioConIVA: null, precioSinIVA: null, presQty: null, presUnit: 'g', observaciones: '', aliases: [] });
   return id;
 }
+
+/* ── VALIDACIÓN UNA POR UNA ─────────────────────────────────────── */
+let _validationQueue = [];
+let _validationIdx   = 0;
+let _approvedRecetas = [];
 
 async function importarExcelRecetas(input) {
   const file = input.files[0];
@@ -3353,26 +3450,11 @@ async function importarExcelRecetas(input) {
     const wb = XLSX.read(buffer, { type: 'array' });
     const parsed = _parseExcelRecetas(wb);
     if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
-
-    const allNombres = new Set();
-    parsed.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
-
-    _matchMap = {};
-    const sinMatch = [];
-    allNombres.forEach(nombre => {
-      const id = _matchIngrediente(nombre);
-      _matchMap[nombre] = id || null;
-      if (!id) sinMatch.push(nombre);
-    });
-
-    _pendingRecetas = parsed;
-    if (!sinMatch.length) {
-      _finalizarImportRecetas();
-    } else {
-      _matchPendientes = sinMatch.sort();
-      _renderMatchModal();
-      openModal('modalMatchRecetas');
-    }
+    _validationQueue = parsed;
+    _validationIdx   = 0;
+    _approvedRecetas = [];
+    _mostrarValidacion();
+    openModal('modalValidacionReceta');
   } catch(e) {
     toast('Error al procesar el Excel', 'error');
     console.error(e);
@@ -3380,44 +3462,138 @@ async function importarExcelRecetas(input) {
   input.value = '';
 }
 
-function _renderMatchModal() {
-  const catOrder = [...new Set([...CATEGORIAS_INSUMOS, ...insumos.map(i=>i.categoria||'Otros')])];
-  const grouped  = {};
-  [...insumos].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).forEach(i => {
-    const c = i.categoria || 'Sin categoría';
-    if (!grouped[c]) grouped[c] = [];
-    grouped[c].push(i);
-  });
-  const opts = catOrder.filter(c=>grouped[c]?.length).map(cat =>
-    `<optgroup label="${cat}">${grouped[cat].map(i=>`<option value="${i.id}">${i.nombre}</option>`).join('')}</optgroup>`
-  ).join('');
+function _mostrarValidacion() {
+  const total = _validationQueue.length;
+  const idx   = _validationIdx;
+  if (idx >= total) { _finalizarValidacion(); return; }
 
-  document.getElementById('matchRecetasList').innerHTML = `
-    <p style="font-size:12px;color:var(--ink3);margin-bottom:10px">${_matchPendientes.length} ingrediente${_matchPendientes.length>1?'s':''} sin mapear</p>
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr>
-        <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--ink3);border-bottom:1px solid var(--border)">Ingrediente (Excel)</th>
-        <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--ink3);border-bottom:1px solid var(--border)">Insumo en el sistema</th>
-      </tr></thead>
-      <tbody>${_matchPendientes.map(nombre=>`
-        <tr>
-          <td style="padding:6px 8px;font-size:13px">${nombre}</td>
-          <td style="padding:4px 8px">
-            <select data-nombre="${nombre}" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
-              <option value="skip">— Ignorar —</option>
-              <option value="new">+ Crear nuevo insumo</option>
-              ${opts}
-            </select>
-          </td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
+  const r = _validationQueue[idx];
+  document.getElementById('valCounter').textContent = `${idx + 1} de ${total}`;
+
+  document.getElementById('valContent').innerHTML = `
+    <div style="margin-bottom:12px">
+      <div style="font-size:1rem;font-weight:700">${r.nombre}</div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:2px">${r.categoria}${r.precioVenta ? ' · $'+r.precioVenta : ''}</div>
+    </div>
+    ${r.subrecetas.map(sub => `
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
+          ${sub.tipo} — ${sub.nombre} · rinde ${sub.rinde}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr>
+            <th style="text-align:left;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Ingrediente</th>
+            <th style="text-align:right;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Cant.</th>
+            <th style="padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Und.</th>
+          </tr></thead>
+          <tbody>${sub.ingredientes.map(ing=>`
+            <tr>
+              <td style="padding:3px 8px">${ing.nombreOriginal}</td>
+              <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
+              <td style="padding:3px 8px;color:var(--ink2)">${ing.unidad}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`).join('')}
+  `;
+}
+
+function _aprobarReceta() {
+  _approvedRecetas.push(_validationQueue[_validationIdx]);
+  _validationIdx++;
+  _mostrarValidacion();
+}
+
+function _descartarReceta() {
+  _validationIdx++;
+  _mostrarValidacion();
+}
+
+function _finalizarValidacion() {
+  closeModal('modalValidacionReceta');
+  if (!_approvedRecetas.length) { toast('No se aprobó ninguna receta', 'info'); return; }
+
+  // Auto-match ingredients
+  const allNombres = new Set();
+  _approvedRecetas.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
+
+  _matchMap = {};
+  _matchPendientes = [];
+  allNombres.forEach(nombre => {
+    const id = _matchIngrediente(nombre);
+    _matchMap[nombre] = id || null;
+    if (!id) _matchPendientes.push(nombre);
+  });
+
+  _pendingRecetas = _approvedRecetas;
+
+  if (!_matchPendientes.length) {
+    _finalizarImportRecetas();
+  } else {
+    _matchPendientes.sort();
+    _renderMatchModal();
+    document.getElementById('matchCounter').textContent = `${_matchPendientes.length} sin mapear`;
+    openModal('modalMatchRecetas');
+  }
+}
+
+/* ── MATCHING CON BUSCADOR ──────────────────────────────────────── */
+function _renderMatchModal() {
+  const list = document.getElementById('matchRecetasList');
+  list.innerHTML = _matchPendientes.map(nombre => {
+    const safeId = nombre.replace(/[^a-zA-Z0-9]/g, '_');
+    return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)" data-nombre="${nombre}">
+        <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:6px">${nombre}</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="text" placeholder="Buscar insumo…"
+            style="flex:1;min-width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px"
+            oninput="_filtrarMatch(this,'${safeId}','${nombre}')"
+            id="msearch_${safeId}">
+          <span id="msel_${safeId}" style="font-size:12px;color:var(--accent);font-family:'DM Mono',monospace"></span>
+        </div>
+        <div id="mres_${safeId}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button onclick="_setMatch('${nombre}','new','${safeId}')"
+            style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">
+            + Crear nuevo
+          </button>
+          <button onclick="_setMatch('${nombre}','skip','${safeId}')"
+            style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--ink3)">
+            Ignorar
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function _filtrarMatch(input, safeId, nombre) {
+  const q = input.value.toLowerCase().trim();
+  const res = document.getElementById('mres_' + safeId);
+  if (!q) { res.innerHTML = ''; return; }
+
+  const matches = insumos.filter(i =>
+    i.nombre.toLowerCase().includes(q) ||
+    _normIng(i.nombre).includes(_normIng(q))
+  ).slice(0, 12);
+
+  res.innerHTML = matches.map(i =>
+    `<button onclick="_setMatch('${nombre}','${i.id}','${safeId}')"
+      style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;color:var(--ink)">
+      ${i.nombre}
+    </button>`
+  ).join('');
+}
+
+function _setMatch(nombre, insumoId, safeId) {
+  _matchMap[nombre] = insumoId;
+  const label = insumoId === 'skip' ? 'Ignorado' : insumoId === 'new' ? 'Crear nuevo' : (insumos.find(i=>i.id===insumoId)?.nombre || insumoId);
+  document.getElementById('msel_' + safeId).textContent = '✓ ' + label;
+  document.getElementById('mres_' + safeId).innerHTML = '';
+  document.getElementById('msearch_' + safeId).value = '';
 }
 
 function _confirmarMatchRecetas() {
-  document.querySelectorAll('#matchRecetasList select').forEach(sel => {
-    _matchMap[sel.dataset.nombre] = sel.value;
-  });
   _finalizarImportRecetas();
 }
 
