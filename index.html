@@ -200,6 +200,18 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .placeholder h2 { color: var(--ink2); margin-bottom: 8px; }
 .placeholder p { color: var(--ink3); font-size: 13px; }
 
+/* RUBROS */
+.rubro-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+.rubro-filter { font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; padding:7px 16px; border-radius:999px; border:2px solid transparent; cursor:pointer; transition:all .15s; white-space:nowrap; opacity:.7; }
+.rubro-filter:hover { opacity:1; }
+.rubro-filter.active { opacity:1; border-color:currentColor; }
+.rubro-section { margin-bottom:28px; }
+.rubro-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--border); }
+.rubro-icon { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.rubro-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink2); }
+.rubro-badge { font-size:11px; font-family:'DM Mono',monospace; padding:2px 8px; border-radius:999px; background:var(--surface2); color:var(--ink3); }
+.recetas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:10px; }
+
 /* MODAL */
 .overlay {
   display: none;
@@ -753,9 +765,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <div id="viewRecetas" class="view">
   <div class="toolbar">
     <input id="searchRecetas" class="search-input" type="text" placeholder="Buscar receta…" oninput="renderRecetas()">
-    <select id="filterCatReceta" onchange="renderRecetas()">
-      <option value="">Todas las categorías</option>
-    </select>
     <button class="btn btn-outline" onclick="document.getElementById('inputInsumosXls').click()">Importar insumos del Excel</button>
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
@@ -764,6 +773,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()">Limpiar recetas</button>
   </div>
   <div id="statsRecetas" class="stats-bar"></div>
+  <div id="recetaRubroFilters" class="rubro-filters"></div>
   <div id="recetasScreen"></div>
 </div>
 
@@ -903,7 +913,21 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         </select>
         <span id="fPresEquiv" style="font-size:12px;color:var(--accent);font-family:'DM Mono',monospace"></span>
       </div>
-      <span style="font-size:11px;color:var(--ink3)">Cuánto trae el paquete que comprás (ej. manteca 500g, crema 1L)</span>
+      <span style="font-size:11px;color:var(--ink3)">Cuánto trae el paquete que comprás (ej. manteca 500g, crema 1L, sobres 800u)</span>
+    </div>
+
+    <div class="field" id="fPresUnitWeightWrap" style="display:none">
+      <label>Peso por unidad <span style="font-weight:400;color:var(--ink3)">(solo si la presentación es en "u")</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="fPresUnitWeight" type="number" step="any" min="0" placeholder="ej. 5" style="width:90px" oninput="_updatePresEquiv()">
+        <select id="fPresUnitWeightUnit" onchange="_updatePresEquiv()" style="width:80px">
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="L">L</option>
+        </select>
+      </div>
+      <span style="font-size:11px;color:var(--ink3)">Cuánto pesa o mide cada unidad (ej. 5g por sachet → así la receta puede usarlo en gramos)</span>
     </div>
 
     <div class="field">
@@ -1355,13 +1379,27 @@ function _updatePresEquiv() {
   const el    = document.getElementById('fPresEquiv');
   // Auto-sync campo Unidad
   document.getElementById('fUnidad').value = unit;
+  // Show/hide peso-por-unidad only when presentación is in units
+  document.getElementById('fPresUnitWeightWrap').style.display = (unit === 'u') ? 'block' : 'none';
   if (!qty || !precio) { el.textContent = ''; return; }
   let costo, label;
   if      (unit === 'kg') { costo = precio / qty;         label = '/kg'; }
   else if (unit === 'g')  { costo = (precio / qty) * 1000; label = '/kg'; }
   else if (unit === 'L')  { costo = precio / qty;         label = '/L';  }
   else if (unit === 'ml') { costo = (precio / qty) * 1000; label = '/L';  }
-  else                    { costo = precio / qty;         label = '/u';  }
+  else {
+    const wt   = parseFloat(document.getElementById('fPresUnitWeight').value);
+    const wUnit = document.getElementById('fPresUnitWeightUnit').value;
+    if (wt && wUnit && wUnit !== 'u') {
+      const totalBase = qty * wt * (_UNIDAD_BASE[wUnit] || 1);
+      const baseLabel = (_typeOf(wUnit) === 'w') ? '/kg' : '/L';
+      const divisor   = (_typeOf(wUnit) === 'w') ? 1000 : 1000;
+      costo = (precio / totalBase) * divisor;
+      label = baseLabel;
+    } else {
+      costo = precio / qty; label = '/u';
+    }
+  }
   el.textContent = `= $${Math.round(costo).toLocaleString('es-AR')}${label}`;
 }
 
@@ -1548,6 +1586,9 @@ function openAddModal() {
   document.getElementById('fCategoria').value = '';
   document.getElementById('fPresUnit').value  = 'g';
   document.getElementById('fPresEquiv').textContent = '';
+  document.getElementById('fPresUnitWeight').value = '';
+  document.getElementById('fPresUnitWeightUnit').value = 'g';
+  document.getElementById('fPresUnitWeightWrap').style.display = 'none';
   document.getElementById('fBuscadorBoleta').value = '';
   document.getElementById('fBoletaResultados').innerHTML = '';
   _poblarSelectProveedor(null);
@@ -1565,6 +1606,8 @@ function openEditModal(id) {
   document.getElementById('fPrecioS').value   = ins.precioSinIVA ?? '';
   document.getElementById('fPresQty').value   = ins.presQty ?? '';
   document.getElementById('fPresUnit').value  = ins.presUnit ?? 'g';
+  document.getElementById('fPresUnitWeight').value = ins.presUnitWeight ?? '';
+  document.getElementById('fPresUnitWeightUnit').value = ins.presUnitWeightUnit ?? 'g';
   document.getElementById('fObs').value       = ins.observaciones;
   document.getElementById('fEditId').value    = id;
   document.getElementById('fBuscadorBoleta').value = '';
@@ -1584,8 +1627,10 @@ function saveInsumo() {
     categoria:    document.getElementById('fCategoria').value || '',
     precioConIVA: parseFloat(document.getElementById('fPrecioC').value) || null,
     precioSinIVA: parseFloat(document.getElementById('fPrecioS').value) || null,
-    presQty:      parseFloat(document.getElementById('fPresQty').value) || null,
-    presUnit:     document.getElementById('fPresUnit').value || 'g',
+    presQty:          parseFloat(document.getElementById('fPresQty').value) || null,
+    presUnit:         document.getElementById('fPresUnit').value || 'g',
+    presUnitWeight:   parseFloat(document.getElementById('fPresUnitWeight').value) || null,
+    presUnitWeightUnit: document.getElementById('fPresUnitWeightUnit').value || null,
     observaciones: document.getElementById('fObs').value.trim(),
   };
 
@@ -1746,8 +1791,8 @@ function renderInsumos() {
           <tr>
             <td><strong>${i.nombre}</strong></td>
             <td style="color:var(--ink2)">${i.unidad || '—'}</td>
-            <td class="mono price-civa" style="text-align:right">${fmt(i.precioConIVA)}</td>
-            <td class="mono price-siva" style="text-align:right">${fmt(i.precioSinIVA)}</td>
+            <td class="mono price-civa" style="text-align:right">${i.precioConIVA != null ? fmt(i.precioConIVA) : i.precioSinIVA != null ? `<span style="color:var(--ink3)" title="Estimado: S/IVA × 1.21">${fmt(Math.round(i.precioSinIVA * 1.21 * 100)/100)} <span style="font-size:10px">~</span></span>` : '—'}</td>
+            <td class="mono price-siva" style="text-align:right">${i.precioSinIVA != null ? fmt(i.precioSinIVA) : i.precioConIVA != null ? `<span style="color:var(--ink3)" title="Estimado: C/IVA ÷ 1.21">${fmt(Math.round(i.precioConIVA / 1.21 * 100)/100)} <span style="font-size:10px">~</span></span>` : '—'}</td>
             <td style="font-size:12px;color:var(--ink2);font-family:'DM Mono',monospace">${_fmtPres(i)}</td>
             <td style="color:var(--ink3);font-size:12px;max-width:200px">${i.observaciones || ''}</td>
             <td></td>
@@ -3738,17 +3783,25 @@ function calcCostoIng(ins, cantidad, unidad) {
   const precio = ins.precioSinIVA ?? ins.precioConIVA;
   if (!precio) return null;
 
-  // Resolve presentation: explicit presQty/presUnit, or fall back to insumo's own unit
   const presQty  = ins.presQty  || 1;
   const presUnit = ins.presUnit || ins.unidad || 'kg';
 
-  const presEnBase = presQty * (_UNIDAD_BASE[presUnit] || 1);
-  const cantEnBase = cantidad * (_UNIDAD_BASE[unidad]  || 1);
+  if (_typeOf(presUnit) === _typeOf(unidad)) {
+    const presEnBase = presQty * (_UNIDAD_BASE[presUnit] || 1);
+    const cantEnBase = cantidad * (_UNIDAD_BASE[unidad]  || 1);
+    return (precio / presEnBase) * cantEnBase;
+  }
 
-  // Incompatible types (weight ≠ volume, etc.) → can't calculate
-  if (_typeOf(presUnit) !== _typeOf(unidad)) return null;
+  // Cross-type: presentación en unidades con peso/volumen conocido por unidad
+  if (presUnit === 'u' && ins.presUnitWeight && ins.presUnitWeightUnit) {
+    if (_typeOf(ins.presUnitWeightUnit) === _typeOf(unidad)) {
+      const totalBase = presQty * ins.presUnitWeight * (_UNIDAD_BASE[ins.presUnitWeightUnit] || 1);
+      const cantEnBase = cantidad * (_UNIDAD_BASE[unidad] || 1);
+      return (precio / totalBase) * cantEnBase;
+    }
+  }
 
-  return (precio / presEnBase) * cantEnBase;
+  return null;
 }
 
 /* ── RECETAS ─────────────────────────────────────────────────────── */
@@ -4140,27 +4193,55 @@ function saveEditReceta() {
   verReceta(recetaId);
 }
 
+const CAT_TO_RUBRO = {
+  pastas:'Pastas', pasteleria:'Pastelería', pastelería:'Pastelería',
+  panaderia:'Panadería', panadería:'Panadería',
+  cocina:'Cocina', cafeteria:'Cafetería', cafetería:'Cafetería',
+  combo_cafeteria:'Cafetería', 'desayunos y meriendas':'Desayunos y Meriendas',
+  sandwich:'Panadería', sandwiches:'Panadería',
+  wraps:'Wraps', ensaladas:'Ensaladas', tartas:'Tartas',
+};
+const RUBRO_ORDER = ['Cafetería','Pastelería','Panadería','Pastas','Cocina','Desayunos y Meriendas','Wraps','Ensaladas','Tartas'];
+const RUBRO_STYLES = {
+  'Pastas':                { bg:'#FEE2E2', color:'#991B1B', icon:'🍝' },
+  'Desayunos y Meriendas': { bg:'#FEF9C3', color:'#854D0E', icon:'🥐' },
+  'Cafetería':             { bg:'#EDE9FE', color:'#5B21B6', icon:'☕' },
+  'Panadería':             { bg:'#FEF3C7', color:'#92400E', icon:'🍞' },
+  'Pastelería':            { bg:'#FCE7F3', color:'#9D174D', icon:'🎂' },
+  'Cocina':                { bg:'#D1FAE5', color:'#065F46', icon:'🍳' },
+  'Wraps':                 { bg:'#ECFDF5', color:'#065F46', icon:'🌯' },
+  'Ensaladas':             { bg:'#D1FAE5', color:'#065F46', icon:'🥗' },
+  'Tartas':                { bg:'#FFF0F6', color:'#9D174D', icon:'🥧' },
+};
+function _catToRubro(cat) {
+  return CAT_TO_RUBRO[(cat||'').toLowerCase().trim()] || (cat ? cat.charAt(0).toUpperCase()+cat.slice(1) : 'Otros');
+}
+let _rubroFiltro = 'todos';
+
 function renderRecetas() {
   _currentVerRecetaId = null;
-  const search    = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
-  const catFilter = document.getElementById('filterCatReceta')?.value || '';
-
-  const cats = [...new Set(recetas.map(r=>r.categoria))].sort();
-  const sel  = document.getElementById('filterCatReceta');
-  if (sel) {
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Todas las categorías</option>';
-    cats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; if(c===prev)o.selected=true; sel.appendChild(o); });
-  }
+  const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
   const visible = recetas.filter(r =>
-    (!search || r.nombre.toLowerCase().includes(search) || r.categoria.toLowerCase().includes(search)) &&
-    (!catFilter || r.categoria === catFilter)
+    !search || r.nombre.toLowerCase().includes(search) || (r.categoria||'').toLowerCase().includes(search)
   );
+
+  const rubrosUsados = [...new Set(visible.map(r => _catToRubro(r.categoria)))];
+  const rubrosSorted = [...RUBRO_ORDER.filter(r=>rubrosUsados.includes(r)), ...rubrosUsados.filter(r=>!RUBRO_ORDER.includes(r)).sort()];
+
+  // Filtros pills
+  const filtersEl = document.getElementById('recetaRubroFilters');
+  if (filtersEl) {
+    filtersEl.innerHTML = [`<button class="rubro-filter${_rubroFiltro==='todos'?' active':''}" style="background:#F0EDE8;color:#1A1814" onclick="_setRubroFiltro('todos')">Todas</button>`]
+      .concat(rubrosSorted.map(g => {
+        const s = RUBRO_STYLES[g] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+        return `<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g}</button>`;
+      })).join('');
+  }
 
   document.getElementById('statsRecetas').innerHTML = `
     <div class="stat-chip"><strong>${recetas.length}</strong> recetas</div>
-    <div class="stat-chip"><strong>${cats.length}</strong> categorías</div>
+    <div class="stat-chip"><strong>${rubrosSorted.length}</strong> rubros</div>
     ${visible.length !== recetas.length ? `<div class="stat-chip"><strong>${visible.length}</strong> resultados</div>` : ''}
   `;
 
@@ -4169,23 +4250,42 @@ function renderRecetas() {
     return;
   }
 
-  const byCat = {};
-  visible.forEach(r => { if(!byCat[r.categoria]) byCat[r.categoria]=[]; byCat[r.categoria].push(r); });
+  const filtradas = _rubroFiltro === 'todos' ? visible : visible.filter(r => _catToRubro(r.categoria) === _rubroFiltro);
+  const byRubro = {};
+  filtradas.forEach(r => {
+    const g = _catToRubro(r.categoria);
+    if (!byRubro[g]) byRubro[g] = [];
+    byRubro[g].push(r);
+  });
+  const orden = [...RUBRO_ORDER.filter(r=>byRubro[r]), ...Object.keys(byRubro).filter(r=>!RUBRO_ORDER.includes(r)).sort()];
 
-  document.getElementById('recetasScreen').innerHTML = Object.entries(byCat).sort(([a],[b])=>a.localeCompare(b,'es')).map(([cat,rs])=>`
-    <div style="margin-bottom:24px">
-      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${cat}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
-        ${rs.map(r=>{
+  document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
+    const rs = byRubro[rubro];
+    const s  = RUBRO_STYLES[rubro] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+    return `<div class="rubro-section">
+      <div class="rubro-header">
+        <div class="rubro-icon" style="background:${s.bg}">${s.icon}</div>
+        <span class="rubro-label" style="color:${s.color}">${rubro}</span>
+        <span class="rubro-badge">${rs.length}</span>
+      </div>
+      <div class="recetas-grid">
+        ${rs.map(r => {
           const totalIng = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.length,0);
           const mapeados = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.filter(i=>i.insumoId).length,0);
-          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          const st = RUBRO_STYLES[_catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
+          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
             <div style="font-size:12px;color:var(--ink2)">${mapeados}/${totalIng} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
           </button>`;
         }).join('')}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+
+function _setRubroFiltro(rubro) {
+  _rubroFiltro = rubro;
+  renderRecetas();
 }
 
 function verReceta(recetaId) {
