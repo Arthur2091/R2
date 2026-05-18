@@ -867,6 +867,12 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <select id="fProveedor" onchange="_onProveedorChange()">
         <option value="">— Sin asignar —</option>
       </select>
+    </div>
+    <div class="field" id="fProvProductoWrap" style="display:none">
+      <label>Producto del proveedor</label>
+      <select id="fProvProducto" onchange="_onProvProductoChange()">
+        <option value="">— Elegí un producto —</option>
+      </select>
       <span id="fProvHint" style="font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;margin-top:4px;display:block"></span>
     </div>
 
@@ -1265,48 +1271,73 @@ function _updatePresEquiv() {
 }
 
 function _onProveedorChange() {
-  const provId   = document.getElementById('fProveedor').value;
-  const insumoId = document.getElementById('fEditId').value;
-  const hint     = document.getElementById('fProvHint');
+  const provId = document.getElementById('fProveedor').value;
+  const wrap   = document.getElementById('fProvProductoWrap');
+  const sel    = document.getElementById('fProvProducto');
+  const hint   = document.getElementById('fProvHint');
   hint.textContent = '';
-  if (!provId || !insumoId) return;
+  sel.innerHTML = '<option value="">— Elegí un producto —</option>';
 
-  // Find latest price record for this insumo from this provider
-  const registros = precios
-    .filter(p => p.insumoId === insumoId && p.proveedorId === provId && p.precioUnitario)
-    .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  if (!provId) { wrap.style.display = 'none'; return; }
 
-  if (!registros.length) {
-    hint.textContent = 'Sin registros de precio de este proveedor';
+  const prov = proveedores.find(p => p.id === provId);
+  const items = (prov?.items || []).filter(it => it.insumoId);
+
+  if (!items.length) {
+    wrap.style.display = 'none';
+    hint.textContent = 'Este proveedor no tiene productos registrados';
     hint.style.color = 'var(--ink3)';
     return;
   }
 
-  const ultimo = registros[0];
-  const precioUnit = ultimo.precioUnitario;
-  const unidad     = ultimo.unidad || 'kg';
-  const fecha      = ultimo.fecha  || '';
+  items.sort((a,b) => (a.nombreBoleta||'').localeCompare(b.nombreBoleta||'','es')).forEach(it => {
+    const o = document.createElement('option');
+    o.value = it.insumoId;
+    o.textContent = it.nombreBoleta || it.insumoId;
+    sel.appendChild(o);
+  });
+  wrap.style.display = 'block';
 
-  // Auto-fill price and presentation
-  document.getElementById('fPrecioS').value = precioUnit.toFixed(2);
+  // Auto-select if the current insumo already matches one of the items
+  const currentId = document.getElementById('fEditId').value;
+  if (currentId && items.some(it => it.insumoId === currentId)) {
+    sel.value = currentId;
+    _onProvProductoChange();
+  }
+}
+
+function _onProvProductoChange() {
+  const provId     = document.getElementById('fProveedor').value;
+  const itemInsumoId = document.getElementById('fProvProducto').value;
+  const hint       = document.getElementById('fProvHint');
+  hint.textContent = '';
+  if (!provId || !itemInsumoId) return;
+
+  const registros = precios
+    .filter(p => p.insumoId === itemInsumoId && p.proveedorId === provId && p.precioUnitario)
+    .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+  if (!registros.length) {
+    hint.textContent = 'Sin registros de precio para este producto';
+    hint.style.color = 'var(--ink3)';
+    return;
+  }
+
+  const ultimo   = registros[0];
+  const precio   = ultimo.precioUnitario;
+  const unidad   = ultimo.unidad || 'kg';
+  const fecha    = ultimo.fecha  || '';
+
+  document.getElementById('fPrecioS').value = precio.toFixed(2);
   document.getElementById('fPrecioC').value = '';
 
-  // Set presentation from purchase unit
-  const unitMap = { kg:1, g:0.001, L:1, ml:0.001, u:1 };
-  if (['kg','L'].includes(unidad)) {
-    document.getElementById('fPresQty').value  = 1;
-    document.getElementById('fPresUnit').value = unidad === 'kg' ? 'kg' : 'L';
-  } else if (unidad === 'g' || unidad === 'ml') {
-    document.getElementById('fPresQty').value  = 1;
-    document.getElementById('fPresUnit').value = unidad;
-  } else {
-    document.getElementById('fPresQty').value  = 1;
-    document.getElementById('fPresUnit').value = 'u';
-  }
+  const presUnit = ['kg','L','g','ml'].includes(unidad) ? unidad : 'u';
+  document.getElementById('fPresQty').value  = 1;
+  document.getElementById('fPresUnit').value = presUnit;
   _updatePresEquiv();
 
   hint.style.color = 'var(--accent)';
-  hint.textContent = `Último precio: $${precioUnit.toFixed(2)}/${unidad} · ${fecha} · ${registros.length} registro${registros.length>1?'s':''}`;
+  hint.textContent = `Último precio: $${precio.toFixed(2)}/${unidad} · ${fecha} · ${registros.length} reg.`;
 }
 
 function _poblarSelectProveedor(insumoId) {
@@ -1317,10 +1348,13 @@ function _poblarSelectProveedor(insumoId) {
     o.value = p.id; o.textContent = p.nombre;
     sel.appendChild(o);
   });
-  // Pre-select if insumo already linked to a provider
+  // Pre-select if insumo already linked to a provider, then populate product select
   if (insumoId) {
     const prov = proveedores.find(p => (p.items||[]).some(it => it.insumoId === insumoId));
-    if (prov) sel.value = prov.id;
+    if (prov) { sel.value = prov.id; _onProveedorChange(); }
+    else { document.getElementById('fProvProductoWrap').style.display = 'none'; }
+  } else {
+    document.getElementById('fProvProductoWrap').style.display = 'none';
   }
 }
 
@@ -3381,31 +3415,26 @@ function _fmtPres(ins) {
   return `${ins.presQty}${ins.presUnit} · $${por100.toFixed(2)}/100${isWeight?'g':'ml'}`;
 }
 
-const _UNIDAD_BASE = { kg: 1000, g: 1, L: 1000, ml: 1, u: 1 };
+// Base units in grams/ml/units — includes culinary measures
+const _UNIDAD_BASE = { kg: 1000, g: 1, L: 1000, ml: 1, u: 1, cdita: 5, cda: 15, taza: 240 };
+const _typeOf = u => ['kg','g'].includes(u) ? 'w' : ['L','ml','cdita','cda','taza'].includes(u) ? 'v' : 'u';
 
 function calcCostoIng(ins, cantidad, unidad) {
   if (!ins) return null;
   const precio = ins.precioSinIVA ?? ins.precioConIVA;
   if (!precio) return null;
 
-  // If no presentation defined, assume precio is per kg/L/u (old behavior)
-  if (!ins.presQty || !ins.presUnit) {
-    const base = _UNIDAD_BASE[ins.presUnit || 'kg'] || 1000;
-    const cantBase = cantidad * (_UNIDAD_BASE[unidad] || 1000);
-    return (precio / base) * cantBase / (_UNIDAD_BASE[ins.presUnit || 'kg'] || 1) * (_UNIDAD_BASE[unidad] || 1);
-  }
+  // Resolve presentation: explicit presQty/presUnit, or fall back to insumo's own unit
+  const presQty  = ins.presQty  || 1;
+  const presUnit = ins.presUnit || ins.unidad || 'kg';
 
-  const presBase = ins.presQty * (_UNIDAD_BASE[ins.presUnit] || 1);
-  const cantBase = cantidad * (_UNIDAD_BASE[unidad] || 1);
+  const presEnBase = presQty * (_UNIDAD_BASE[presUnit] || 1);
+  const cantEnBase = cantidad * (_UNIDAD_BASE[unidad]  || 1);
 
-  // Check type compatibility (weight ↔ weight, volume ↔ volume, u ↔ u)
-  const typeOf = u => ['kg','g'].includes(u) ? 'w' : ['L','ml'].includes(u) ? 'v' : 'u';
-  if (typeOf(ins.presUnit) !== typeOf(unidad)) {
-    // Fallback: assume precio is per kg when no pres type match
-    return precio * cantidad;
-  }
+  // Incompatible types (weight ≠ volume, etc.) → can't calculate
+  if (_typeOf(presUnit) !== _typeOf(unidad)) return null;
 
-  return (precio / presBase) * cantBase;
+  return (precio / presEnBase) * cantEnBase;
 }
 
 /* ── RECETAS ─────────────────────────────────────────────────────── */
@@ -3801,6 +3830,8 @@ function verReceta(recetaId) {
   });
   const rinde0   = r.subrecetas[0]?.rinde || 1;
   const costoUnd = costoTotal > 0 ? costoTotal / rinde0 : 0;
+  const ganancia = (costoUnd > 0 && r.precioVenta)
+    ? Math.round(((r.precioVenta - costoUnd) / costoUnd) * 100) : null;
   const sinVincular = r.subrecetas.reduce((s,sub) => s + sub.ingredientes.filter(i=>!i.insumoId).length, 0);
 
   document.getElementById('recetasScreen').innerHTML = `
@@ -3811,10 +3842,11 @@ function verReceta(recetaId) {
         <div style="font-size:13px;color:var(--ink2);margin-top:2px">${r.categoria}</div>
         ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
       </div>
-      <div style="display:flex;gap:20px;align-items:center">
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
-        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/unidad</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
+        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde0}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
         ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
+        ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
       </div>
     </div>
     ${r.subrecetas.map((sub, si) => `
