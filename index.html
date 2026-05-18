@@ -890,6 +890,53 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<!-- MODAL: Editar ingrediente de receta -->
+<div id="modalEditIng" class="overlay">
+  <div class="modal" style="width:480px">
+    <h2 style="margin-bottom:4px">Editar ingrediente</h2>
+    <div id="meiNombreOrig" style="font-size:12px;color:var(--ink3);margin-bottom:16px"></div>
+
+    <input type="hidden" id="meiRecetaId">
+    <input type="hidden" id="meiSi">
+    <input type="hidden" id="meiIi">
+
+    <div class="field">
+      <label>Insumo vinculado</label>
+      <div id="meiInsumoNombre" style="font-size:14px;font-weight:600;color:var(--ink2);padding:6px 0"></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field">
+        <label>Cantidad</label>
+        <input id="meiCantidad" type="number" min="0" step="any" oninput="_meiCalcCosto()">
+      </div>
+      <div class="field">
+        <label>Unidad</label>
+        <select id="meiUnidad" onchange="_meiCalcCosto()">
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="L">L</option>
+          <option value="u">u</option>
+          <option value="cdita">cdita ≈ 5ml</option>
+          <option value="cda">cda ≈ 15ml</option>
+          <option value="taza">taza ≈ 240ml</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="meiCostoWrap" style="display:none;background:var(--surface2);border-radius:8px;padding:10px 14px;margin-top:4px;font-family:'DM Mono',monospace;font-size:13px">
+      Subtotal: <span id="meiCosto" style="font-weight:700;color:var(--accent)"></span>
+      <span id="meiEquiv" style="font-size:11px;color:var(--ink3);margin-left:8px"></span>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('modalEditIng')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_saveEditIng()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Agregar / Editar Proveedor -->
 <div id="modalProveedor" class="overlay">
   <div class="modal">
@@ -3872,9 +3919,9 @@ function verReceta(recetaId) {
             const pres = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>' : '';
             const vinculado = ins
               ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                   <span style="color:var(--accent);font-size:13px;font-weight:500">${ins.nombre}</span>
-                   <button onclick="openEditModal('${ins.id}')"
-                     style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Editar</button>
+                   <span style="color:var(--ink2);font-size:13px">${ins.nombre}</span>
+                   <button onclick="editarIngrediente('${recetaId}',${si},${ii})"
+                     style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Editar ingrediente</button>
                    <button onclick="_desvincularIng('${recetaId}',${si},${ii})"
                      style="font-size:11px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px">✕</button>
                  </div>`
@@ -3961,6 +4008,74 @@ function _desvincularIng(recetaId, si, ii) {
 
   persistRecetas();
   verReceta(recetaId);
+}
+
+/* ── EDITAR INGREDIENTE DE RECETA ──────────────────────────────── */
+let _meiIns = null; // insumo vinculado activo en el modal
+
+function editarIngrediente(recetaId, si, ii) {
+  const receta = recetas.find(r => r.id === recetaId);
+  if (!receta) return;
+  const ing = receta.subrecetas[si]?.ingredientes[ii];
+  if (!ing) return;
+
+  _meiIns = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
+
+  document.getElementById('meiRecetaId').value = recetaId;
+  document.getElementById('meiSi').value       = si;
+  document.getElementById('meiIi').value       = ii;
+  document.getElementById('meiNombreOrig').textContent = `Ingrediente de receta: ${ing.nombreOriginal}`;
+  document.getElementById('meiInsumoNombre').textContent = _meiIns?.nombre ?? '—';
+  document.getElementById('meiCantidad').value = ing.cantidad;
+  document.getElementById('meiUnidad').value   = ing.unidad || 'g';
+  _meiCalcCosto();
+  openModal('modalEditIng');
+}
+
+function _meiCalcCosto() {
+  const cantidad = parseFloat(document.getElementById('meiCantidad').value);
+  const unidad   = document.getElementById('meiUnidad').value;
+  const wrap     = document.getElementById('meiCostoWrap');
+  const costoEl  = document.getElementById('meiCosto');
+  const equivEl  = document.getElementById('meiEquiv');
+
+  const EQUIV = { cdita: '≈ 5ml', cda: '≈ 15ml', taza: '≈ 240ml' };
+  equivEl.textContent = EQUIV[unidad] || '';
+
+  if (!_meiIns || !cantidad) { wrap.style.display = 'none'; return; }
+  const costo = calcCostoIng(_meiIns, cantidad, unidad);
+  if (costo === null) {
+    wrap.style.display = 'block';
+    costoEl.textContent = '— unidades incompatibles';
+    costoEl.style.color = 'var(--ink3)';
+  } else {
+    wrap.style.display = 'block';
+    costoEl.textContent = '$' + costo.toFixed(2);
+    costoEl.style.color = 'var(--accent)';
+  }
+}
+
+function _saveEditIng() {
+  const recetaId = document.getElementById('meiRecetaId').value;
+  const si       = parseInt(document.getElementById('meiSi').value);
+  const ii       = parseInt(document.getElementById('meiIi').value);
+  const cantidad = parseFloat(document.getElementById('meiCantidad').value);
+  const unidad   = document.getElementById('meiUnidad').value;
+
+  if (!cantidad || cantidad <= 0) { toast('Ingresá una cantidad válida', 'error'); return; }
+
+  const receta = recetas.find(r => r.id === recetaId);
+  if (!receta) return;
+  const ing = receta.subrecetas[si]?.ingredientes[ii];
+  if (!ing) return;
+
+  ing.cantidad = cantidad;
+  ing.unidad   = unidad;
+
+  persistRecetas();
+  closeModal('modalEditIng');
+  verReceta(recetaId);
+  toast('Ingrediente actualizado', 'success');
 }
 
 function eliminarReceta(id) {
