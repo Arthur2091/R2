@@ -3821,7 +3821,7 @@ function calcCostoIng(ins, cantidad, unidad) {
   if (!precio) return null;
 
   const presQty  = ins.presQty  || 1;
-  const presUnit = ins.presUnit || ins.unidad || 'kg';
+  const presUnit = ins.presUnit || ins.unidad || ins.presUnitWeightUnit || 'kg';
 
   if (_typeOf(presUnit) === _typeOf(unidad)) {
     const presEnBase = presQty * (_UNIDAD_BASE[presUnit] || 1);
@@ -4223,7 +4223,7 @@ function _migrarRecetasFlat() {
       migradas.push({
         id: crypto.randomUUID(),
         nombre: sub.nombre || r.nombre,
-        rubro: _catToRubro(r.categoria),
+        rubro: _catToRubro(r.categoria) || 'Otros',
         rinde: sub.rinde || 1,
         precioVenta: r.precioVenta || null,
         ingredientes: sub.ingredientes || []
@@ -4280,13 +4280,14 @@ function _erRenderIngs() {
   }).join('');
 }
 
-function _erSetNombre(ii, v)  { _erIngs[ii].nombreOriginal = v.trim(); }
-function _erSetCant(ii, v)    { _erIngs[ii].cantidad = parseFloat(v) || 0; }
-function _erSetUnidad(ii, v)  { _erIngs[ii].unidad   = v.trim(); }
-function _erRemoveIng(ii)     { _erIngs.splice(ii, 1); _erRenderIngs(); }
-function _erDesvincular(ii)   { _erIngs[ii].insumoId = null; _erIngs[ii].recetaId = null; _erRenderIngs(); }
+function _erSetNombre(ii, v)  { ii=+ii; if(_erIngs[ii]) _erIngs[ii].nombreOriginal = v.trim(); }
+function _erSetCant(ii, v)    { ii=+ii; if(_erIngs[ii]) _erIngs[ii].cantidad = parseFloat(v) || 0; }
+function _erSetUnidad(ii, v)  { ii=+ii; if(_erIngs[ii]) _erIngs[ii].unidad = v.trim(); }
+function _erRemoveIng(ii)     { ii=+ii; _erIngs.splice(ii, 1); _erRenderIngs(); }
+function _erDesvincular(ii)   { ii=+ii; if(_erIngs[ii]) { _erIngs[ii].insumoId = null; _erIngs[ii].recetaId = null; _erRenderIngs(); } }
 
 function _erBuscarInsInline(input, ii) {
+  ii = +ii;
   const q = input.value.toLowerCase().trim();
   const res = document.getElementById('erIR_' + ii);
   if (!res || !q) { if(res) res.innerHTML=''; return; }
@@ -4298,6 +4299,7 @@ function _erBuscarInsInline(input, ii) {
 }
 
 function _erBuscarRecInline(input, ii) {
+  ii = +ii;
   const q   = input.value.toLowerCase().trim();
   const res = document.getElementById('erIR_' + ii);
   const rid = document.getElementById('erRecetaId').value;
@@ -4309,8 +4311,8 @@ function _erBuscarRecInline(input, ii) {
   ).join('');
 }
 
-function _erVincularIns(ii, insumoId)     { _erIngs[ii].insumoId = insumoId; _erIngs[ii].recetaId = null; _erRenderIngs(); }
-function _erVincularRec(ii, subRecetaId)  { _erIngs[ii].recetaId = subRecetaId; _erIngs[ii].insumoId = null; _erRenderIngs(); }
+function _erVincularIns(ii, insumoId)    { ii=+ii; if(_erIngs[ii]) { _erIngs[ii].insumoId = insumoId; _erIngs[ii].recetaId = null; _erRenderIngs(); } }
+function _erVincularRec(ii, subRecetaId) { ii=+ii; if(_erIngs[ii]) { _erIngs[ii].recetaId = subRecetaId; _erIngs[ii].insumoId = null; _erRenderIngs(); } }
 
 function _erBuscarIns(q) {
   const res = document.getElementById('erResIns');
@@ -4523,7 +4525,8 @@ function _setRubroFiltro(rubro) {
   renderRecetas();
 }
 
-function _calcCostoRecetaUnd(rid, _visited = new Set()) {
+function _calcCostoRecetaUnd(rid, _visited) {
+  if (!_visited) _visited = new Set();
   if (_visited.has(rid)) return 0;
   _visited.add(rid);
   const r = recetas.find(x => x.id === rid);
@@ -4533,10 +4536,11 @@ function _calcCostoRecetaUnd(rid, _visited = new Set()) {
     if (ing.insumoId) {
       const ins = insumos.find(i => i.id === ing.insumoId);
       const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
-      if (c) total += c;
+      if (c && !isNaN(c)) total += c;
     } else if (ing.recetaId) {
       const cUnd = _calcCostoRecetaUnd(ing.recetaId, _visited);
-      total += cUnd * (ing.cantidad || 1);
+      const qty  = Math.max(0, parseFloat(ing.cantidad) || 0);
+      if (!isNaN(cUnd) && qty > 0) total += cUnd * qty;
     }
   });
   return total / (r.rinde || 1);
@@ -4555,7 +4559,9 @@ function verReceta(recetaId) {
       const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
       if (c) costoTotal += c;
     } else if (ing.recetaId) {
-      costoTotal += _calcCostoRecetaUnd(ing.recetaId) * (ing.cantidad || 1);
+      const cUnd = _calcCostoRecetaUnd(ing.recetaId, new Set());
+      const qty  = Math.max(0, parseFloat(ing.cantidad) || 0);
+      if (!isNaN(cUnd) && qty > 0) costoTotal += cUnd * qty;
     }
   });
   const rinde    = r.rinde || 1;
@@ -4596,7 +4602,7 @@ function verReceta(recetaId) {
         const ins   = ing.insumoId  ? insumos.find(i => i.id === ing.insumoId)   : null;
         const subR  = ing.recetaId  ? recetas.find(x => x.id === ing.recetaId)   : null;
         const st    = ins  ? calcCostoIng(ins, ing.cantidad, ing.unidad)
-                   : subR ? _calcCostoRecetaUnd(ing.recetaId) * (ing.cantidad||1)
+                   : subR ? (() => { const c = _calcCostoRecetaUnd(ing.recetaId, new Set()); const q = Math.max(0, parseFloat(ing.cantidad)||0); return (!isNaN(c) && q>0) ? c*q : null; })()
                    : null;
         const info  = ins?.presQty ? `${ins.presQty}${ins.presUnit}`
                     : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>'
@@ -4704,19 +4710,14 @@ function _buscarIngMatch(input, recetaId, ii) {
 function _vincularIng(recetaId, ii, insumoId) {
   const receta = recetas.find(r => r.id === recetaId);
   if (!receta) return;
-  const nombreOriginal = receta.ingredientes[ii]?.nombreOriginal;
-
-  // Vincular en TODAS las recetas donde aparezca el mismo nombreOriginal
-  recetas.forEach(r => {
-    (r.ingredientes || []).forEach(ing => {
-      if (ing.nombreOriginal === nombreOriginal) ing.insumoId = insumoId;
-    });
-  });
-
+  const ing = receta.ingredientes[ii];
+  if (!ing) return;
+  ing.insumoId = insumoId;
+  ing.recetaId = null;
   persistRecetas();
   verReceta(recetaId);
   const ins = insumos.find(i => i.id === insumoId);
-  toast(`"${nombreOriginal}" vinculado a "${ins?.nombre}" en todas las recetas`, 'success');
+  toast(`"${ing.nombreOriginal}" vinculado a "${ins?.nombre}"`, 'success');
 }
 
 function _desvincularIng(recetaId, ii) {
