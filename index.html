@@ -4511,6 +4511,29 @@ function renderRecetas() {
   }
 
   const filtradas = _rubroFiltro === 'todos' ? visible : visible.filter(r => (r.rubro || _catToRubro(r.categoria)) === _rubroFiltro);
+
+  // Modo selección → lista plana alfabética
+  if (_seleccionModo) {
+    const sorted = [...filtradas].sort((a,b) => a.nombre.localeCompare(b.nombre,'es'));
+    document.getElementById('recetasScreen').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <span style="font-size:13px;color:var(--ink2)">${sorted.length} recetas — seleccioná las que querés mover</span>
+        <button class="btn btn-sm btn-outline" onclick="_seleccionarTodas()" style="font-size:12px">${_seleccionIds.size === sorted.length ? 'Deseleccionar todas' : 'Seleccionar todas'}</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+        ${sorted.map(r => {
+          const st  = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+          const sel = _seleccionIds.has(r.id);
+          return `<button onclick="_toggleSeleccion('${r.id}')" style="background:${sel?st.bg:'var(--surface)'};border:${sel?`2px solid ${st.color}`:'1px solid var(--border)'};border-radius:var(--radius);padding:10px 12px;text-align:left;cursor:pointer;transition:all .15s;position:relative">
+            ${sel?`<span style="position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:${st.color};color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">✓</span>`:''}
+            <div style="font-weight:600;font-size:13px;margin-bottom:3px;padding-right:${sel?'18px':'0'}">${r.nombre}</div>
+            <div style="font-size:11px;color:var(--ink3)">${st.icon} ${r.rubro || _catToRubro(r.categoria) || '—'}</div>
+          </button>`;
+        }).join('')}
+      </div>`;
+    return;
+  }
+
   const byRubro = {};
   filtradas.forEach(r => {
     const g = r.rubro || _catToRubro(r.categoria);
@@ -4533,13 +4556,7 @@ function renderRecetas() {
           const ings     = r.ingredientes || [];
           const mapeados = ings.filter(i=>i.insumoId).length;
           const st       = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
-          const sel      = _seleccionModo && _seleccionIds.has(r.id);
-          const border   = sel ? `2px solid ${st.color}` : '1px solid var(--border)';
-          const bg       = sel ? st.bg : 'var(--surface)';
-          const action   = _seleccionModo ? `_toggleSeleccion('${r.id}')` : `verReceta('${r.id}')`;
-          const hover    = _seleccionModo ? '' : `onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'"`;
-          return `<button onclick="${action}" style="background:${bg};border:${border};border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:all .15s;position:relative" ${hover}>
-            ${sel ? `<span style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;background:${st.color};color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">✓</span>` : ''}
+          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
             <div style="font-size:12px;color:var(--ink2)">${mapeados}/${ings.length} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
           </button>`;
@@ -4590,6 +4607,14 @@ function _actualizarBarraSeleccion() {
   } else {
     bar.style.display = 'none';
   }
+}
+
+function _seleccionarTodas() {
+  const filtradas = _rubroFiltro === 'todos' ? recetas : recetas.filter(r => (r.rubro || _catToRubro(r.categoria)) === _rubroFiltro);
+  if (_seleccionIds.size === filtradas.length) _seleccionIds.clear();
+  else filtradas.forEach(r => _seleccionIds.add(r.id));
+  _actualizarBarraSeleccion();
+  renderRecetas();
 }
 
 function _asignarRubroSeleccion() {
