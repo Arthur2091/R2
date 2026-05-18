@@ -2889,7 +2889,7 @@ Si no podés leer algún campo con certeza, ponés null.`;
 
   const body = JSON.stringify({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [{
       role: 'user',
       content: [
@@ -2926,9 +2926,11 @@ Si no podés leer algún campo con certeza, ponés null.`;
       data = await res.json();
       break;
     }
+    if (data.stop_reason === 'max_tokens') throw new Error('Respuesta truncada (boleta muy larga). Intentá con una imagen más clara o de menor tamaño.');
     const text = data.content[0].text.trim();
     const jsonStr = text.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
-    const parsed = JSON.parse(jsonStr);
+    let parsed;
+    try { parsed = JSON.parse(jsonStr); } catch(e) { throw new Error('No se pudo parsear la respuesta de la IA. Respuesta: ' + text.slice(0,200)); }
 
     _boletaItems = (parsed.items || []).map(it => {
       if (it.precio_total == null && it.precio_unitario != null && it.cantidad != null) {
