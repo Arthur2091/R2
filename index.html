@@ -4703,11 +4703,26 @@ function renderRecetas() {
   });
   const orden = [...RUBRO_ORDER.filter(r => byRubro[r]), ...(byRubro['__sin__'] ? ['__sin__'] : [])];
 
+  const rubroOpts = RUBRO_ORDER.map(ro => `<option value="${ro}">${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('');
+
+  // Card simple — sin selector (el selector está en el título del grupo)
   const renderCard = (r, accentColor) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='${accentColor}'" onmouseout="this.style.borderColor='var(--border)'"
+        onclick="verReceta('${r.id}')">
+      <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
+      <div style="font-size:12px;color:var(--ink2)">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
+    </div>`;
+  };
+
+  // Card con selector de rubro — para recetas sin grupo (manuales)
+  const renderCardConSelector = (r, accentColor) => {
+    const ings     = r.ingredientes || [];
+    const mapeados = ings.filter(i => i.insumoId).length;
     const rubroVal = RUBRO_ORDER.includes(r.rubro) ? r.rubro : '';
-    const opts     = RUBRO_ORDER.map(ro => `<option value="${ro}"${ro===rubroVal?' selected':''}>${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('');
+    const opts     = `${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s"
         onmouseover="this.style.borderColor='${accentColor}'" onmouseout="this.style.borderColor='var(--border)'"
         onclick="verReceta('${r.id}')">
@@ -4716,7 +4731,6 @@ function renderRecetas() {
         <span style="font-size:12px;color:var(--ink2);flex:1">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</span>
         <select onclick="event.stopPropagation()" onchange="event.stopPropagation();_cambiarRubroReceta('${r.id}',this.value)"
           style="font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--ink2);font-family:var(--font);cursor:pointer;max-width:130px">
-          ${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}
           ${opts}
         </select>
       </div>
@@ -4737,14 +4751,27 @@ function renderRecetas() {
       else sinGrupo.push(r);
     });
 
-    const gruposHtml = Object.keys(byGrupo).sort().map(g => `
-      <div style="margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.06em;padding:2px 0 8px 2px;opacity:.75">${g}</div>
-        <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r, s.color)).join('')}</div>
-      </div>`).join('');
+    // Grupo con selector en el título — cambia el rubro de todas las sub-recetas del grupo
+    const gruposHtml = Object.keys(byGrupo).sort().map(g => {
+      const grupoRubro = byGrupo[g][0]?.rubro || '';
+      const opts = `${!RUBRO_ORDER.includes(grupoRubro) ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
+      const safeG = g.replace(/'/g, "\\'");
+      return `
+        <div style="margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px;padding:4px 2px 8px 2px;border-bottom:1px solid var(--border);margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.06em;flex:1">${g}</span>
+            <span style="font-size:11px;color:var(--ink3)">${byGrupo[g].length} receta${byGrupo[g].length!==1?'s':''}</span>
+            <select onclick="event.stopPropagation()" onchange="_cambiarRubroGrupo('${safeG}', this.value)"
+              style="font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid ${isSin?'#F59E0B':'var(--border)'};background:${isSin?'#FFFBEB':'var(--surface2)'};color:${isSin?'#92400E':'var(--ink)'};font-family:var(--font);cursor:pointer;font-weight:${isSin?'600':'400'}">
+              ${opts}
+            </select>
+          </div>
+          <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r, s.color)).join('')}</div>
+        </div>`;
+    }).join('');
 
     const sinGrupoHtml = sinGrupo.length
-      ? `<div class="recetas-grid">${sinGrupo.map(r => renderCard(r, s.color)).join('')}</div>`
+      ? `<div class="recetas-grid">${sinGrupo.map(r => renderCardConSelector(r, s.color)).join('')}</div>`
       : '';
 
     return `<div class="rubro-section">
@@ -4767,6 +4794,13 @@ function _cambiarRubroReceta(id, nuevoRubro) {
   const r = recetas.find(x => x.id === id);
   if (!r || !nuevoRubro) return;
   r.rubro = nuevoRubro;
+  persistRecetas();
+  renderRecetas();
+}
+
+function _cambiarRubroGrupo(grupo, nuevoRubro) {
+  if (!nuevoRubro) return;
+  recetas.forEach(r => { if (r.grupo === grupo) r.rubro = nuevoRubro; });
   persistRecetas();
   renderRecetas();
 }
