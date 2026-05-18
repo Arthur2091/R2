@@ -4485,15 +4485,17 @@ function renderRecetas() {
   );
 
   const rubrosUsados = [...new Set(visible.map(r => r.rubro || _catToRubro(r.categoria)))];
-  const rubrosSorted = [...RUBRO_ORDER.filter(r=>rubrosUsados.includes(r)), ...rubrosUsados.filter(r=>!RUBRO_ORDER.includes(r)).sort()];
+  const rubrosExtra  = rubrosUsados.filter(r => !RUBRO_ORDER.includes(r)).sort();
+  const rubrosSorted = [...RUBRO_ORDER, ...rubrosExtra];
 
-  // Filtros pills
+  // Filtros pills — siempre muestran todos los rubros de RUBRO_ORDER
   const filtersEl = document.getElementById('recetaRubroFilters');
   if (filtersEl) {
     filtersEl.innerHTML = [`<button class="rubro-filter${_rubroFiltro==='todos'?' active':''}" style="background:#F0EDE8;color:#1A1814" onclick="_setRubroFiltro('todos')">Todas</button>`]
       .concat(rubrosSorted.map(g => {
-        const s = RUBRO_STYLES[g] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
-        return `<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g}</button>`;
+        const s     = RUBRO_STYLES[g] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+        const count = byRubroCount(g, visible);
+        return `<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color};${count===0?'opacity:.45':'opacity:1'}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g}${count>0?` <span style="font-size:11px;font-weight:400">(${count})</span>`:''}</button>`;
       })).join('');
   }
 
@@ -4545,6 +4547,10 @@ function renderRecetas() {
       </div>
     </div>`;
   }).join('');
+}
+
+function byRubroCount(rubro, lista) {
+  return lista.filter(r => (r.rubro || _catToRubro(r.categoria)) === rubro).length;
 }
 
 function _setRubroFiltro(rubro) {
