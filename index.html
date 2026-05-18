@@ -775,12 +775,21 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
     <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
+    <button id="btnSeleccionarRecetas" class="btn btn-outline" onclick="_toggleModoSeleccion()">Seleccionar</button>
     <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
     <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()">Limpiar recetas</button>
   </div>
   <div id="statsRecetas" class="stats-bar"></div>
   <div id="recetaRubroFilters" class="rubro-filters"></div>
   <div id="recetasScreen"></div>
+  <div id="recetasSelBar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:12px 20px;display:none;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,.25);z-index:200;min-width:360px">
+    <span id="recetasSelCount" style="font-size:13px;font-weight:600;white-space:nowrap"></span>
+    <select id="recetasSelRubro" style="flex:1;padding:6px 10px;border-radius:8px;border:none;font:14px var(--font);background:var(--surface);color:var(--ink);outline:none">
+      <option value="">— Elegí rubro —</option>
+    </select>
+    <button class="btn btn-sm" style="background:var(--accent);color:#fff;white-space:nowrap" onclick="_asignarRubroSeleccion()">Asignar</button>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,.15);color:#fff" onclick="_toggleModoSeleccion()">Cancelar</button>
+  </div>
 </div>
 
 <!-- MODAL: Configuración global de costos -->
@@ -3040,7 +3049,7 @@ function renderBoletaItems() {
 function _boletaSet(idx, el, field, isNum) {
   _boletaItems[idx][field] = isNum ? (parseFloat(el.value) || null) : el.value;
   // Recalcular precio_total si cambia algún campo relevante
-  if (['cantidad','peso_por_unidad','precio_unitario'].includes(field)) {
+  if (['cantidad','precio_unitario'].includes(field)) {
     const it = _boletaItems[idx];
     const pu = it.precio_unitario;
     const cant = it.cantidad;
@@ -4188,7 +4197,7 @@ function saveConfigCostos() {
   const e = parseFloat(document.getElementById('cfgExtras').value) || 0;
   localStorage.setItem('cons_margen_obj', m);
   localStorage.setItem('cons_costos_extra', e);
-  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e, apikey: localStorage.getItem('cons_apikey') || '' }).catch(() => {});
+  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e }).catch(() => {});
   closeModal('modalConfigCostos');
   toast('Configuración guardada', 'success');
   if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
@@ -4198,11 +4207,11 @@ function saveConfigCostos() {
 let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
 
 function _persistRubros() {
-  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0, apikey: localStorage.getItem('cons_apikey') || '' }).catch(() => {});
+  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }).catch(() => {});
 }
 
 function _poblarSelectRubros(sel, valorActual) {
-  const base = ['Cafetería','Pastelería','Panadería','Pastas','Cocina','Desayunos y Meriendas','Wraps','Ensaladas','Tartas'];
+  const base = ['Pastas','Desayunos y Meriendas','Cafetería','Wraps','Ensaladas','Pastelería','Tartas','Menú del Día','Panadería','Cocina','Sandwich','Jugos y Licuados'];
   sel.innerHTML = '<option value="">— Elegí —</option>';
   [...base, ..._customRubros].forEach(r => {
     const o = document.createElement('option');
@@ -4442,20 +4451,25 @@ const CAT_TO_RUBRO = {
   panaderia:'Panadería', panadería:'Panadería',
   cocina:'Cocina', cafeteria:'Cafetería', cafetería:'Cafetería',
   combo_cafeteria:'Cafetería', 'desayunos y meriendas':'Desayunos y Meriendas',
-  sandwich:'Panadería', sandwiches:'Panadería',
-  wraps:'Wraps', ensaladas:'Ensaladas', tartas:'Tartas',
+  sandwich:'Sandwich', sandwiches:'Sandwich',
+  wraps:'Wraps', ensaladas:'Ensaladas', tartas:'Tartas', tarta:'Tartas',
+  'menu del dia':'Menú del Día', 'menú del día':'Menú del Día',
+  'jugos y licuados':'Jugos y Licuados',
 };
-const RUBRO_ORDER = ['Cafetería','Pastelería','Panadería','Pastas','Cocina','Desayunos y Meriendas','Wraps','Ensaladas','Tartas'];
+const RUBRO_ORDER = ['Pastas','Desayunos y Meriendas','Cafetería','Wraps','Ensaladas','Pastelería','Tartas','Menú del Día','Panadería','Cocina','Sandwich','Jugos y Licuados'];
 const RUBRO_STYLES = {
   'Pastas':                { bg:'#FEE2E2', color:'#991B1B', icon:'🍝' },
   'Desayunos y Meriendas': { bg:'#FEF9C3', color:'#854D0E', icon:'🥐' },
   'Cafetería':             { bg:'#EDE9FE', color:'#5B21B6', icon:'☕' },
-  'Panadería':             { bg:'#FEF3C7', color:'#92400E', icon:'🍞' },
-  'Pastelería':            { bg:'#FCE7F3', color:'#9D174D', icon:'🎂' },
-  'Cocina':                { bg:'#D1FAE5', color:'#065F46', icon:'🍳' },
   'Wraps':                 { bg:'#ECFDF5', color:'#065F46', icon:'🌯' },
-  'Ensaladas':             { bg:'#D1FAE5', color:'#065F46', icon:'🥗' },
+  'Ensaladas':             { bg:'#D1FAE5', color:'#15803D', icon:'🥗' },
+  'Pastelería':            { bg:'#FCE7F3', color:'#9D174D', icon:'🎂' },
   'Tartas':                { bg:'#FFF0F6', color:'#9D174D', icon:'🥧' },
+  'Menú del Día':          { bg:'#DBEAFE', color:'#1E40AF', icon:'🍽' },
+  'Panadería':             { bg:'#FEF3C7', color:'#92400E', icon:'🍞' },
+  'Cocina':                { bg:'#D1FAE5', color:'#065F46', icon:'🍳' },
+  'Sandwich':              { bg:'#FFF7ED', color:'#C2410C', icon:'🥪' },
+  'Jugos y Licuados':      { bg:'#ECFDF5', color:'#166534', icon:'🥤' },
 };
 function _catToRubro(cat) {
   return CAT_TO_RUBRO[(cat||'').toLowerCase().trim()] || (cat ? cat.charAt(0).toUpperCase()+cat.slice(1) : 'Otros');
@@ -4514,10 +4528,16 @@ function renderRecetas() {
       </div>
       <div class="recetas-grid">
         ${rs.map(r => {
-          const ings    = r.ingredientes || [];
+          const ings     = r.ingredientes || [];
           const mapeados = ings.filter(i=>i.insumoId).length;
-          const st = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
-          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'">
+          const st       = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
+          const sel      = _seleccionModo && _seleccionIds.has(r.id);
+          const border   = sel ? `2px solid ${st.color}` : '1px solid var(--border)';
+          const bg       = sel ? st.bg : 'var(--surface)';
+          const action   = _seleccionModo ? `_toggleSeleccion('${r.id}')` : `verReceta('${r.id}')`;
+          const hover    = _seleccionModo ? '' : `onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'"`;
+          return `<button onclick="${action}" style="background:${bg};border:${border};border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:all .15s;position:relative" ${hover}>
+            ${sel ? `<span style="position:absolute;top:8px;right:8px;width:18px;height:18px;border-radius:50%;background:${st.color};color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">✓</span>` : ''}
             <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
             <div style="font-size:12px;color:var(--ink2)">${mapeados}/${ings.length} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
           </button>`;
@@ -4529,6 +4549,55 @@ function renderRecetas() {
 
 function _setRubroFiltro(rubro) {
   _rubroFiltro = rubro;
+  renderRecetas();
+}
+
+let _seleccionModo = false;
+let _seleccionIds  = new Set();
+
+function _toggleModoSeleccion() {
+  _seleccionModo = !_seleccionModo;
+  _seleccionIds.clear();
+  const btn = document.getElementById('btnSeleccionarRecetas');
+  if (btn) { btn.textContent = _seleccionModo ? 'Cancelar selección' : 'Seleccionar'; btn.style.background = _seleccionModo ? 'var(--surface2)' : ''; }
+  _actualizarBarraSeleccion();
+  renderRecetas();
+}
+
+function _toggleSeleccion(id) {
+  if (_seleccionIds.has(id)) _seleccionIds.delete(id);
+  else _seleccionIds.add(id);
+  _actualizarBarraSeleccion();
+  renderRecetas();
+}
+
+function _actualizarBarraSeleccion() {
+  const bar = document.getElementById('recetasSelBar');
+  if (!bar) return;
+  if (_seleccionModo && _seleccionIds.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('recetasSelCount').textContent = `${_seleccionIds.size} receta${_seleccionIds.size !== 1 ? 's' : ''} seleccionada${_seleccionIds.size !== 1 ? 's' : ''}`;
+    const sel = document.getElementById('recetasSelRubro');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— Elegí rubro —</option>' +
+      RUBRO_ORDER.map(r => `<option value="${r}"${r === current ? ' selected' : ''}>${(RUBRO_STYLES[r]||{}).icon||''} ${r}</option>`).join('');
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function _asignarRubroSeleccion() {
+  const rubro = document.getElementById('recetasSelRubro').value;
+  if (!rubro) { toast('Elegí un rubro primero', 'error'); return; }
+  let count = 0;
+  recetas.forEach(r => { if (_seleccionIds.has(r.id)) { r.rubro = rubro; count++; } });
+  persistRecetas();
+  toast(`${count} receta${count !== 1 ? 's' : ''} asignada${count !== 1 ? 's' : ''} a ${rubro}`, 'success');
+  _seleccionModo = false;
+  _seleccionIds.clear();
+  const btn = document.getElementById('btnSeleccionarRecetas');
+  if (btn) { btn.textContent = 'Seleccionar'; btn.style.background = ''; }
+  _actualizarBarraSeleccion();
   renderRecetas();
 }
 
@@ -4919,7 +4988,7 @@ function _syncChip(state) {
 
 async function _fbWrite(docId, data) {
   try {
-    await _db.collection('data').doc(docId).set(data);
+    await _db.collection('data').doc(docId).set(data, { merge: true });
   } catch(e) {
     console.warn('Firebase write error:', docId, e.message);
     _syncChip('error');
