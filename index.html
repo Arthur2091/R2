@@ -1427,13 +1427,30 @@ function _poblarSelectProveedor(insumoId) {
     o.value = p.id; o.textContent = p.nombre;
     sel.appendChild(o);
   });
-  // Pre-select if insumo already linked to a provider, then populate product select
+
+  // Pre-seleccionar sin auto-fill de precio (el usuario ya tiene sus valores guardados)
+  const wrap = document.getElementById('fProvProductoWrap');
+  const prodSel = document.getElementById('fProvProducto');
   if (insumoId) {
     const prov = proveedores.find(p => (p.items||[]).some(it => it.insumoId === insumoId));
-    if (prov) { sel.value = prov.id; _onProveedorChange(); }
-    else { document.getElementById('fProvProductoWrap').style.display = 'none'; }
+    if (prov) {
+      sel.value = prov.id;
+      // Poblar productos del proveedor sin pisar precio/presentación
+      const items = (prov.items||[]).filter(it => it.insumoId);
+      prodSel.innerHTML = '<option value="">— Elegí un producto —</option>';
+      items.sort((a,b)=>(a.nombreBoleta||'').localeCompare(b.nombreBoleta||'','es')).forEach(it => {
+        const o = document.createElement('option');
+        o.value = it.insumoId; o.textContent = it.nombreBoleta || it.insumoId;
+        prodSel.appendChild(o);
+      });
+      // Pre-seleccionar el producto que corresponde
+      if (items.some(it => it.insumoId === insumoId)) prodSel.value = insumoId;
+      wrap.style.display = 'block';
+    } else {
+      wrap.style.display = 'none';
+    }
   } else {
-    document.getElementById('fProvProductoWrap').style.display = 'none';
+    wrap.style.display = 'none';
   }
 }
 
