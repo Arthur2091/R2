@@ -474,8 +474,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <header class="app-header">
   <div class="app-logo">Consolidado <span>Arthur</span></div>
   <div id="syncChip" style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--ink3);display:none"></div>
-  <button onclick="_fbLoad()" style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↓ Cargar nube</button>
-  <button onclick="_fbPushAll().then(()=>toast('Datos subidos a la nube','success')).catch(e=>toast('Error: '+e.message,'error'))" style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↑ Subir datos</button>
+  <button onclick="exportarDatos()" style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↓ Backup</button>
+  <label style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↑ Restaurar<input type="file" accept=".json" onchange="importarDatos(this)" style="display:none"></label>
   <nav>
     <button class="nav-btn active" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewProveedores">Proveedores</button>
@@ -1221,85 +1221,6 @@ let _pendingRecetas  = [];
 let _matchMap        = {};
 let _matchPendientes = [];
 
-/* ── FIREBASE ───────────────────────────────────────────────────── */
-const _fbApp = firebase.initializeApp({
-  apiKey: "AIzaSyC8isESO5gop5LQxdnO-f25UsMtHRIiN78",
-  authDomain: "arthur-consolidado.firebaseapp.com",
-  projectId: "arthur-consolidado",
-  storageBucket: "arthur-consolidado.firebasestorage.app",
-  messagingSenderId: "610315407018",
-  appId: "1:610315407018:web:c768103db4cab8fee3cad3"
-});
-const _db = firebase.firestore(_fbApp);
-
-function _syncChip(state) {
-  const el = document.getElementById('syncChip');
-  if (!el) return;
-  const map = { syncing: ['⟳ Guardando…','#FEF3C7','#92400E'], ok: ['✓ Sincronizado','#D1FAE5','#065F46'], error: ['⚠ Sin conexión','#FEE2E2','#991B1B'] };
-  const [text, bg, color] = map[state] || map.ok;
-  el.textContent = text; el.style.background = bg; el.style.color = color; el.style.display = '';
-  if (state === 'ok') setTimeout(() => { el.style.display = 'none'; }, 2500);
-}
-
-async function _fbWrite(docId, data) {
-  await _db.collection('data').doc(docId).set(data);
-}
-
-async function _fbPushAll() {
-  _syncChip('syncing');
-  try {
-    await Promise.all([
-      _fbWrite('insumos',     { items: insumos }),
-      _fbWrite('proveedores', { items: proveedores }),
-      _fbWrite('precios',     { items: precios }),
-      _fbWrite('facturas',    { items: facturas }),
-      _fbWrite('recetas',     { items: recetas }),
-      _fbWrite('contable',    { ventas, sueldos, otrosEgresos, productosRubros }),
-      _fbWrite('config',      { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }),
-    ]);
-    _syncChip('ok');
-  } catch(e) { _syncChip('error'); }
-}
-
-async function _fbLoad() {
-  _syncChip('syncing');
-  try {
-    const snap = await _db.collection('data').get();
-    if (snap.empty) { _fbPushAll(); return; }
-    snap.forEach(doc => {
-      const d = doc.data();
-      switch(doc.id) {
-        case 'insumos':     insumos     = d.items || insumos;     localStorage.setItem('cons_insumos',     JSON.stringify(insumos));     break;
-        case 'proveedores': proveedores = d.items || proveedores; localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); break;
-        case 'precios':     precios     = d.items || precios;     localStorage.setItem('cons_precios',     JSON.stringify(precios));     break;
-        case 'facturas':    facturas    = d.items || facturas;    localStorage.setItem('cons_facturas',    JSON.stringify(facturas));    break;
-        case 'recetas':     recetas     = d.items || recetas;     localStorage.setItem('cons_recetas',     JSON.stringify(recetas));     break;
-        case 'contable':
-          if (d.ventas)          { ventas         = d.ventas;         localStorage.setItem('cons_ventas',      JSON.stringify(ventas));         }
-          if (d.sueldos)         { sueldos        = d.sueldos;        localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos));        }
-          if (d.otrosEgresos)    { otrosEgresos   = d.otrosEgresos;   localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos));   }
-          if (d.productosRubros) { productosRubros= d.productosRubros;localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros));}
-          break;
-        case 'config':
-          if (d.rubros)      { _customRubros = d.rubros;      localStorage.setItem('cons_rubros',       JSON.stringify(_customRubros));  }
-          if (d.margen_obj)  {                                localStorage.setItem('cons_margen_obj',   String(d.margen_obj));           }
-          if (d.costos_extra){                                localStorage.setItem('cons_costos_extra', String(d.costos_extra));         }
-          break;
-      }
-    });
-    _migrarRecetasFlat();
-    renderInsumos();
-    renderProveedores();
-    renderRecetas();
-    renderContable();
-    _syncChip('ok');
-    toast('Datos cargados desde la nube', 'success');
-  } catch(e) {
-    console.warn('Firebase load error:', e);
-    _syncChip('error');
-    toast('Error al cargar desde Firebase: ' + e.message, 'error');
-  }
-}
 
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
 function persist() {
@@ -1313,7 +1234,7 @@ function persist() {
     _fbWrite('proveedores', { items: proveedores }),
     _fbWrite('precios',     { items: precios }),
     _fbWrite('facturas',    { items: facturas }),
-  ]).then(() => _syncChip('ok'));
+  ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
 function hydrate() {
@@ -3311,7 +3232,7 @@ function persistContable() {
   localStorage.setItem('cons_otros',          JSON.stringify(otrosEgresos));
   localStorage.setItem('cons_prod_rubros',    JSON.stringify(productosRubros));
   _syncChip('syncing');
-  _fbWrite('contable', { ventas, sueldos, otrosEgresos, productosRubros }).then(() => _syncChip('ok'));
+  _fbWrite('contable', { ventas, sueldos, otrosEgresos, productosRubros }).then(() => _syncChip('ok')).catch(() => {});
 }
 function hydrateContable() {
   try { ventas          = JSON.parse(localStorage.getItem('cons_ventas')       || '[]'); } catch { ventas = []; }
@@ -3938,8 +3859,8 @@ function calcCostoIng(ins, cantidad, unidad) {
 /* ── RECETAS ─────────────────────────────────────────────────────── */
 function persistRecetas() {
   localStorage.setItem('cons_recetas', JSON.stringify(recetas));
-  _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok'));
   _syncChip('syncing');
+  _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok')).catch(() => {});
 }
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
@@ -4282,7 +4203,7 @@ function saveConfigCostos() {
   const e = parseFloat(document.getElementById('cfgExtras').value) || 0;
   localStorage.setItem('cons_margen_obj', m);
   localStorage.setItem('cons_costos_extra', e);
-  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e });
+  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e }).catch(() => {});
   closeModal('modalConfigCostos');
   toast('Configuración guardada', 'success');
   if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
@@ -4293,7 +4214,7 @@ let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
 
 function _persistRubros() {
   localStorage.setItem('cons_rubros', JSON.stringify(_customRubros));
-  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 });
+  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }).catch(() => {});
 }
 
 function _poblarSelectRubros(sel, valorActual) {
@@ -4990,6 +4911,131 @@ function verConsolidado() {
   `;
 
   openModal('modalConsolidado');
+}
+
+/* ── FIREBASE ───────────────────────────────────────────────────── */
+const _fbApp = firebase.initializeApp({
+  apiKey: "AIzaSyC8isESO5gop5LQxdnO-f25UsMtHRIiN78",
+  authDomain: "arthur-consolidado.firebaseapp.com",
+  projectId: "arthur-consolidado",
+  storageBucket: "arthur-consolidado.firebasestorage.app",
+  messagingSenderId: "610315407018",
+  appId: "1:610315407018:web:c768103db4cab8fee3cad3"
+});
+const _db = firebase.firestore(_fbApp);
+
+function _syncChip(state) {
+  const el = document.getElementById('syncChip');
+  if (!el) return;
+  const map = { syncing: ['⟳ Guardando…','#FEF3C7','#92400E'], ok: ['✓ Sincronizado','#D1FAE5','#065F46'], error: ['⚠ Sin conexión','#FEE2E2','#991B1B'] };
+  const [text, bg, color] = map[state] || map.ok;
+  el.textContent = text; el.style.background = bg; el.style.color = color; el.style.display = '';
+  if (state === 'ok') setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+async function _fbWrite(docId, data) {
+  try {
+    await _db.collection('data').doc(docId).set(data);
+  } catch(e) {
+    console.warn('Firebase write error:', docId, e.message);
+    _syncChip('error');
+    throw e;
+  }
+}
+
+async function _fbLoad() {
+  _syncChip('syncing');
+  try {
+    const snap = await _db.collection('data').get();
+    let changed = false;
+    snap.forEach(doc => {
+      const d = doc.data();
+      switch(doc.id) {
+        case 'insumos':
+          if (d.items?.length) { insumos = d.items; localStorage.setItem('cons_insumos', JSON.stringify(insumos)); changed = true; }
+          break;
+        case 'proveedores':
+          if (d.items?.length) { proveedores = d.items; localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); changed = true; }
+          break;
+        case 'precios':
+          if (d.items?.length) { precios = d.items; localStorage.setItem('cons_precios', JSON.stringify(precios)); changed = true; }
+          break;
+        case 'facturas':
+          if (d.items?.length) { facturas = d.items; localStorage.setItem('cons_facturas', JSON.stringify(facturas)); changed = true; }
+          break;
+        case 'recetas':
+          if (d.items?.length) { recetas = d.items; localStorage.setItem('cons_recetas', JSON.stringify(recetas)); changed = true; }
+          break;
+        case 'contable':
+          if (d.ventas?.length)      { ventas = d.ventas;               localStorage.setItem('cons_ventas',      JSON.stringify(ventas)); changed = true; }
+          if (d.sueldos?.length)     { sueldos = d.sueldos;             localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos)); changed = true; }
+          if (d.otrosEgresos?.length){ otrosEgresos = d.otrosEgresos;   localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos)); changed = true; }
+          if (d.productosRubros && Object.keys(d.productosRubros).length) { productosRubros = d.productosRubros; localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros)); changed = true; }
+          break;
+        case 'config':
+          if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
+          if (d.margen_obj)      { localStorage.setItem('cons_margen_obj',   String(d.margen_obj)); }
+          if (d.costos_extra)    { localStorage.setItem('cons_costos_extra', String(d.costos_extra)); }
+          break;
+      }
+    });
+    if (changed) {
+      _migrarRecetasFlat();
+      renderInsumos();
+      renderProveedores();
+      renderRecetas();
+      renderContable();
+      toast('Datos cargados desde la nube', 'success');
+    }
+    _syncChip('ok');
+  } catch(e) {
+    console.warn('Firebase load error:', e);
+    _syncChip('error');
+  }
+}
+
+/* ── BACKUP ─────────────────────────────────────────────────────── */
+function exportarDatos() {
+  const data = {
+    insumos, proveedores, precios, facturas, recetas,
+    ventas, sueldos, otrosEgresos, productosRubros,
+    rubros: _customRubros,
+    margen_obj: localStorage.getItem('cons_margen_obj'),
+    costos_extra: localStorage.getItem('cons_costos_extra'),
+    exportado: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `arthur-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  toast('Backup descargado', 'success');
+}
+
+function importarDatos(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      if (d.insumos)         { insumos = d.insumos;               localStorage.setItem('cons_insumos',     JSON.stringify(insumos)); }
+      if (d.proveedores)     { proveedores = d.proveedores;       localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); }
+      if (d.precios)         { precios = d.precios;               localStorage.setItem('cons_precios',     JSON.stringify(precios)); }
+      if (d.facturas)        { facturas = d.facturas;             localStorage.setItem('cons_facturas',    JSON.stringify(facturas)); }
+      if (d.recetas)         { recetas = d.recetas;               localStorage.setItem('cons_recetas',     JSON.stringify(recetas)); }
+      if (d.ventas)          { ventas = d.ventas;                 localStorage.setItem('cons_ventas',      JSON.stringify(ventas)); }
+      if (d.sueldos)         { sueldos = d.sueldos;               localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos)); }
+      if (d.otrosEgresos)    { otrosEgresos = d.otrosEgresos;     localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos)); }
+      if (d.productosRubros) { productosRubros = d.productosRubros; localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros)); }
+      if (d.rubros)          { _customRubros = d.rubros;          localStorage.setItem('cons_rubros',      JSON.stringify(_customRubros)); }
+      if (d.margen_obj)      { localStorage.setItem('cons_margen_obj',   d.margen_obj); }
+      if (d.costos_extra)    { localStorage.setItem('cons_costos_extra', d.costos_extra); }
+      renderInsumos(); renderProveedores(); renderRecetas(); renderContable();
+      toast('Backup restaurado', 'success');
+    } catch { toast('Error al leer el archivo', 'error'); }
+  };
+  reader.readAsText(file);
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
