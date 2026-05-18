@@ -1248,11 +1248,27 @@ async function _fbWrite(docId, data) {
   }
 }
 
+async function _fbPushAll() {
+  _syncChip('syncing');
+  try {
+    await Promise.all([
+      _fbWrite('insumos',     { items: insumos }),
+      _fbWrite('proveedores', { items: proveedores }),
+      _fbWrite('precios',     { items: precios }),
+      _fbWrite('facturas',    { items: facturas }),
+      _fbWrite('recetas',     { items: recetas }),
+      _fbWrite('contable',    { ventas, sueldos, otrosEgresos, productosRubros }),
+      _fbWrite('config',      { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }),
+    ]);
+    _syncChip('ok');
+  } catch(e) { _syncChip('error'); }
+}
+
 async function _fbLoad() {
   _syncChip('syncing');
   try {
     const snap = await _db.collection('data').get();
-    if (snap.empty) { _syncChip('ok'); return; }
+    if (snap.empty) { _fbPushAll(); return; }
     snap.forEach(doc => {
       const d = doc.data();
       switch(doc.id) {
