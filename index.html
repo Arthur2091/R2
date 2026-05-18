@@ -2502,6 +2502,7 @@ function saveApiKey() {
   const key = document.getElementById('apikeyInput').value.trim();
   if (!key.startsWith('sk-ant-')) { toast('Key inválida — debe empezar con sk-ant-', 'error'); return; }
   localStorage.setItem('cons_apikey', key);
+  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0, apikey: key }).catch(() => {});
   document.getElementById('apikeyBanner').style.display = 'none';
   toast('API key guardada', 'success');
 }
@@ -4187,7 +4188,7 @@ function saveConfigCostos() {
   const e = parseFloat(document.getElementById('cfgExtras').value) || 0;
   localStorage.setItem('cons_margen_obj', m);
   localStorage.setItem('cons_costos_extra', e);
-  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e }).catch(() => {});
+  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e, apikey: localStorage.getItem('cons_apikey') || '' }).catch(() => {});
   closeModal('modalConfigCostos');
   toast('Configuración guardada', 'success');
   if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
@@ -4197,7 +4198,7 @@ function saveConfigCostos() {
 let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
 
 function _persistRubros() {
-  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }).catch(() => {});
+  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0, apikey: localStorage.getItem('cons_apikey') || '' }).catch(() => {});
 }
 
 function _poblarSelectRubros(sel, valorActual) {
@@ -4948,6 +4949,7 @@ async function _fbLoad() {
           if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
           if (d.margen_obj)      localStorage.setItem('cons_margen_obj',   String(d.margen_obj));
           if (d.costos_extra)    localStorage.setItem('cons_costos_extra', String(d.costos_extra));
+          if (d.apikey)          localStorage.setItem('cons_apikey', d.apikey);
           break;
       }
     });
