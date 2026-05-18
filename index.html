@@ -874,17 +874,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <div id="modalRevision" class="overlay">
   <div class="modal" style="width:640px;max-height:85vh;display:flex;flex-direction:column;gap:0">
-    <h2 style="margin-bottom:6px">Revisión de nombres</h2>
-    <p style="color:var(--ink3);font-size:13px;margin-bottom:20px">Algunos productos necesitan tu atención antes de darse de alta.</p>
+    <h2 style="margin-bottom:6px">Productos ilegibles</h2>
+    <p style="color:var(--ink3);font-size:13px;margin-bottom:20px">La IA no pudo leer el nombre de estos productos. Escribilo o descartá.</p>
     <div style="overflow-y:auto;flex:1;padding-right:4px">
-      <div id="revSecCodigo" style="display:none;margin-bottom:20px">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:10px">Tienen código interno — editá el nombre</div>
-        <div id="revListaCodigo" style="display:flex;flex-direction:column;gap:8px"></div>
-      </div>
-      <div id="revSecIlegible" style="display:none">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:10px">No se pudo leer el nombre — escribilo o descartá</div>
-        <div id="revListaIlegible" style="display:flex;flex-direction:column;gap:8px"></div>
-      </div>
+      <div id="revListaIlegible" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
     <div class="modal-actions" style="margin-top:20px">
       <button class="btn btn-outline" onclick="closeModal('modalRevision')">Cancelar</button>
@@ -1644,16 +1637,6 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       continue;
     }
     if (yaMapados.has(norm(nombre))) continue;
-    if (tienePrefijo(nombre)) {
-      const sugerido = limpiar(nombre);
-      const con = todasLasFacturas.flatMap(f => f.items.filter(i => i.nombre?.toLowerCase() === nombre.toLowerCase())).filter(i => getPrecio(i) != null);
-      const ult = con[con.length - 1] ?? null;
-      const pConIVA = ult ? getPrecio(ult) : null;
-      const tasa    = ult?.iva ?? 21;
-      const pSinIVA = pConIVA != null && tasa > 0 ? Math.round(pConIVA / (1 + tasa / 100) * 100) / 100 : pConIVA;
-      pendientes.push({ nombreOriginal: nombre, nombreSugerido: sugerido, tipo: 'codigo', provId, precioConIVA: pConIVA, precioSinIVA: pSinIVA, unidad: ult?.unidad || '', todasLasFacturas });
-      continue;
-    }
     limpios.push(nombre);
   }
 
@@ -1705,36 +1688,13 @@ let _revisionPendientes = [];
 
 function _mostrarRevisionNombres(pendientes) {
   _revisionPendientes = pendientes;
-  const conCodigo  = pendientes.filter(p => p.tipo === 'codigo');
-  const ilegibles  = pendientes.filter(p => p.tipo === 'ilegible');
-
-  const secCod = document.getElementById('revSecCodigo');
-  const secIle = document.getElementById('revSecIlegible');
-
-  if (conCodigo.length) {
-    secCod.style.display = 'block';
-    document.getElementById('revListaCodigo').innerHTML = conCodigo.map(p => {
-      const idx = pendientes.indexOf(p);
-      return `<div style="display:flex;gap:8px;align-items:center">
-        <span style="font-size:11px;color:var(--ink3);width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace" title="${p.nombreOriginal}">${p.nombreOriginal}</span>
-        <input type="text" data-rev-idx="${idx}" value="${p.nombreSugerido}" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
-      </div>`;
-    }).join('');
-  } else { secCod.style.display = 'none'; }
-
-  if (ilegibles.length) {
-    secIle.style.display = 'block';
-    document.getElementById('revListaIlegible').innerHTML = ilegibles.map(p => {
-      const idx = pendientes.indexOf(p);
-      return `<div style="display:flex;gap:8px;align-items:center">
-        <input type="text" data-rev-idx="${idx}" placeholder="Escribí el nombre…" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
-        <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;font-size:13px;cursor:pointer">
-          <input type="checkbox" data-rev-discard="${idx}"> Descartar
-        </label>
-      </div>`;
-    }).join('');
-  } else { secIle.style.display = 'none'; }
-
+  document.getElementById('revListaIlegible').innerHTML = pendientes.map((p, idx) => `
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" data-rev-idx="${idx}" placeholder="Escribí el nombre…" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+      <label style="display:flex;gap:6px;align-items:center;white-space:nowrap;font-size:13px;cursor:pointer">
+        <input type="checkbox" data-rev-discard="${idx}"> Descartar
+      </label>
+    </div>`).join('');
   openModal('modalRevision');
 }
 
