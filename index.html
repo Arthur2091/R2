@@ -6,6 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Consolidado — Arthur</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
 :root {
   --bg: #F7F5F0;
@@ -471,6 +473,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <header class="app-header">
   <div class="app-logo">Consolidado <span>Arthur</span></div>
+  <div id="syncChip" style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--ink3);display:none"></div>
   <nav>
     <button class="nav-btn active" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewProveedores">Proveedores</button>
@@ -1216,12 +1219,85 @@ let _pendingRecetas  = [];
 let _matchMap        = {};
 let _matchPendientes = [];
 
+/* ── FIREBASE ───────────────────────────────────────────────────── */
+const _fbApp = firebase.initializeApp({
+  apiKey: "AIzaSyC8isESO5gop5LQxdnO-f25UsMtHRIiN78",
+  authDomain: "arthur-consolidado.firebaseapp.com",
+  projectId: "arthur-consolidado",
+  storageBucket: "arthur-consolidado.firebasestorage.app",
+  messagingSenderId: "610315407018",
+  appId: "1:610315407018:web:c768103db4cab8fee3cad3"
+});
+const _db = firebase.firestore(_fbApp);
+
+function _syncChip(state) {
+  const el = document.getElementById('syncChip');
+  if (!el) return;
+  const map = { syncing: ['⟳ Guardando…','#FEF3C7','#92400E'], ok: ['✓ Sincronizado','#D1FAE5','#065F46'], error: ['⚠ Sin conexión','#FEE2E2','#991B1B'] };
+  const [text, bg, color] = map[state] || map.ok;
+  el.textContent = text; el.style.background = bg; el.style.color = color; el.style.display = '';
+  if (state === 'ok') setTimeout(() => { el.style.display = 'none'; }, 2500);
+}
+
+async function _fbWrite(docId, data) {
+  try {
+    await _db.collection('data').doc(docId).set(data);
+  } catch(e) {
+    console.warn('Firebase write error:', e);
+    _syncChip('error');
+  }
+}
+
+async function _fbLoad() {
+  _syncChip('syncing');
+  try {
+    const snap = await _db.collection('data').get();
+    if (snap.empty) { _syncChip('ok'); return; }
+    snap.forEach(doc => {
+      const d = doc.data();
+      switch(doc.id) {
+        case 'insumos':     insumos     = d.items || insumos;     localStorage.setItem('cons_insumos',     JSON.stringify(insumos));     break;
+        case 'proveedores': proveedores = d.items || proveedores; localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); break;
+        case 'precios':     precios     = d.items || precios;     localStorage.setItem('cons_precios',     JSON.stringify(precios));     break;
+        case 'facturas':    facturas    = d.items || facturas;    localStorage.setItem('cons_facturas',    JSON.stringify(facturas));    break;
+        case 'recetas':     recetas     = d.items || recetas;     localStorage.setItem('cons_recetas',     JSON.stringify(recetas));     break;
+        case 'contable':
+          if (d.ventas)          { ventas         = d.ventas;         localStorage.setItem('cons_ventas',      JSON.stringify(ventas));         }
+          if (d.sueldos)         { sueldos        = d.sueldos;        localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos));        }
+          if (d.otrosEgresos)    { otrosEgresos   = d.otrosEgresos;   localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos));   }
+          if (d.productosRubros) { productosRubros= d.productosRubros;localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros));}
+          break;
+        case 'config':
+          if (d.rubros)      { _customRubros = d.rubros;      localStorage.setItem('cons_rubros',       JSON.stringify(_customRubros));  }
+          if (d.margen_obj)  {                                localStorage.setItem('cons_margen_obj',   String(d.margen_obj));           }
+          if (d.costos_extra){                                localStorage.setItem('cons_costos_extra', String(d.costos_extra));         }
+          break;
+      }
+    });
+    _migrarRecetasFlat();
+    renderInsumos();
+    renderProveedores();
+    if (document.getElementById('viewRecetas')?.style.display !== 'none') renderRecetas();
+    _syncChip('ok');
+  } catch(e) {
+    console.warn('Firebase load error:', e);
+    _syncChip('error');
+  }
+}
+
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
 function persist() {
   localStorage.setItem('cons_insumos',     JSON.stringify(insumos));
   localStorage.setItem('cons_proveedores', JSON.stringify(proveedores));
   localStorage.setItem('cons_precios',     JSON.stringify(precios));
   localStorage.setItem('cons_facturas',    JSON.stringify(facturas));
+  _syncChip('syncing');
+  Promise.all([
+    _fbWrite('insumos',     { items: insumos }),
+    _fbWrite('proveedores', { items: proveedores }),
+    _fbWrite('precios',     { items: precios }),
+    _fbWrite('facturas',    { items: facturas }),
+  ]).then(() => _syncChip('ok'));
 }
 
 function hydrate() {
@@ -3218,6 +3294,8 @@ function persistContable() {
   localStorage.setItem('cons_sueldos',        JSON.stringify(sueldos));
   localStorage.setItem('cons_otros',          JSON.stringify(otrosEgresos));
   localStorage.setItem('cons_prod_rubros',    JSON.stringify(productosRubros));
+  _syncChip('syncing');
+  _fbWrite('contable', { ventas, sueldos, otrosEgresos, productosRubros }).then(() => _syncChip('ok'));
 }
 function hydrateContable() {
   try { ventas          = JSON.parse(localStorage.getItem('cons_ventas')       || '[]'); } catch { ventas = []; }
@@ -3842,7 +3920,11 @@ function calcCostoIng(ins, cantidad, unidad) {
 }
 
 /* ── RECETAS ─────────────────────────────────────────────────────── */
-function persistRecetas() { localStorage.setItem('cons_recetas', JSON.stringify(recetas)); }
+function persistRecetas() {
+  localStorage.setItem('cons_recetas', JSON.stringify(recetas));
+  _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok'));
+  _syncChip('syncing');
+}
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
 async function importarInsumosExcel(input) {
@@ -4184,6 +4266,7 @@ function saveConfigCostos() {
   const e = parseFloat(document.getElementById('cfgExtras').value) || 0;
   localStorage.setItem('cons_margen_obj', m);
   localStorage.setItem('cons_costos_extra', e);
+  _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e });
   closeModal('modalConfigCostos');
   toast('Configuración guardada', 'success');
   if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
@@ -4192,7 +4275,10 @@ function saveConfigCostos() {
 /* ── EDITAR RECETA ──────────────────────────────────────────────── */
 let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
 
-function _persistRubros() { localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
+function _persistRubros() {
+  localStorage.setItem('cons_rubros', JSON.stringify(_customRubros));
+  _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 });
+}
 
 function _poblarSelectRubros(sel, valorActual) {
   const base = ['Cafetería','Pastelería','Panadería','Pastas','Cocina','Desayunos y Meriendas','Wraps','Ensaladas','Tartas'];
@@ -4896,6 +4982,7 @@ _migrarRecetasFlat();
 hydrateContable();
 renderInsumos();
 renderProveedores();
+_fbLoad();
 </script>
 </body>
 </html>
