@@ -2888,36 +2888,53 @@ function renderBoletaItems() {
   }).join('');
   const selOpts = `<option value="">— Sin mapear —</option>${optGroups}`;
 
-  wrap.innerHTML = _boletaItems.map((item, idx) => {
-    // Try to find existing mapping in proveedor items
-    const mapping = prov?.items.find(it =>
-      it.nombreBoleta.toLowerCase() === item.nombre?.toLowerCase()
-    );
-    const insumo = mapping ? insumos.find(i => i.id === mapping.insumoId) : null;
+  const inp = (field, val, type='text', ph='') =>
+    `<input type="${type}" value="${String(val??'').replace(/"/g,'&quot;')}" placeholder="${ph}"
+      style="font:${type==='number'?'13px var(--mono)':'13px var(--font)'};padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none;width:100%;box-sizing:border-box"
+      oninput="_boletaSet(${wrap._idx??0},this,'${field}',${type==='number'})">`;
 
-    const detalle = [
-      item.cantidad != null ? item.cantidad : '',
-      item.unidad || '',
-      item.precio_unitario != null ? `$${Number(item.precio_unitario).toLocaleString('es-AR')}` : '',
-      item.precio_total != null ? `→ $${Number(item.precio_total).toLocaleString('es-AR')}` : '',
-    ].filter(Boolean).join(' · ');
+  wrap._idx = 0;
+  wrap.innerHTML = _boletaItems.map((item, idx) => {
+    wrap._idx = idx;
+    const mapping = prov?.items.find(it => it.nombreBoleta.toLowerCase() === item.nombre?.toLowerCase());
+    const insumo  = mapping ? insumos.find(i => i.id === mapping.insumoId) : null;
+    const curInsumoId = item._insumoId || mapping?.insumoId || '';
 
     return `
-      <div class="boleta-item-row">
-        <div>
-          <div class="item-nombre">${item.nombre || '—'}</div>
-          <div class="item-detalle">${detalle}</div>
+      <div class="boleta-item-row" style="grid-template-columns:1fr auto">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <input type="text" value="${String(item.nombre??'').replace(/"/g,'&quot;')}" placeholder="Nombre"
+            style="font:600 13px var(--font);padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none;width:100%;box-sizing:border-box"
+            oninput="_boletaSet(${idx},this,'nombre',false)">
+          <div style="display:flex;gap:6px">
+            <input type="number" value="${item.cantidad??''}" placeholder="Cant."
+              style="width:70px;font:13px var(--mono);padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+              oninput="_boletaSet(${idx},this,'cantidad',true)">
+            <input type="text" value="${item.unidad??''}" placeholder="Und."
+              style="width:55px;font:13px var(--mono);padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+              oninput="_boletaSet(${idx},this,'unidad',false)">
+            <input type="number" step="0.01" value="${item.precio_unitario??''}" placeholder="$ Unit."
+              style="flex:1;font:13px var(--mono);padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+              oninput="_boletaSet(${idx},this,'precio_unitario',true)">
+            <input type="number" step="0.01" value="${item.precio_total??''}" placeholder="$ Total"
+              style="flex:1;font:13px var(--mono);padding:4px 7px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+              oninput="_boletaSet(${idx},this,'precio_total',true)">
+          </div>
           ${insumo
             ? `<div class="item-mapeo">✓ ${insumo.nombre}</div>`
-            : `<select onchange="_boletaItems[${idx}]._insumoId=this.value" style="font-size:12px;padding:4px 8px;margin-top:6px;width:100%;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-family:var(--font)">
-                ${selOpts}
-               </select>
-               <div class="item-mapeo sin-mapeo">Sin mapeo</div>`
+            : `<select onchange="_boletaItems[${idx}]._insumoId=this.value"
+                style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-family:var(--font);width:100%">
+                ${selOpts.replace(`value="${curInsumoId}"`, `value="${curInsumoId}" selected`)}
+               </select>`
           }
         </div>
-        <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 6px" onclick="_boletaItems.splice(${idx},1);renderBoletaItems()">✕</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:4px 6px;align-self:start" onclick="_boletaItems.splice(${idx},1);renderBoletaItems()">✕</button>
       </div>`;
   }).join('');
+}
+
+function _boletaSet(idx, el, field, isNum) {
+  _boletaItems[idx][field] = isNum ? (parseFloat(el.value) || null) : el.value;
 }
 
 function resetBoleta() {
