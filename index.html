@@ -3967,6 +3967,8 @@ function _parseExcelRecetas(wb) {
       while (i < rows.length) {
         const r = rows[i];
         if (String(r[c] || '').trim().startsWith('PRODUCTO')) {
+          const productoCell = String(r[c] || '').trim();
+          const grupoNombre = productoCell.replace(/^PRODUCTO\s*/i, '').trim() || String(r[c+3] || '').trim() || sheetName;
           const precioVenta = typeof rows[i+1]?.[c+5] === 'number' && rows[i+1][c+5] > 1 ? rows[i+1][c+5] : null;
           i++;
           while (i < rows.length) {
@@ -3994,7 +3996,7 @@ function _parseExcelRecetas(wb) {
                 i++;
               }
               if (ingredientes.length > 0) {
-                parsed.push({ nombre: subNombre, rubro: _catToRubro(sheetName), rinde, precioVenta, ingredientes });
+                parsed.push({ nombre: subNombre, grupo: grupoNombre, rubro: _catToRubro(sheetName), rinde, precioVenta, ingredientes });
               }
             } else { i++; }
           }
@@ -4633,25 +4635,33 @@ function renderRecetas() {
     !search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search)
   );
 
-  const rubrosUsados = [...new Set(visible.map(r => r.rubro || _catToRubro(r.categoria)))];
-  const rubrosExtra  = rubrosUsados.filter(r => !RUBRO_ORDER.includes(r)).sort();
-  const rubrosSorted = [...RUBRO_ORDER, ...rubrosExtra];
+  const _getRubro = r => RUBRO_ORDER.includes(r.rubro || _catToRubro(r.categoria))
+    ? (r.rubro || _catToRubro(r.categoria)) : '__sin__';
 
-  // Filtros pills — siempre muestran todos los rubros de RUBRO_ORDER
+  const hasSinRubro = visible.some(r => _getRubro(r) === '__sin__');
+  const sinCount    = visible.filter(r => _getRubro(r) === '__sin__').length;
+
+  // Filtros pills — solo los 12 rubros conocidos + "Sin rubro" si hay
   const filtersEl = document.getElementById('recetaRubroFilters');
   if (filtersEl) {
-    filtersEl.innerHTML = [`<button class="rubro-filter${_rubroFiltro==='todos'?' active':''}" style="background:#F0EDE8;color:#1A1814" onclick="_setRubroFiltro('todos')">Todas</button>`]
-      .concat(rubrosSorted.map(g => {
-        const s     = RUBRO_STYLES[g] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
-        const count = byRubroCount(g, visible);
-        return `<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color};${count===0?'opacity:.45':'opacity:1'}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g}${count>0?` <span style="font-size:11px;font-weight:400">(${count})</span>`:''}</button>`;
-      })).join('');
+    const pills = [`<button class="rubro-filter${_rubroFiltro==='todos'?' active':''}" style="background:#F0EDE8;color:#1A1814" onclick="_setRubroFiltro('todos')">Todas</button>`];
+    RUBRO_ORDER.forEach(g => {
+      const s     = RUBRO_STYLES[g];
+      const count = visible.filter(r => _getRubro(r) === g).length;
+      if (count > 0 || _rubroFiltro === g)
+        pills.push(`<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g} <span style="font-size:11px;font-weight:400">(${count})</span></button>`);
+    });
+    if (hasSinRubro)
+      pills.push(`<button class="rubro-filter${_rubroFiltro==='__sin__'?' active':''}" style="background:#FFF7ED;color:#C2410C" onclick="_setRubroFiltro('__sin__')">⚠️ Sin rubro (${sinCount})</button>`);
+    filtersEl.innerHTML = pills.join('');
   }
 
+  const rubrosConRecetas = RUBRO_ORDER.filter(g => visible.some(r => _getRubro(r) === g)).length;
   document.getElementById('statsRecetas').innerHTML = `
     <div class="stat-chip"><strong>${recetas.length}</strong> recetas</div>
-    <div class="stat-chip"><strong>${rubrosSorted.length}</strong> rubros</div>
+    <div class="stat-chip"><strong>${rubrosConRecetas}</strong> rubros</div>
     ${visible.length !== recetas.length ? `<div class="stat-chip"><strong>${visible.length}</strong> resultados</div>` : ''}
+    ${hasSinRubro ? `<div class="stat-chip" style="color:#C2410C">⚠️ <strong>${sinCount}</strong> sin rubro</div>` : ''}
   `;
 
   if (!recetas.length) {
@@ -4659,7 +4669,10 @@ function renderRecetas() {
     return;
   }
 
-  const filtradas = _rubroFiltro === 'todos' ? visible : visible.filter(r => (r.rubro || _catToRubro(r.categoria)) === _rubroFiltro);
+  let filtradas;
+  if (_rubroFiltro === 'todos')    filtradas = visible;
+  else if (_rubroFiltro === '__sin__') filtradas = visible.filter(r => _getRubro(r) === '__sin__');
+  else filtradas = visible.filter(r => _getRubro(r) === _rubroFiltro);
 
   // Modo selección → lista plana alfabética
   if (_seleccionModo) {
@@ -4671,7 +4684,7 @@ function renderRecetas() {
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
         ${sorted.map(r => {
-          const st  = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+          const st  = RUBRO_STYLES[_getRubro(r)] || { bg:'#FFF7ED', color:'#C2410C', icon:'⚠️' };
           const sel = _seleccionIds.has(r.id);
           return `<button onclick="_toggleSeleccion('${r.id}')" style="background:${sel?st.bg:'var(--surface)'};border:${sel?`2px solid ${st.color}`:'1px solid var(--border)'};border-radius:var(--radius);padding:10px 12px;text-align:left;cursor:pointer;transition:all .15s;position:relative">
             ${sel?`<span style="position:absolute;top:6px;right:6px;width:16px;height:16px;border-radius:50%;background:${st.color};color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center">✓</span>`:''}
@@ -4685,38 +4698,78 @@ function renderRecetas() {
 
   const byRubro = {};
   filtradas.forEach(r => {
-    const g = r.rubro || _catToRubro(r.categoria);
+    const g = _getRubro(r);
     if (!byRubro[g]) byRubro[g] = [];
     byRubro[g].push(r);
   });
-  const orden = [...RUBRO_ORDER.filter(r=>byRubro[r]), ...Object.keys(byRubro).filter(r=>!RUBRO_ORDER.includes(r)).sort()];
+  const orden = [...RUBRO_ORDER.filter(r => byRubro[r]), ...(byRubro['__sin__'] ? ['__sin__'] : [])];
+
+  const renderCard = (r, accentColor) => {
+    const ings     = r.ingredientes || [];
+    const mapeados = ings.filter(i => i.insumoId).length;
+    const rubroVal = RUBRO_ORDER.includes(r.rubro) ? r.rubro : '';
+    const opts     = RUBRO_ORDER.map(ro => `<option value="${ro}"${ro===rubroVal?' selected':''}>${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('');
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:border-color .15s"
+        onmouseover="this.style.borderColor='${accentColor}'" onmouseout="this.style.borderColor='var(--border)'"
+        onclick="verReceta('${r.id}')">
+      <div style="font-weight:600;font-size:14px;margin-bottom:6px">${r.nombre}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span style="font-size:12px;color:var(--ink2);flex:1">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</span>
+        <select onclick="event.stopPropagation()" onchange="event.stopPropagation();_cambiarRubroReceta('${r.id}',this.value)"
+          style="font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--ink2);font-family:var(--font);cursor:pointer;max-width:130px">
+          ${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}
+          ${opts}
+        </select>
+      </div>
+    </div>`;
+  };
 
   document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
-    const rs = byRubro[rubro];
-    const s  = RUBRO_STYLES[rubro] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+    const rs    = byRubro[rubro];
+    const isSin = rubro === '__sin__';
+    const s     = isSin ? { bg:'#FFF7ED', color:'#C2410C', icon:'⚠️' } : RUBRO_STYLES[rubro];
+    const label = isSin ? 'Sin rubro asignado' : rubro;
+
+    // Sub-agrupar por grupo (nombre del PRODUCTO padre)
+    const byGrupo = {};
+    const sinGrupo = [];
+    rs.forEach(r => {
+      if (r.grupo) { if (!byGrupo[r.grupo]) byGrupo[r.grupo] = []; byGrupo[r.grupo].push(r); }
+      else sinGrupo.push(r);
+    });
+
+    const gruposHtml = Object.keys(byGrupo).sort().map(g => `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:${s.color};text-transform:uppercase;letter-spacing:.06em;padding:2px 0 8px 2px;opacity:.75">${g}</div>
+        <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r, s.color)).join('')}</div>
+      </div>`).join('');
+
+    const sinGrupoHtml = sinGrupo.length
+      ? `<div class="recetas-grid">${sinGrupo.map(r => renderCard(r, s.color)).join('')}</div>`
+      : '';
+
     return `<div class="rubro-section">
       <div class="rubro-header">
         <div class="rubro-icon" style="background:${s.bg}">${s.icon}</div>
-        <span class="rubro-label" style="color:${s.color}">${rubro}</span>
+        <span class="rubro-label" style="color:${s.color}">${label}</span>
         <span class="rubro-badge">${rs.length}</span>
       </div>
-      <div class="recetas-grid">
-        ${rs.map(r => {
-          const ings     = r.ingredientes || [];
-          const mapeados = ings.filter(i=>i.insumoId).length;
-          const st       = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
-          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'">
-            <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
-            <div style="font-size:12px;color:var(--ink2)">${mapeados}/${ings.length} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
-          </button>`;
-        }).join('')}
-      </div>
+      ${gruposHtml}${sinGrupoHtml}
     </div>`;
   }).join('');
 }
 
 function byRubroCount(rubro, lista) {
-  return lista.filter(r => (r.rubro || _catToRubro(r.categoria)) === rubro).length;
+  const _gr = r => RUBRO_ORDER.includes(r.rubro || _catToRubro(r.categoria)) ? (r.rubro || _catToRubro(r.categoria)) : '__sin__';
+  return lista.filter(r => _gr(r) === rubro).length;
+}
+
+function _cambiarRubroReceta(id, nuevoRubro) {
+  const r = recetas.find(x => x.id === id);
+  if (!r || !nuevoRubro) return;
+  r.rubro = nuevoRubro;
+  persistRecetas();
+  renderRecetas();
 }
 
 function _setRubroFiltro(rubro) {
@@ -4759,7 +4812,8 @@ function _actualizarBarraSeleccion() {
 }
 
 function _seleccionarTodas() {
-  const filtradas = _rubroFiltro === 'todos' ? recetas : recetas.filter(r => (r.rubro || _catToRubro(r.categoria)) === _rubroFiltro);
+  const _gr = r => RUBRO_ORDER.includes(r.rubro || _catToRubro(r.categoria)) ? (r.rubro || _catToRubro(r.categoria)) : '__sin__';
+  const filtradas = _rubroFiltro === 'todos' ? recetas : recetas.filter(r => _gr(r) === _rubroFiltro);
   if (_seleccionIds.size === filtradas.length) _seleccionIds.clear();
   else filtradas.forEach(r => _seleccionIds.add(r.id));
   _actualizarBarraSeleccion();
