@@ -2994,7 +2994,7 @@ function renderBoletaItems() {
   wrap._idx = 0;
   wrap.innerHTML = _boletaItems.map((item, idx) => {
     wrap._idx = idx;
-    const mapping = prov?.items.find(it => it.nombreBoleta.toLowerCase() === item.nombre?.toLowerCase());
+    const mapping = prov?.items?.find(it => it.nombreBoleta?.toLowerCase() === item.nombre?.toLowerCase());
     const insumo  = mapping ? insumos.find(i => i.id === mapping.insumoId) : null;
     const curInsumoId = item._insumoId || mapping?.insumoId || '';
 
