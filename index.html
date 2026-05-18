@@ -1519,7 +1519,9 @@ function eliminarProveedor(id, nombre) {
 }
 
 function _normProv(s) {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return s.toLowerCase()
+    .normalize('NFD').replace(/̀-ͯ/g, '')
+    .replace(/[^a-z0-9]/g, '');
 }
 
 function _mergeProvPair(keepId, dropId) {
