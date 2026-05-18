@@ -138,7 +138,8 @@ select {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 table { width: 100%; border-collapse: collapse; }
 thead th {
@@ -1271,11 +1272,16 @@ function _updatePresEquiv() {
   const unit  = document.getElementById('fPresUnit').value;
   const precio = parseFloat(document.getElementById('fPrecioS').value) || parseFloat(document.getElementById('fPrecioC').value);
   const el    = document.getElementById('fPresEquiv');
+  // Auto-sync campo Unidad
+  document.getElementById('fUnidad').value = unit;
   if (!qty || !precio) { el.textContent = ''; return; }
-  const base = _PRES_BASE[unit] || 1;
-  const por100 = (precio / (qty * base)) * 100;
-  const label = (unit === 'u') ? `$${(precio/qty).toFixed(2)}/u` : (unit === 'kg' || unit === 'g') ? `$${por100.toFixed(2)}/100g` : `$${por100.toFixed(2)}/100ml`;
-  el.textContent = `= ${label}`;
+  let costo, label;
+  if      (unit === 'kg') { costo = precio / qty;         label = '/kg'; }
+  else if (unit === 'g')  { costo = (precio / qty) * 1000; label = '/kg'; }
+  else if (unit === 'L')  { costo = precio / qty;         label = '/L';  }
+  else if (unit === 'ml') { costo = (precio / qty) * 1000; label = '/L';  }
+  else                    { costo = precio / qty;         label = '/u';  }
+  el.textContent = `= $${Math.round(costo).toLocaleString('es-AR')}${label}`;
 }
 
 function _onProveedorChange() {
@@ -3509,11 +3515,13 @@ function _fmtPres(ins) {
   if (!ins.presQty || !ins.presUnit) return '—';
   const precio = ins.precioSinIVA ?? ins.precioConIVA;
   if (!precio) return `${ins.presQty} ${ins.presUnit}`;
-  const base = _PRES_BASE[ins.presUnit] || 1;
-  const por100 = (precio / (ins.presQty * base)) * 100;
-  if (ins.presUnit === 'u') return `${ins.presQty}u · $${(precio/ins.presQty).toFixed(2)}/u`;
-  const isWeight = ins.presUnit === 'kg' || ins.presUnit === 'g';
-  return `${ins.presQty}${ins.presUnit} · $${por100.toFixed(2)}/100${isWeight?'g':'ml'}`;
+  let costo, label;
+  if      (ins.presUnit === 'kg') { costo = precio / ins.presQty;          label = '/kg'; }
+  else if (ins.presUnit === 'g')  { costo = (precio / ins.presQty) * 1000; label = '/kg'; }
+  else if (ins.presUnit === 'L')  { costo = precio / ins.presQty;          label = '/L';  }
+  else if (ins.presUnit === 'ml') { costo = (precio / ins.presQty) * 1000; label = '/L';  }
+  else                            { costo = precio / ins.presQty;          label = '/u';  }
+  return `${ins.presQty}${ins.presUnit} · $${Math.round(costo).toLocaleString('es-AR')}${label}`;
 }
 
 // Base units in grams/ml/units — includes culinary measures
