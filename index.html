@@ -811,7 +811,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field">
         <label>Rubro</label>
-        <select id="erRubro" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none">
+        <select id="erRubro" onchange="_onErRubroChange()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none">
           <option value="">— Elegí —</option>
           <option>Cafetería</option>
           <option>Pastelería</option>
@@ -822,7 +822,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
           <option>Wraps</option>
           <option>Ensaladas</option>
           <option>Tartas</option>
+          <option value="__nuevo__">+ Nuevo rubro…</option>
         </select>
+        <input id="erRubroNuevo" type="text" placeholder="Nombre del nuevo rubro" style="display:none;margin-top:6px;width:100%;padding:8px 10px;border:1px solid var(--info);border-radius:8px;font:14px var(--font);outline:none;box-sizing:border-box">
       </div>
       <div class="field">
         <label>Rinde (unidades)</label>
@@ -4175,6 +4177,31 @@ function saveConfigCostos() {
 }
 
 /* ── EDITAR RECETA ──────────────────────────────────────────────── */
+let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
+
+function _persistRubros() { localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
+
+function _poblarSelectRubros(sel, valorActual) {
+  const base = ['Cafetería','Pastelería','Panadería','Pastas','Cocina','Desayunos y Meriendas','Wraps','Ensaladas','Tartas'];
+  sel.innerHTML = '<option value="">— Elegí —</option>';
+  [...base, ..._customRubros].forEach(r => {
+    const o = document.createElement('option');
+    o.value = r; o.textContent = r;
+    if (r === valorActual) o.selected = true;
+    sel.appendChild(o);
+  });
+  const oNuevo = document.createElement('option');
+  oNuevo.value = '__nuevo__'; oNuevo.textContent = '+ Nuevo rubro…';
+  sel.appendChild(oNuevo);
+}
+
+function _onErRubroChange() {
+  const sel   = document.getElementById('erRubro');
+  const input = document.getElementById('erRubroNuevo');
+  input.style.display = sel.value === '__nuevo__' ? 'block' : 'none';
+  if (sel.value === '__nuevo__') { input.value = ''; input.focus(); }
+}
+
 function _migrarRecetasFlat() {
   if (!recetas.length || !recetas[0].subrecetas) return;
   const migradas = [];
@@ -4198,31 +4225,42 @@ function openNuevaReceta() {
   document.getElementById('erModalTitle').textContent = 'Nueva receta';
   document.getElementById('erRecetaId').value    = '';
   document.getElementById('erNombre').value      = '';
-  document.getElementById('erRubro').value       = '';
   document.getElementById('erRinde').value       = '';
   document.getElementById('erPrecioVenta').value = '';
+  document.getElementById('erRubroNuevo').style.display = 'none';
+  _poblarSelectRubros(document.getElementById('erRubro'), '');
   openModal('modalEditReceta');
 }
 
 function openEditReceta(recetaId) {
   const r = recetas.find(x => x.id === recetaId);
   if (!r) return;
+  const rubroActual = r.rubro || _catToRubro(r.categoria) || '';
   document.getElementById('erModalTitle').textContent = 'Editar receta';
   document.getElementById('erRecetaId').value    = recetaId;
   document.getElementById('erNombre').value      = r.nombre || '';
-  document.getElementById('erRubro').value       = r.rubro || _catToRubro(r.categoria) || '';
   document.getElementById('erRinde').value       = r.rinde || 1;
   document.getElementById('erPrecioVenta').value = r.precioVenta || '';
+  document.getElementById('erRubroNuevo').style.display = 'none';
+  _poblarSelectRubros(document.getElementById('erRubro'), rubroActual);
   openModal('modalEditReceta');
 }
 
 function saveEditReceta() {
   const nombre = document.getElementById('erNombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+
+  let rubro = document.getElementById('erRubro').value;
+  if (rubro === '__nuevo__') {
+    rubro = document.getElementById('erRubroNuevo').value.trim();
+    if (!rubro) { toast('Escribí el nombre del rubro', 'error'); return; }
+    if (!_customRubros.includes(rubro)) { _customRubros.push(rubro); _persistRubros(); }
+  }
+
   const recetaId = document.getElementById('erRecetaId').value;
   const data = {
     nombre,
-    rubro:       document.getElementById('erRubro').value || 'Otros',
+    rubro:       rubro || 'Otros',
     rinde:       parseFloat(document.getElementById('erRinde').value) || 1,
     precioVenta: parseFloat(document.getElementById('erPrecioVenta').value) || null,
   };
