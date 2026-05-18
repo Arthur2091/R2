@@ -1224,10 +1224,6 @@ let _matchPendientes = [];
 
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
 function persist() {
-  localStorage.setItem('cons_insumos',     JSON.stringify(insumos));
-  localStorage.setItem('cons_proveedores', JSON.stringify(proveedores));
-  localStorage.setItem('cons_precios',     JSON.stringify(precios));
-  localStorage.setItem('cons_facturas',    JSON.stringify(facturas));
   _syncChip('syncing');
   Promise.all([
     _fbWrite('insumos',     { items: insumos }),
@@ -1238,11 +1234,7 @@ function persist() {
 }
 
 function hydrate() {
-  try { insumos     = JSON.parse(localStorage.getItem('cons_insumos')     || '[]'); } catch { insumos = []; }
-  try { proveedores = JSON.parse(localStorage.getItem('cons_proveedores') || '[]'); } catch { proveedores = []; }
-  try { precios     = JSON.parse(localStorage.getItem('cons_precios')     || '[]'); } catch { precios = []; }
-  try { facturas    = JSON.parse(localStorage.getItem('cons_facturas')    || '[]'); } catch { facturas = []; }
-  try { recetas     = JSON.parse(localStorage.getItem('cons_recetas')     || '[]'); } catch { recetas = []; }
+  insumos = []; proveedores = []; precios = []; facturas = []; recetas = [];
 }
 
 
@@ -3227,18 +3219,11 @@ const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","A
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 
 function persistContable() {
-  localStorage.setItem('cons_ventas',         JSON.stringify(ventas));
-  localStorage.setItem('cons_sueldos',        JSON.stringify(sueldos));
-  localStorage.setItem('cons_otros',          JSON.stringify(otrosEgresos));
-  localStorage.setItem('cons_prod_rubros',    JSON.stringify(productosRubros));
   _syncChip('syncing');
   _fbWrite('contable', { ventas, sueldos, otrosEgresos, productosRubros }).then(() => _syncChip('ok')).catch(() => {});
 }
 function hydrateContable() {
-  try { ventas          = JSON.parse(localStorage.getItem('cons_ventas')       || '[]'); } catch { ventas = []; }
-  try { sueldos         = JSON.parse(localStorage.getItem('cons_sueldos')      || '[]'); } catch { sueldos = []; }
-  try { otrosEgresos    = JSON.parse(localStorage.getItem('cons_otros')        || '[]'); } catch { otrosEgresos = []; }
-  try { const s = JSON.parse(localStorage.getItem('cons_prod_rubros') || 'null'); productosRubros = (s && Object.keys(s).length) ? s : {..._RUBROS_DEFAULT}; } catch { productosRubros = {..._RUBROS_DEFAULT}; }
+  ventas = []; sueldos = []; otrosEgresos = []; productosRubros = {..._RUBROS_DEFAULT};
 }
 
 function initContableView() {
@@ -3858,7 +3843,6 @@ function calcCostoIng(ins, cantidad, unidad) {
 
 /* ── RECETAS ─────────────────────────────────────────────────────── */
 function persistRecetas() {
-  localStorage.setItem('cons_recetas', JSON.stringify(recetas));
   _syncChip('syncing');
   _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok')).catch(() => {});
 }
@@ -4213,7 +4197,6 @@ function saveConfigCostos() {
 let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
 
 function _persistRubros() {
-  localStorage.setItem('cons_rubros', JSON.stringify(_customRubros));
   _fbWrite('config', { rubros: _customRubros, margen_obj: parseFloat(localStorage.getItem('cons_margen_obj')) || 0, costos_extra: parseFloat(localStorage.getItem('cons_costos_extra')) || 0 }).catch(() => {});
 }
 
@@ -4947,50 +4930,37 @@ async function _fbLoad() {
   _syncChip('syncing');
   try {
     const snap = await _db.collection('data').get();
-    let changed = false;
     snap.forEach(doc => {
       const d = doc.data();
       switch(doc.id) {
-        case 'insumos':
-          if (d.items?.length) { insumos = d.items; localStorage.setItem('cons_insumos', JSON.stringify(insumos)); changed = true; }
-          break;
-        case 'proveedores':
-          if (d.items?.length) { proveedores = d.items; localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); changed = true; }
-          break;
-        case 'precios':
-          if (d.items?.length) { precios = d.items; localStorage.setItem('cons_precios', JSON.stringify(precios)); changed = true; }
-          break;
-        case 'facturas':
-          if (d.items?.length) { facturas = d.items; localStorage.setItem('cons_facturas', JSON.stringify(facturas)); changed = true; }
-          break;
-        case 'recetas':
-          if (d.items?.length) { recetas = d.items; localStorage.setItem('cons_recetas', JSON.stringify(recetas)); changed = true; }
-          break;
+        case 'insumos':     if (d.items?.length)     insumos      = d.items;           break;
+        case 'proveedores': if (d.items?.length)     proveedores  = d.items;           break;
+        case 'precios':     if (d.items?.length)     precios      = d.items;           break;
+        case 'facturas':    if (d.items?.length)     facturas     = d.items;           break;
+        case 'recetas':     if (d.items?.length)     recetas      = d.items;           break;
         case 'contable':
-          if (d.ventas?.length)      { ventas = d.ventas;               localStorage.setItem('cons_ventas',      JSON.stringify(ventas)); changed = true; }
-          if (d.sueldos?.length)     { sueldos = d.sueldos;             localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos)); changed = true; }
-          if (d.otrosEgresos?.length){ otrosEgresos = d.otrosEgresos;   localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos)); changed = true; }
-          if (d.productosRubros && Object.keys(d.productosRubros).length) { productosRubros = d.productosRubros; localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros)); changed = true; }
+          if (d.ventas?.length)       ventas         = d.ventas;
+          if (d.sueldos?.length)      sueldos        = d.sueldos;
+          if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
+          if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
           break;
         case 'config':
           if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
-          if (d.margen_obj)      { localStorage.setItem('cons_margen_obj',   String(d.margen_obj)); }
-          if (d.costos_extra)    { localStorage.setItem('cons_costos_extra', String(d.costos_extra)); }
+          if (d.margen_obj)      localStorage.setItem('cons_margen_obj',   String(d.margen_obj));
+          if (d.costos_extra)    localStorage.setItem('cons_costos_extra', String(d.costos_extra));
           break;
       }
     });
-    if (changed) {
-      _migrarRecetasFlat();
-      renderInsumos();
-      renderProveedores();
-      renderRecetas();
-      renderContable();
-      toast('Datos cargados desde la nube', 'success');
-    }
+    _migrarRecetasFlat();
+    renderInsumos();
+    renderProveedores();
+    renderRecetas();
+    renderContable();
     _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
     _syncChip('error');
+    toast('Error al conectar con la base de datos', 'error');
   }
 }
 
