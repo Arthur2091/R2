@@ -863,6 +863,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
 
     <div class="field">
+      <label>Proveedor</label>
+      <select id="fProveedor" onchange="_onProveedorChange()">
+        <option value="">— Sin asignar —</option>
+      </select>
+      <span id="fProvHint" style="font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;margin-top:4px;display:block"></span>
+    </div>
+
+    <div class="field">
       <label>Observaciones</label>
       <input id="fObs" type="text" placeholder="">
     </div>
@@ -1256,6 +1264,66 @@ function _updatePresEquiv() {
   el.textContent = `= ${label}`;
 }
 
+function _onProveedorChange() {
+  const provId   = document.getElementById('fProveedor').value;
+  const insumoId = document.getElementById('fEditId').value;
+  const hint     = document.getElementById('fProvHint');
+  hint.textContent = '';
+  if (!provId || !insumoId) return;
+
+  // Find latest price record for this insumo from this provider
+  const registros = precios
+    .filter(p => p.insumoId === insumoId && p.proveedorId === provId && p.precioUnitario)
+    .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+  if (!registros.length) {
+    hint.textContent = 'Sin registros de precio de este proveedor';
+    hint.style.color = 'var(--ink3)';
+    return;
+  }
+
+  const ultimo = registros[0];
+  const precioUnit = ultimo.precioUnitario;
+  const unidad     = ultimo.unidad || 'kg';
+  const fecha      = ultimo.fecha  || '';
+
+  // Auto-fill price and presentation
+  document.getElementById('fPrecioS').value = precioUnit.toFixed(2);
+  document.getElementById('fPrecioC').value = '';
+
+  // Set presentation from purchase unit
+  const unitMap = { kg:1, g:0.001, L:1, ml:0.001, u:1 };
+  if (['kg','L'].includes(unidad)) {
+    document.getElementById('fPresQty').value  = 1;
+    document.getElementById('fPresUnit').value = unidad === 'kg' ? 'kg' : 'L';
+  } else if (unidad === 'g' || unidad === 'ml') {
+    document.getElementById('fPresQty').value  = 1;
+    document.getElementById('fPresUnit').value = unidad;
+  } else {
+    document.getElementById('fPresQty').value  = 1;
+    document.getElementById('fPresUnit').value = 'u';
+  }
+  _updatePresEquiv();
+
+  hint.style.color = 'var(--accent)';
+  hint.textContent = `Último precio: $${precioUnit.toFixed(2)}/${unidad} · ${fecha} · ${registros.length} registro${registros.length>1?'s':''}`;
+}
+
+function _poblarSelectProveedor(insumoId) {
+  const sel = document.getElementById('fProveedor');
+  sel.innerHTML = '<option value="">— Sin asignar —</option>';
+  [...proveedores].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.nombre;
+    sel.appendChild(o);
+  });
+  // Pre-select if insumo already linked to a provider
+  if (insumoId) {
+    const prov = proveedores.find(p => (p.items||[]).some(it => it.insumoId === insumoId));
+    if (prov) sel.value = prov.id;
+  }
+}
+
 function openAddModal() {
   document.getElementById('modalInsumoTitle').textContent = 'Nuevo Insumo';
   ['fNombre','fUnidad','fObs','fEditId','fPresQty'].forEach(id => document.getElementById(id).value = '');
@@ -1263,6 +1331,7 @@ function openAddModal() {
   document.getElementById('fCategoria').value = '';
   document.getElementById('fPresUnit').value  = 'g';
   document.getElementById('fPresEquiv').textContent = '';
+  _poblarSelectProveedor(null);
   openModal('modalInsumo');
 }
 
@@ -1279,6 +1348,7 @@ function openEditModal(id) {
   document.getElementById('fPresUnit').value  = ins.presUnit ?? 'g';
   document.getElementById('fObs').value       = ins.observaciones;
   document.getElementById('fEditId').value    = id;
+  _poblarSelectProveedor(id);
   _updatePresEquiv();
   openModal('modalInsumo');
 }
@@ -1298,12 +1368,35 @@ function saveInsumo() {
     observaciones: document.getElementById('fObs').value.trim(),
   };
 
-  const editId = document.getElementById('fEditId').value;
+  const editId   = document.getElementById('fEditId').value;
+  const provId   = document.getElementById('fProveedor').value;
+  let   insumoId = editId;
+
   if (editId) {
     const idx = insumos.findIndex(i => i.id === editId);
     if (idx >= 0) insumos[idx] = { ...insumos[idx], ...data };
   } else {
-    insumos.push({ id: crypto.randomUUID(), aliases: [], ...data });
+    insumoId = crypto.randomUUID();
+    insumos.push({ id: insumoId, aliases: [], ...data });
+  }
+
+  // Assign provider: add to prov.items if not already linked
+  if (provId) {
+    const prov = proveedores.find(p => p.id === provId);
+    if (prov) {
+      if (!prov.items) prov.items = [];
+      const yaVinculado = prov.items.some(it => it.insumoId === insumoId);
+      if (!yaVinculado) {
+        prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: data.unidad || '' });
+      }
+    }
+  }
+  // Remove from other providers if reassigned
+  if (provId) {
+    proveedores.forEach(p => {
+      if (p.id === provId) return;
+      p.items = (p.items||[]).filter(it => it.insumoId !== insumoId);
+    });
   }
 
   persist();
@@ -3477,11 +3570,14 @@ async function importarExcelRecetas(input) {
     const wb = XLSX.read(buffer, { type: 'array' });
     const parsed = _parseExcelRecetas(wb);
     if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
-    _validationQueue = parsed;
-    _validationIdx   = 0;
-    _approvedRecetas = [];
-    _mostrarValidacion();
-    openModal('modalValidacionReceta');
+
+    const allNombres = new Set();
+    parsed.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
+    _matchMap = {};
+    allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
+
+    _pendingRecetas = parsed;
+    _finalizarImportRecetas();
   } catch(e) {
     toast('Error al procesar el Excel', 'error');
     console.error(e);
@@ -3743,8 +3839,10 @@ function verReceta(recetaId) {
             const st   = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
             const pres = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>' : '';
             const vinculado = ins
-              ? `<div style="display:flex;align-items:center;gap:6px">
-                   <span style="color:var(--accent);font-size:13px">${ins.nombre}</span>
+              ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                   <span style="color:var(--accent);font-size:13px;font-weight:500">${ins.nombre}</span>
+                   <button onclick="openEditModal('${ins.id}')"
+                     style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Editar</button>
                    <button onclick="_desvincularIng('${recetaId}',${si},${ii})"
                      style="font-size:11px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px">✕</button>
                  </div>`
