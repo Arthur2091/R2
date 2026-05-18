@@ -2275,17 +2275,23 @@ function renderFacturaDetalle(facturaId, provId) {
       <button onclick="eliminarFactura('${f.id}','${provId}')" style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:.5rem .9rem;cursor:pointer;font-size:.85rem;white-space:nowrap">Eliminar</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:.4rem">
-      ${f.items.map(item => `
+      ${f.items.map(item => {
+        const pu = item.precio_unitario != null ? item.precio_unitario
+                 : (item.precio_total != null && item.cantidad) ? item.precio_total / item.cantidad
+                 : null;
+        const ud = item.unidad || 'u';
+        const puLabel = pu != null ? pesos(pu) + '/' + ud : '';
+        return `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.6rem 1rem;display:flex;justify-content:space-between;align-items:baseline">
           <div>
             <div style="font-weight:600;font-size:.9rem">${item.nombre}</div>
-            <div style="font-size:.78rem;color:var(--ink2)">${item.cantidad != null ? item.cantidad + ' ' + (item.unidad||'') : ''}</div>
+            <div style="font-size:.78rem;color:var(--ink2)">${item.cantidad != null ? item.cantidad + ' ' + ud : ''}</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:600">${item.precio_total != null ? pesos(item.precio_total) : '—'}</div>
-            <div style="font-size:.75rem;color:var(--ink3)">${item.precio_unitario != null ? pesos(item.precio_unitario) + '/u' : ''}</div>
+            <div style="font-size:.75rem;color:var(--ink3)">${puLabel}</div>
           </div>
-        </div>`).join('')}
+        </div>`;}).join('')}
     </div>`;
 }
 
