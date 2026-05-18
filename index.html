@@ -4648,8 +4648,7 @@ function renderRecetas() {
     RUBRO_ORDER.forEach(g => {
       const s     = RUBRO_STYLES[g];
       const count = visible.filter(r => _getRubro(r) === g).length;
-      if (count > 0 || _rubroFiltro === g)
-        pills.push(`<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g} <span style="font-size:11px;font-weight:400">(${count})</span></button>`);
+      pills.push(`<button class="rubro-filter${_rubroFiltro===g?' active':''}" style="background:${s.bg};color:${s.color};${count===0?'opacity:.45':''}" onclick="_setRubroFiltro('${g}')">${s.icon} ${g}${count>0?` <span style="font-size:11px;font-weight:400">(${count})</span>`:''}</button>`);
     });
     if (hasSinRubro)
       pills.push(`<button class="rubro-filter${_rubroFiltro==='__sin__'?' active':''}" style="background:#FFF7ED;color:#C2410C" onclick="_setRubroFiltro('__sin__')">⚠️ Sin rubro (${sinCount})</button>`);
