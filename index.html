@@ -506,6 +506,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <div id="viewProveedores" class="view">
   <div class="toolbar" style="margin-bottom:16px">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
+    <button class="btn btn-outline" onclick="detectarDuplicadosProveedores()">Unificar duplicados</button>
   </div>
   <div id="proveedoresScreen"></div>
 </div>
@@ -751,7 +752,24 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
     <div class="field">
       <label>Categoría</label>
-      <input id="fCategoria" type="text" placeholder="ej. VERDULERIA">
+      <select id="fCategoria">
+        <option value="">— Sin categoría —</option>
+        <option>Lácteos</option>
+        <option>Harinas y Cereales</option>
+        <option>Huevos</option>
+        <option>Carnes y Fiambres</option>
+        <option>Frutas y Verduras</option>
+        <option>Aceites y Condimentos</option>
+        <option>Azúcares y Dulces</option>
+        <option>Chocolates y Coberturas</option>
+        <option>Café e Infusiones</option>
+        <option>Bebidas</option>
+        <option>Panadería</option>
+        <option>Congelados</option>
+        <option>Limpieza</option>
+        <option>Descartables</option>
+        <option>Otros</option>
+      </select>
     </div>
 
     <div class="row">
@@ -911,6 +929,39 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
+/* ── CATEGORIAS ─────────────────────────────────────────────────── */
+const CATEGORIAS_INSUMOS = [
+  'Lácteos','Harinas y Cereales','Huevos','Carnes y Fiambres',
+  'Frutas y Verduras','Aceites y Condimentos','Azúcares y Dulces',
+  'Chocolates y Coberturas','Café e Infusiones','Bebidas',
+  'Panadería','Congelados','Limpieza','Descartables','Otros'
+];
+
+const _CAT_KEYWORDS = [
+  ['Lácteos',              /leche|crema|queso|manteca|ricota|yogur|mozzarella|mascarpone|dulce de leche|caseína/i],
+  ['Harinas y Cereales',   /harina|almidón|fécula|maizena|avena|sémola|polenta|arroz|trigo|centeno|cebada/i],
+  ['Huevos',               /huevo/i],
+  ['Carnes y Fiambres',    /carne|pollo|cerdo|vacuno|res|jamón|panceta|salame|chorizo|longaniza|salchicha|fiambre|mortadela|milanesa/i],
+  ['Frutas y Verduras',    /manzana|pera|banana|frutilla|frambuesa|limón|naranja|ajo|cebolla|papa|tomate|zanahoria|espinaca|acelga|lechuga|zapallo|choclo|verdura|fruta|kiwi|mango/i],
+  ['Aceites y Condimentos',/aceite|vinagre|sal\b|pimienta|mostaza|ketchup|mayonesa|salsa|orégano|ají|pimentón|comino|laurel|especias|condimento|aliño/i],
+  ['Azúcares y Dulces',    /azúcar|azucar|impalpable|mermelada|dulce|miel|stevia|fructosa|glucosa/i],
+  ['Chocolates y Coberturas',/chocolate|cacao|cobertura|ganache|chips de chocolate|choco/i],
+  ['Café e Infusiones',    /café|cafe|te\b|té\b|mate|yerba|infusión|infusion|cápsula|capsula/i],
+  ['Bebidas',              /agua|jugo|bebida|gaseosa|cerveza|vino|soda|refresco|tónica|sprite|coca/i],
+  ['Panadería',            /pan\b|medialunas?|facturas?|brioche|baguette|levadura|masa|hojaldre|croissant|pionono|bizcocho/i],
+  ['Congelados',           /congela|helado|frozen/i],
+  ['Limpieza',             /detergente|lavandina|desinfectante|jabón|jabón|limpiador|esponja|trapo|mopa|guante|bolsa de basura|escoba|secador|desodorante de ambiente/i],
+  ['Descartables',         /descartable|servilleta|vaso descartable|plato descartable|film|papel|aluminio|caja|bolsa|manga|straw|sorbete|packaging|embalaje|etiqueta|adhesivo|cartón/i],
+];
+
+function categorizarInsumo(nombre) {
+  if (!nombre) return '';
+  for (const [cat, rx] of _CAT_KEYWORDS) {
+    if (rx.test(nombre)) return cat;
+  }
+  return 'Otros';
+}
+
 /* ── STATE ─────────────────────────────────────────────────────── */
 let insumos     = [];
 let proveedores = [];
@@ -1134,7 +1185,7 @@ function saveInsumo() {
   const data = {
     nombre,
     unidad:       document.getElementById('fUnidad').value.trim(),
-    categoria:    (document.getElementById('fCategoria').value.trim().toUpperCase()) || 'SIN CATEGORÍA',
+    categoria:    document.getElementById('fCategoria').value || '',
     precioConIVA: parseFloat(document.getElementById('fPrecioC').value) || null,
     precioSinIVA: parseFloat(document.getElementById('fPrecioS').value) || null,
     observaciones: document.getElementById('fObs').value.trim(),
@@ -1180,8 +1231,9 @@ function renderInsumos() {
   const search    = document.getElementById('searchInsumos').value.toLowerCase();
   const catFilter = document.getElementById('filterCat').value;
 
-  // Rebuild category select
-  const allCats = [...new Set(insumos.map(i => i.categoria))].sort();
+  // Rebuild category filter
+  const usedCats = new Set(insumos.map(i => i.categoria).filter(Boolean));
+  const allCats  = [...new Set([...CATEGORIAS_INSUMOS, ...usedCats])];
   const sel = document.getElementById('filterCat');
   const prev = sel.value;
   sel.innerHTML = '<option value="">Todas las categorías</option>';
@@ -1205,7 +1257,7 @@ function renderInsumos() {
   // Stats
   document.getElementById('statsInsumos').innerHTML = `
     <div class="stat-chip"><strong>${insumos.length}</strong> insumos</div>
-    <div class="stat-chip"><strong>${allCats.length}</strong> categorías</div>
+    <div class="stat-chip"><strong>${usedCats.size}</strong> categorías</div>
     ${visible.length !== insumos.length ? `<div class="stat-chip"><strong>${visible.length}</strong> resultados</div>` : ''}
   `;
 
@@ -1466,6 +1518,64 @@ function eliminarProveedor(id, nombre) {
   toast(`Proveedor "${nombre}" eliminado`, 'success');
 }
 
+function _normProv(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function _mergeProvPair(keepId, dropId) {
+  const keep = proveedores.find(p => p.id === keepId);
+  const drop = proveedores.find(p => p.id === dropId);
+  if (!keep || !drop) return;
+
+  // Merge aliases
+  const allAliases = [...new Set([...(keep.aliases||[]), drop.nombre, ...(drop.aliases||[])])];
+  keep.aliases = allAliases.filter(a => _normProv(a) !== _normProv(keep.nombre));
+
+  // Merge items — add drop's items that don't already exist by nombreBoleta
+  const existingNames = new Set((keep.items||[]).map(it => it.nombreBoleta.toLowerCase()));
+  (drop.items||[]).forEach(it => {
+    if (!existingNames.has(it.nombreBoleta.toLowerCase())) {
+      keep.items.push({ ...it });
+      existingNames.add(it.nombreBoleta.toLowerCase());
+    }
+  });
+
+  // Redirect precios and facturas
+  precios  = precios.map(p  => p.proveedorId  === dropId ? { ...p,  proveedorId:  keepId } : p);
+  facturas = facturas.map(f => f.proveedorId  === dropId ? { ...f,  proveedorId:  keepId } : f);
+
+  // Remove the duplicate
+  proveedores = proveedores.filter(p => p.id !== dropId);
+}
+
+function detectarDuplicadosProveedores() {
+  const norm = _normProv;
+  const grupos = {};
+  proveedores.forEach(p => {
+    const k = norm(p.nombre);
+    if (!grupos[k]) grupos[k] = [];
+    grupos[k].push(p);
+  });
+
+  const duplicados = Object.values(grupos).filter(g => g.length > 1);
+  if (!duplicados.length) { toast('No hay proveedores duplicados', 'info'); return; }
+
+  duplicados.forEach(grupo => {
+    // Keep the one with most facturas
+    const sorted = [...grupo].sort((a, b) => {
+      const fa = facturas.filter(f => f.proveedorId === a.id).length;
+      const fb = facturas.filter(f => f.proveedorId === b.id).length;
+      return fb - fa;
+    });
+    const keep = sorted[0];
+    sorted.slice(1).forEach(drop => _mergeProvPair(keep.id, drop.id));
+  });
+
+  persist();
+  renderProveedores();
+  toast(`${duplicados.length} grupo${duplicados.length > 1 ? 's' : ''} unificado${duplicados.length > 1 ? 's' : ''}`, 'success');
+}
+
 function renderProveedorFacturas(provId) {
   const screen = document.getElementById('proveedoresScreen');
   const prov   = proveedores.find(p => p.id === provId);
@@ -1657,7 +1767,7 @@ function altaInsumosDesdeFacturas(provId, silent = false) {
       if (!exacto.unidad && unidad) exacto.unidad = unidad;
     } else {
       insumoId = crypto.randomUUID();
-      insumos.push({ id: insumoId, nombre: limpiar(nombre), unidad, categoria: 'SIN CATEGORÍA', precioConIVA, precioSinIVA, observaciones: '', aliases: [] });
+      insumos.push({ id: insumoId, nombre: limpiar(nombre), unidad, categoria: categorizarInsumo(limpiar(nombre)), precioConIVA, precioSinIVA, observaciones: '', aliases: [] });
       creados++;
     }
 
@@ -1721,7 +1831,7 @@ function _revisionConfirmar() {
       if (!exacto.unidad && p.unidad) exacto.unidad = p.unidad;
     } else {
       insumoId = crypto.randomUUID();
-      insumos.push({ id: insumoId, nombre: nombreFinal, unidad: p.unidad, categoria: 'SIN CATEGORÍA', precioConIVA: p.precioConIVA, precioSinIVA: p.precioSinIVA, observaciones: '', aliases: [] });
+      insumos.push({ id: insumoId, nombre: nombreFinal, unidad: p.unidad, categoria: categorizarInsumo(nombreFinal), precioConIVA: p.precioConIVA, precioSinIVA: p.precioSinIVA, observaciones: '', aliases: [] });
       creados++;
     }
 
