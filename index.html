@@ -2024,9 +2024,12 @@ function renderProveedorFacturas(provId) {
 
   screen.innerHTML = `
     <button class="btn btn-outline" style="margin-bottom:1rem" onclick="renderProveedores()">← Proveedores</button>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
       <div style="font-size:1.1rem;font-weight:700">${prov?.nombre}</div>
-      <button class="btn btn-primary" onclick="altaInsumosDesdeFacturas('${provId}')">+ Dar de alta en Insumos</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" onclick="openItemsModal('${provId}')">Editar insumos</button>
+        <button class="btn btn-primary" onclick="altaInsumosDesdeFacturas('${provId}')">+ Dar de alta en Insumos</button>
+      </div>
     </div>
     ${!lista.length
       ? '<p style="color:var(--ink2)">Sin facturas cargadas.</p>'
