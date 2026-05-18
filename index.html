@@ -769,6 +769,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
+    <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
     <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
     <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()">Limpiar recetas</button>
   </div>
@@ -801,15 +802,36 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- MODAL: Editar receta (rinde + precio venta) -->
 <div id="modalEditReceta" class="overlay">
-  <div class="modal" style="max-width:420px">
-    <h2>Editar receta</h2>
+  <div class="modal" style="max-width:480px">
+    <h2 id="erModalTitle">Editar receta</h2>
+    <div class="field">
+      <label>Nombre</label>
+      <input id="erNombre" type="text" placeholder="Ej. Cappuccino">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field">
+        <label>Rubro</label>
+        <select id="erRubro" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none">
+          <option value="">— Elegí —</option>
+          <option>Cafetería</option>
+          <option>Pastelería</option>
+          <option>Panadería</option>
+          <option>Pastas</option>
+          <option>Cocina</option>
+          <option>Desayunos y Meriendas</option>
+          <option>Wraps</option>
+          <option>Ensaladas</option>
+          <option>Tartas</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Rinde (unidades)</label>
+        <input id="erRinde" type="number" step="1" min="1" placeholder="1">
+      </div>
+    </div>
     <div class="field">
       <label>Precio de venta ($)</label>
       <input id="erPrecioVenta" type="number" step="0.01" min="0" placeholder="0.00">
-    </div>
-    <div class="field">
-      <label>Rindes por subreceta</label>
-      <div id="erRindesList" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
     <input type="hidden" id="erRecetaId">
     <div class="modal-actions">
@@ -3918,10 +3940,9 @@ function _parseExcelRecetas(wb) {
               }
               i++;
             }
-            if (ingredientes.length > 0) subrecetas.push({ nombre: subNombre, tipo: col1, rinde, ingredientes });
+            if (ingredientes.length > 0) parsed.push({ nombre: subNombre, rubro: _catToRubro(sheetName), rinde, precioVenta, ingredientes });
           } else { i++; }
         }
-        if (subrecetas.length > 0) parsed.push({ nombre: nombreProducto, categoria: sheetName, precioVenta, subrecetas });
       } else { i++; }
     }
   });
@@ -3968,7 +3989,7 @@ async function importarExcelRecetas(input) {
     if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
 
     const allNombres = new Set();
-    parsed.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
+    parsed.forEach(r => (r.ingredientes || []).forEach(ing => allNombres.add(ing.nombreOriginal)));
     _matchMap = {};
     allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
 
@@ -3992,28 +4013,22 @@ function _mostrarValidacion() {
   document.getElementById('valContent').innerHTML = `
     <div style="margin-bottom:12px">
       <div style="font-size:1rem;font-weight:700">${r.nombre}</div>
-      <div style="font-size:12px;color:var(--ink3);margin-top:2px">${r.categoria}${r.precioVenta ? ' · $'+r.precioVenta : ''}</div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:2px">${r.rubro||''}${r.precioVenta ? ' · $'+r.precioVenta : ''} · rinde ${r.rinde||1}</div>
     </div>
-    ${r.subrecetas.map(sub => `
-      <div style="margin-bottom:14px">
-        <div style="font-size:11px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
-          ${sub.tipo} — ${sub.nombre} · rinde ${sub.rinde}
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead><tr>
-            <th style="text-align:left;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Ingrediente</th>
-            <th style="text-align:right;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Cant.</th>
-            <th style="padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Und.</th>
-          </tr></thead>
-          <tbody>${sub.ingredientes.map(ing=>`
-            <tr>
-              <td style="padding:3px 8px">${ing.nombreOriginal}</td>
-              <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
-              <td style="padding:3px 8px;color:var(--ink2)">${ing.unidad}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`).join('')}
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr>
+        <th style="text-align:left;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Ingrediente</th>
+        <th style="text-align:right;padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Cant.</th>
+        <th style="padding:4px 8px;color:var(--ink3);font-weight:500;border-bottom:1px solid var(--border)">Und.</th>
+      </tr></thead>
+      <tbody>${(r.ingredientes||[]).map(ing=>`
+        <tr>
+          <td style="padding:3px 8px">${ing.nombreOriginal}</td>
+          <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
+          <td style="padding:3px 8px;color:var(--ink2)">${ing.unidad}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
   `;
 }
 
@@ -4034,7 +4049,7 @@ function _finalizarValidacion() {
 
   // Auto-match what we can; unresolved stay null — user links from within each recipe
   const allNombres = new Set();
-  _approvedRecetas.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
+  _approvedRecetas.forEach(r => (r.ingredientes || []).forEach(ing => allNombres.add(ing.nombreOriginal)));
   _matchMap = {};
   allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
 
@@ -4105,24 +4120,22 @@ function _confirmarMatchRecetas() {
 function _finalizarImportRecetas() {
   const nuevosIds = {};
   _pendingRecetas.forEach(receta => {
-    receta.subrecetas.forEach(sub => {
-      sub.ingredientes.forEach(ing => {
-        const mapped = _matchMap[ing.nombreOriginal];
-        if (!mapped || mapped === 'skip') {
-          ing.insumoId = null;
-        } else if (mapped === 'new') {
-          if (!nuevosIds[ing.nombreOriginal]) nuevosIds[ing.nombreOriginal] = _crearInsumoDesdeNombre(ing.nombreOriginal);
-          ing.insumoId = nuevosIds[ing.nombreOriginal];
-        } else {
-          ing.insumoId = mapped;
-        }
-      });
+    (receta.ingredientes || []).forEach(ing => {
+      const mapped = _matchMap[ing.nombreOriginal];
+      if (!mapped || mapped === 'skip') {
+        ing.insumoId = null;
+      } else if (mapped === 'new') {
+        if (!nuevosIds[ing.nombreOriginal]) nuevosIds[ing.nombreOriginal] = _crearInsumoDesdeNombre(ing.nombreOriginal);
+        ing.insumoId = nuevosIds[ing.nombreOriginal];
+      } else {
+        ing.insumoId = mapped;
+      }
     });
   });
 
   let created=0, updated=0;
   _pendingRecetas.forEach(r => {
-    const ex = recetas.find(x => x.nombre===r.nombre && x.categoria===r.categoria);
+    const ex = recetas.find(x => x.nombre===r.nombre && x.rubro===r.rubro);
     if (ex) { Object.assign(ex, r); updated++; }
     else { recetas.push({ id: crypto.randomUUID(), ...r }); created++; }
   });
@@ -4162,35 +4175,67 @@ function saveConfigCostos() {
 }
 
 /* ── EDITAR RECETA ──────────────────────────────────────────────── */
+function _migrarRecetasFlat() {
+  if (!recetas.length || !recetas[0].subrecetas) return;
+  const migradas = [];
+  recetas.forEach(r => {
+    (r.subrecetas || []).forEach(sub => {
+      migradas.push({
+        id: crypto.randomUUID(),
+        nombre: sub.nombre || r.nombre,
+        rubro: _catToRubro(r.categoria),
+        rinde: sub.rinde || 1,
+        precioVenta: r.precioVenta || null,
+        ingredientes: sub.ingredientes || []
+      });
+    });
+  });
+  recetas = migradas;
+  persistRecetas();
+}
+
+function openNuevaReceta() {
+  document.getElementById('erModalTitle').textContent = 'Nueva receta';
+  document.getElementById('erRecetaId').value    = '';
+  document.getElementById('erNombre').value      = '';
+  document.getElementById('erRubro').value       = '';
+  document.getElementById('erRinde').value       = '';
+  document.getElementById('erPrecioVenta').value = '';
+  openModal('modalEditReceta');
+}
+
 function openEditReceta(recetaId) {
   const r = recetas.find(x => x.id === recetaId);
   if (!r) return;
+  document.getElementById('erModalTitle').textContent = 'Editar receta';
   document.getElementById('erRecetaId').value    = recetaId;
+  document.getElementById('erNombre').value      = r.nombre || '';
+  document.getElementById('erRubro').value       = r.rubro || _catToRubro(r.categoria) || '';
+  document.getElementById('erRinde').value       = r.rinde || 1;
   document.getElementById('erPrecioVenta').value = r.precioVenta || '';
-  document.getElementById('erRindesList').innerHTML = r.subrecetas.map((sub, si) => `
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="flex:1;font-size:13px;color:var(--ink2)">${sub.nombre}</span>
-      <input type="number" step="1" min="1" value="${sub.rinde || 1}"
-        style="width:70px;font:13px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
-        id="erRinde_${si}" placeholder="Rinde">
-      <span style="font-size:12px;color:var(--ink3)">und.</span>
-    </div>`).join('');
   openModal('modalEditReceta');
 }
 
 function saveEditReceta() {
+  const nombre = document.getElementById('erNombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
   const recetaId = document.getElementById('erRecetaId').value;
-  const r = recetas.find(x => x.id === recetaId);
-  if (!r) return;
-  r.precioVenta = parseFloat(document.getElementById('erPrecioVenta').value) || null;
-  r.subrecetas.forEach((sub, si) => {
-    const v = parseFloat(document.getElementById(`erRinde_${si}`)?.value);
-    if (v > 0) sub.rinde = v;
-  });
+  const data = {
+    nombre,
+    rubro:       document.getElementById('erRubro').value || 'Otros',
+    rinde:       parseFloat(document.getElementById('erRinde').value) || 1,
+    precioVenta: parseFloat(document.getElementById('erPrecioVenta').value) || null,
+  };
+  if (recetaId) {
+    const r = recetas.find(x => x.id === recetaId);
+    if (r) Object.assign(r, data);
+  } else {
+    recetas.push({ id: crypto.randomUUID(), ingredientes: [], ...data });
+  }
   persistRecetas();
   closeModal('modalEditReceta');
-  toast('Receta actualizada', 'success');
-  verReceta(recetaId);
+  toast(recetaId ? 'Receta actualizada' : 'Receta creada', 'success');
+  renderRecetas();
 }
 
 const CAT_TO_RUBRO = {
@@ -4223,10 +4268,10 @@ function renderRecetas() {
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
   const visible = recetas.filter(r =>
-    !search || r.nombre.toLowerCase().includes(search) || (r.categoria||'').toLowerCase().includes(search)
+    !search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search)
   );
 
-  const rubrosUsados = [...new Set(visible.map(r => _catToRubro(r.categoria)))];
+  const rubrosUsados = [...new Set(visible.map(r => r.rubro || _catToRubro(r.categoria)))];
   const rubrosSorted = [...RUBRO_ORDER.filter(r=>rubrosUsados.includes(r)), ...rubrosUsados.filter(r=>!RUBRO_ORDER.includes(r)).sort()];
 
   // Filtros pills
@@ -4250,10 +4295,10 @@ function renderRecetas() {
     return;
   }
 
-  const filtradas = _rubroFiltro === 'todos' ? visible : visible.filter(r => _catToRubro(r.categoria) === _rubroFiltro);
+  const filtradas = _rubroFiltro === 'todos' ? visible : visible.filter(r => (r.rubro || _catToRubro(r.categoria)) === _rubroFiltro);
   const byRubro = {};
   filtradas.forEach(r => {
-    const g = _catToRubro(r.categoria);
+    const g = r.rubro || _catToRubro(r.categoria);
     if (!byRubro[g]) byRubro[g] = [];
     byRubro[g].push(r);
   });
@@ -4270,12 +4315,12 @@ function renderRecetas() {
       </div>
       <div class="recetas-grid">
         ${rs.map(r => {
-          const totalIng = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.length,0);
-          const mapeados = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.filter(i=>i.insumoId).length,0);
-          const st = RUBRO_STYLES[_catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
+          const ings    = r.ingredientes || [];
+          const mapeados = ings.filter(i=>i.insumoId).length;
+          const st = RUBRO_STYLES[r.rubro || _catToRubro(r.categoria)] || { bg:'#F0EDE8', color:'#6B6760' };
           return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='${st.color}'" onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
-            <div style="font-size:12px;color:var(--ink2)">${mapeados}/${totalIng} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
+            <div style="font-size:12px;color:var(--ink2)">${mapeados}/${ings.length} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
           </button>`;
         }).join('')}
       </div>
@@ -4293,99 +4338,86 @@ function verReceta(recetaId) {
   const r = recetas.find(r => r.id === recetaId);
   if (!r) return;
 
+  const ings = r.ingredientes || [];
   let costoTotal = 0;
-  r.subrecetas.forEach(sub => {
-    sub.ingredientes.forEach(ing => {
-      if (!ing.insumoId) return;
-      const ins = insumos.find(i => i.id === ing.insumoId);
-      const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
-      if (c) costoTotal += c;
-    });
+  ings.forEach(ing => {
+    if (!ing.insumoId) return;
+    const ins = insumos.find(i => i.id === ing.insumoId);
+    const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
+    if (c) costoTotal += c;
   });
-  const rinde0   = r.subrecetas[0]?.rinde || 1;
-  const costoUnd = costoTotal > 0 ? costoTotal / rinde0 : 0;
+  const rinde    = r.rinde || 1;
+  const costoUnd = costoTotal > 0 ? costoTotal / rinde : 0;
   const ganancia = (costoUnd > 0 && r.precioVenta)
     ? Math.round(((r.precioVenta - costoUnd) / costoUnd) * 100) : null;
-  const sinVincular = r.subrecetas.reduce((s,sub) => s + sub.ingredientes.filter(i=>!i.insumoId).length, 0);
+  const sinVincular = ings.filter(i => !i.insumoId).length;
+  const s = RUBRO_STYLES[r.rubro] || { bg:'#F0EDE8', color:'#6B6760' };
 
   document.getElementById('recetasScreen').innerHTML = `
     <button class="btn btn-outline" style="margin-bottom:16px" onclick="renderRecetas()">← Recetas</button>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div>
         <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
-        <div style="font-size:13px;color:var(--ink2);margin-top:2px">${r.categoria}</div>
-        ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
+        <div style="display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;margin-top:4px;background:${s.bg};color:${s.color}">${r.rubro || ''}</div>
+        ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:6px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
       </div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-          ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
-          ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde0}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
-          ${costoUnd>0&&_cfgMargen()>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio sugerido (${_cfgMargen()}%)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd).toFixed(2)}</div></div>`:''}
-          ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
-          ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
-        </div>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
+        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
+        ${costoUnd>0&&_cfgMargen()>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Sugerido (${_cfgMargen()}%)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd).toFixed(2)}</div></div>`:''}
+        ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
+        ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
         <button class="btn btn-outline btn-sm" onclick="openEditReceta('${r.id}')">Editar</button>
       </div>
     </div>
-    ${r.subrecetas.map((sub, si) => `
-      <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px;display:flex;gap:8px;align-items:center">
-          <span style="background:var(--surface2);padding:2px 8px;border-radius:4px">${sub.tipo}</span>
-          <span>${sub.nombre}</span>
-          <span style="color:var(--ink3)">· Rinde: ${sub.rinde}</span>
-        </div>
-        <div class="table-wrap"><table>
-          <thead><tr>
-            <th>Ingrediente (receta)</th>
-            <th style="text-align:right">Cant.</th>
-            <th>Und.</th>
-            <th>Insumo vinculado</th>
-            <th>Presentación</th>
-            <th style="text-align:right">Subtotal</th>
-          </tr></thead>
-          <tbody>${sub.ingredientes.map((ing, ii) => {
-            const sid  = `${recetaId}_${si}_${ii}`.replace(/-/g,'_');
-            const ins  = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
-            const st   = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
-            const pres = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>' : '';
-            const vinculado = ins
-              ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                   <span style="color:var(--accent);font-size:13px;font-weight:500">${ins.nombre}</span>
-                   <button onclick="openEditModal('${ins.id}')"
-                     style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Editar</button>
-                   <button onclick="_desvincularIng('${recetaId}',${si},${ii})"
-                     style="font-size:11px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px">✕</button>
-                 </div>`
-              : `<div>
-                   <input id="ib_${sid}" type="text" placeholder="Buscar insumo…"
-                     style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"
-                     oninput="_buscarIngMatch(this,'${recetaId}',${si},${ii})">
-                   <div id="ir_${sid}" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
-                 </div>`;
-            return `<tr style="${!ins ? 'background:#fffbeb' : ''}">
-              <td style="font-weight:500">${ing.nombreOriginal}</td>
-              <td style="text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
-              <td style="color:var(--ink2)">${ing.unidad}</td>
-              <td style="min-width:200px">${vinculado}</td>
-              <td style="font-size:12px;font-family:'DM Mono',monospace;color:var(--ink2)">${pres}</td>
-              <td style="text-align:right;font-weight:600">${st ? '$'+st.toFixed(2) : '—'}</td>
-            </tr>`;
-          }).join('')}</tbody>
-        </table></div>
-      </div>`).join('')}
-    <div style="margin-top:8px">
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>Ingrediente</th>
+        <th style="text-align:right">Cant.</th>
+        <th>Und.</th>
+        <th>Insumo vinculado</th>
+        <th>Presentación</th>
+        <th style="text-align:right">Subtotal</th>
+      </tr></thead>
+      <tbody>${ings.map((ing, ii) => {
+        const sid = `${recetaId}_${ii}`.replace(/-/g,'_');
+        const ins = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
+        const st  = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
+        const pres = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>' : '';
+        const vinculado = ins
+          ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+               <span style="color:var(--accent);font-size:13px;font-weight:500">${ins.nombre}</span>
+               <button onclick="openEditModal('${ins.id}')" style="font-size:11px;padding:2px 7px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Editar</button>
+               <button onclick="_desvincularIng('${recetaId}',${ii})" style="font-size:11px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px">✕</button>
+             </div>`
+          : `<div>
+               <input id="ib_${sid}" type="text" placeholder="Buscar insumo…"
+                 style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"
+                 oninput="_buscarIngMatch(this,'${recetaId}',${ii})">
+               <div id="ir_${sid}" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
+             </div>`;
+        return `<tr style="${!ins?'background:#fffbeb':''}">
+          <td style="font-weight:500">${ing.nombreOriginal}</td>
+          <td style="text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
+          <td style="color:var(--ink2)">${ing.unidad}</td>
+          <td style="min-width:200px">${vinculado}</td>
+          <td style="font-size:12px;font-family:'DM Mono',monospace;color:var(--ink2)">${pres}</td>
+          <td style="text-align:right;font-weight:600">${st ? '$'+st.toFixed(2) : '—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
       <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">Eliminar receta</button>
     </div>`;
 }
 
-function _buscarIngMatch(input, recetaId, si, ii) {
+function _buscarIngMatch(input, recetaId, ii) {
   const q   = input.value.toLowerCase().trim();
-  const sid = `${recetaId}_${si}_${ii}`.replace(/-/g,'_');
+  const sid = `${recetaId}_${ii}`.replace(/-/g,'_');
   const res = document.getElementById('ir_' + sid);
   if (!res) return;
   if (!q) { res.innerHTML = ''; return; }
 
-  // Solo insumos con precio cargado
   const conPrecio = insumos.filter(i => i.precioSinIVA || i.precioConIVA);
   const matches   = conPrecio.filter(i =>
     i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))
@@ -4394,7 +4426,7 @@ function _buscarIngMatch(input, recetaId, si, ii) {
   res.innerHTML = matches.map(ins => {
     const precio = ins.precioSinIVA ?? ins.precioConIVA;
     const pres   = ins.presQty ? `${ins.presQty}${ins.presUnit}` : ins.unidad || '';
-    return `<button onclick="_vincularIng('${recetaId}',${si},${ii},'${ins.id}')"
+    return `<button onclick="_vincularIng('${recetaId}',${ii},'${ins.id}')"
       style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;color:var(--ink);white-space:nowrap;text-align:left;display:flex;flex-direction:column;gap:1px">
       <span style="font-weight:600">${ins.nombre}</span>
       <span style="font-size:11px;color:var(--accent);font-family:'DM Mono',monospace">$${precio.toFixed(2)}${pres ? ' · '+pres : ''}</span>
@@ -4402,18 +4434,15 @@ function _buscarIngMatch(input, recetaId, si, ii) {
   }).join('') || '<span style="font-size:12px;color:var(--ink3)">Sin resultados con precio</span>';
 }
 
-function _vincularIng(recetaId, si, ii, insumoId) {
-  // Obtener el nombreOriginal del ingrediente para vincular en todas las recetas
+function _vincularIng(recetaId, ii, insumoId) {
   const receta = recetas.find(r => r.id === recetaId);
   if (!receta) return;
-  const nombreOriginal = receta.subrecetas[si]?.ingredientes[ii]?.nombreOriginal;
+  const nombreOriginal = receta.ingredientes[ii]?.nombreOriginal;
 
-  // Actualizar en TODAS las recetas el mismo nombreOriginal
+  // Vincular en TODAS las recetas donde aparezca el mismo nombreOriginal
   recetas.forEach(r => {
-    r.subrecetas.forEach(sub => {
-      sub.ingredientes.forEach(ing => {
-        if (ing.nombreOriginal === nombreOriginal) ing.insumoId = insumoId;
-      });
+    (r.ingredientes || []).forEach(ing => {
+      if (ing.nombreOriginal === nombreOriginal) ing.insumoId = insumoId;
     });
   });
 
@@ -4423,17 +4452,14 @@ function _vincularIng(recetaId, si, ii, insumoId) {
   toast(`"${nombreOriginal}" vinculado a "${ins?.nombre}" en todas las recetas`, 'success');
 }
 
-function _desvincularIng(recetaId, si, ii) {
+function _desvincularIng(recetaId, ii) {
   const receta = recetas.find(r => r.id === recetaId);
   if (!receta) return;
-  const nombreOriginal = receta.subrecetas[si]?.ingredientes[ii]?.nombreOriginal;
+  const nombreOriginal = receta.ingredientes[ii]?.nombreOriginal;
 
-  // Desvincular en TODAS las recetas
   recetas.forEach(r => {
-    r.subrecetas.forEach(sub => {
-      sub.ingredientes.forEach(ing => {
-        if (ing.nombreOriginal === nombreOriginal) ing.insumoId = null;
-      });
+    (r.ingredientes || []).forEach(ing => {
+      if (ing.nombreOriginal === nombreOriginal) ing.insumoId = null;
     });
   });
 
@@ -4598,6 +4624,7 @@ function verConsolidado() {
 
 /* ── INIT ───────────────────────────────────────────────────────── */
 hydrate();
+_migrarRecetasFlat();
 hydrateContable();
 renderInsumos();
 renderProveedores();
