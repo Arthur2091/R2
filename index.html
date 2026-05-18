@@ -760,10 +760,53 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
-    <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()" style="margin-left:auto">Limpiar recetas</button>
+    <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
+    <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()">Limpiar recetas</button>
   </div>
   <div id="statsRecetas" class="stats-bar"></div>
   <div id="recetasScreen"></div>
+</div>
+
+<!-- MODAL: Configuración global de costos -->
+<div id="modalConfigCostos" class="overlay">
+  <div class="modal" style="max-width:400px">
+    <h2>Costos globales</h2>
+    <p class="modal-sub">Se aplican a todas las recetas al calcular el precio sugerido.</p>
+    <div class="field">
+      <label>Margen de ganancia objetivo (%)</label>
+      <input id="cfgMargen" type="number" step="1" min="0" max="100" placeholder="ej. 60">
+      <span style="font-size:11px;color:var(--ink3)">Precio sugerido = costo / (1 − margen/100)</span>
+    </div>
+    <div class="field">
+      <label>Costos adicionales (% sobre ingredientes)</label>
+      <input id="cfgExtras" type="number" step="1" min="0" placeholder="ej. 20">
+      <span style="font-size:11px;color:var(--ink3)">Mano de obra, gas, packaging, etc.</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalConfigCostos')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveConfigCostos()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar receta (rinde + precio venta) -->
+<div id="modalEditReceta" class="overlay">
+  <div class="modal" style="max-width:420px">
+    <h2>Editar receta</h2>
+    <div class="field">
+      <label>Precio de venta ($)</label>
+      <input id="erPrecioVenta" type="number" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div class="field">
+      <label>Rindes por subreceta</label>
+      <div id="erRindesList" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+    <input type="hidden" id="erRecetaId">
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalEditReceta')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditReceta()">Guardar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: Validación de recetas una por una -->
@@ -3981,6 +4024,64 @@ function _finalizarImportRecetas() {
   toast(`${created} recetas importadas${updated?', '+updated+' actualizadas':''}${nNuevos?', '+nNuevos+' insumos creados':''}`, 'success');
 }
 
+/* ── CONFIG COSTOS GLOBALES ─────────────────────────────────────── */
+function _cfgMargen()  { return parseFloat(localStorage.getItem('cons_margen_obj') || '0') || 0; }
+function _cfgExtras()  { return parseFloat(localStorage.getItem('cons_costos_extra') || '0') || 0; }
+function _costoConExtras(c) { return c * (1 + _cfgExtras() / 100); }
+function _precioSugerido(costoUnd) {
+  const base = _costoConExtras(costoUnd);
+  const m = _cfgMargen();
+  return m >= 100 ? base : base / (1 - m / 100);
+}
+
+function openConfigCostos() {
+  document.getElementById('cfgMargen').value = _cfgMargen() || '';
+  document.getElementById('cfgExtras').value = _cfgExtras() || '';
+  openModal('modalConfigCostos');
+}
+
+function saveConfigCostos() {
+  const m = parseFloat(document.getElementById('cfgMargen').value) || 0;
+  const e = parseFloat(document.getElementById('cfgExtras').value) || 0;
+  localStorage.setItem('cons_margen_obj', m);
+  localStorage.setItem('cons_costos_extra', e);
+  closeModal('modalConfigCostos');
+  toast('Configuración guardada', 'success');
+  if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
+}
+
+/* ── EDITAR RECETA ──────────────────────────────────────────────── */
+function openEditReceta(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  document.getElementById('erRecetaId').value    = recetaId;
+  document.getElementById('erPrecioVenta').value = r.precioVenta || '';
+  document.getElementById('erRindesList').innerHTML = r.subrecetas.map((sub, si) => `
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="flex:1;font-size:13px;color:var(--ink2)">${sub.nombre}</span>
+      <input type="number" step="1" min="1" value="${sub.rinde || 1}"
+        style="width:70px;font:13px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+        id="erRinde_${si}" placeholder="Rinde">
+      <span style="font-size:12px;color:var(--ink3)">und.</span>
+    </div>`).join('');
+  openModal('modalEditReceta');
+}
+
+function saveEditReceta() {
+  const recetaId = document.getElementById('erRecetaId').value;
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  r.precioVenta = parseFloat(document.getElementById('erPrecioVenta').value) || null;
+  r.subrecetas.forEach((sub, si) => {
+    const v = parseFloat(document.getElementById(`erRinde_${si}`)?.value);
+    if (v > 0) sub.rinde = v;
+  });
+  persistRecetas();
+  closeModal('modalEditReceta');
+  toast('Receta actualizada', 'success');
+  verReceta(recetaId);
+}
+
 function renderRecetas() {
   _currentVerRecetaId = null;
   const search    = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
@@ -4057,11 +4158,15 @@ function verReceta(recetaId) {
         <div style="font-size:13px;color:var(--ink2);margin-top:2px">${r.categoria}</div>
         ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
       </div>
-      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-        ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
-        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde0}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
-        ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
-        ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+          ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
+          ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde0}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
+          ${costoUnd>0&&_cfgMargen()>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio sugerido (${_cfgMargen()}%)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd).toFixed(2)}</div></div>`:''}
+          ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
+          ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openEditReceta('${r.id}')">Editar</button>
       </div>
     </div>
     ${r.subrecetas.map((sub, si) => `
