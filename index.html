@@ -1404,13 +1404,18 @@ function _aplicarBoletaItem(provId, itemInsumoId) {
   const provSel = document.getElementById('fProveedor');
   if (provSel) { provSel.value = provId; _onProveedorChange(); }
 
-  // Limpiar buscador
-  document.getElementById('fBuscadorBoleta').value = '';
-  document.getElementById('fBoletaResultados').innerHTML = '';
-
   const prov = proveedores.find(p => p.id === provId);
   const it   = (prov?.items||[]).find(i => i.insumoId === itemInsumoId);
-  toast(`Precio tomado de ${it?.nombreBoleta || ''} (${prov?.nombre || ''})`, 'success');
+
+  // Mostrar chip de selección en gris en lugar de los resultados
+  document.getElementById('fBuscadorBoleta').value = '';
+  document.getElementById('fBoletaResultados').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 10px">
+      <span style="font-size:13px;color:var(--ink2);font-weight:600">${it?.nombreBoleta || ''}</span>
+      <span style="font-size:11px;color:var(--ink3)">${prov?.nombre || ''} · $${ultimo.precioUnitario.toFixed(2)}/${unidad}</span>
+      <button type="button" onclick="document.getElementById('fBoletaResultados').innerHTML=''"
+        style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--ink3);font-size:14px;line-height:1;padding:0 2px">✕</button>
+    </div>`;
 }
 
 function _poblarSelectProveedor(insumoId) {
