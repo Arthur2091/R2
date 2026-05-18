@@ -2943,6 +2943,22 @@ function renderBoletaItems() {
 
 function _boletaSet(idx, el, field, isNum) {
   _boletaItems[idx][field] = isNum ? (parseFloat(el.value) || null) : el.value;
+  // Recalcular precio_total si cambia algún campo relevante
+  if (['cantidad','peso_por_unidad','precio_unitario'].includes(field)) {
+    const it = _boletaItems[idx];
+    const pu = it.precio_unitario;
+    const cant = it.cantidad;
+    if (pu != null && cant != null) {
+      const total = it.peso_por_unidad ? cant * it.peso_por_unidad * pu : cant * pu;
+      it.precio_total = Math.round(total * 100) / 100;
+      // Actualizar el input de precio_total en el DOM sin re-renderizar
+      const row = document.getElementById('boletaItemsWrap').children[idx];
+      if (row) {
+        const totalInput = row.querySelector('input[placeholder="$ Total"]');
+        if (totalInput) totalInput.value = it.precio_total;
+      }
+    }
+  }
 }
 
 function resetBoleta() {
