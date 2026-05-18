@@ -4955,7 +4955,7 @@ async function _fbLoad() {
     renderInsumos();
     renderProveedores();
     renderRecetas();
-    renderContable();
+    initContableView();
     _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
