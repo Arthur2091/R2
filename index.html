@@ -4958,6 +4958,10 @@ async function _fbLoad() {
     renderProveedores();
     renderRecetas();
     initContableView();
+    // Actualizar boletas si está visible
+    const bannerApikey = document.getElementById('apikeyBanner');
+    if (bannerApikey && getApiKey()) bannerApikey.style.display = 'none';
+    if (_boletaItems.length) renderBoletaItems();
     _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
