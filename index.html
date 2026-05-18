@@ -814,6 +814,20 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<!-- MODAL: Asignar rubros pre-import -->
+<div id="modalAsignarRubros" class="overlay">
+  <div class="modal" style="max-width:780px;max-height:90vh;display:flex;flex-direction:column">
+    <h2 style="flex-shrink:0">Asignar rubros antes de importar</h2>
+    <p class="modal-sub" style="flex-shrink:0">Revisá el rubro de cada receta antes de guardarla. Podés cambiar individualmente o por grupo.</p>
+    <div id="arContent" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;padding-right:4px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal('modalAsignarRubros')">Cancelar</button>
+      <span id="arContador" style="font-size:13px;color:var(--ink3);margin:auto"></span>
+      <button class="btn btn-primary" onclick="_confirmarImportConRubros()">✓ Confirmar e importar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Editar receta -->
 <div id="modalEditReceta" class="overlay">
   <div class="modal" style="max-width:620px;max-height:88vh;display:flex;flex-direction:column">
@@ -4021,6 +4035,8 @@ let _validationQueue = [];
 let _validationIdx   = 0;
 let _approvedRecetas = [];
 
+let _preImportRecetas = [];
+
 async function importarExcelRecetas(input) {
   const file = input.files[0];
   if (!file) return;
@@ -4030,19 +4046,81 @@ async function importarExcelRecetas(input) {
     const wb = XLSX.read(buffer, { type: 'array' });
     const parsed = _parseExcelRecetas(wb);
     if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
-
-    const allNombres = new Set();
-    parsed.forEach(r => (r.ingredientes || []).forEach(ing => allNombres.add(ing.nombreOriginal)));
-    _matchMap = {};
-    allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
-
-    _pendingRecetas = parsed;
-    _finalizarImportRecetas();
+    _preImportRecetas = parsed;
+    _abrirModalAsignarRubros();
   } catch(e) {
     toast('Error al procesar el Excel', 'error');
     console.error(e);
   }
   input.value = '';
+}
+
+function _abrirModalAsignarRubros() {
+  const rubrosOpts = RUBRO_ORDER.map(r => `<option value="${r}">${(RUBRO_STYLES[r]||{}).icon||''} ${r}</option>`).join('');
+
+  // Agrupar por rubro auto-detectado
+  const grupos = {};
+  _preImportRecetas.forEach((r, idx) => {
+    const g = r.rubro || 'Otros';
+    if (!grupos[g]) grupos[g] = [];
+    grupos[g].push({ ...r, _idx: idx });
+  });
+
+  const orden = [...RUBRO_ORDER.filter(r => grupos[r]), ...Object.keys(grupos).filter(r => !RUBRO_ORDER.includes(r)).sort()];
+
+  document.getElementById('arContent').innerHTML = orden.map(rubro => {
+    const s = RUBRO_STYLES[rubro] || { bg:'#F0EDE8', color:'#6B6760', icon:'📋' };
+    const items = grupos[rubro];
+    return `
+      <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+        <div style="background:${s.bg};padding:10px 14px;display:flex;align-items:center;gap:10px">
+          <span style="font-size:15px">${s.icon}</span>
+          <span style="font-weight:700;font-size:13px;color:${s.color};text-transform:uppercase;letter-spacing:.05em">${rubro}</span>
+          <span style="font-size:11px;color:${s.color};opacity:.7">${items.length} recetas</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:${s.color};opacity:.8">Cambiar todo a:</span>
+            <select onchange="_cambiarGrupoRubro('${rubro}', this.value)"
+              style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid ${s.color}40;background:white;color:var(--ink);font-family:var(--font)">
+              <option value="">— Elegí —</option>
+              ${rubrosOpts}
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column">
+          ${items.map(r => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-top:1px solid var(--border)">
+              <span style="flex:1;font-size:13px;font-weight:500">${r.nombre}</span>
+              <span style="font-size:11px;color:var(--ink3)">${r.ingredientes?.length||0} ing.</span>
+              <select data-idx="${r._idx}"
+                style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-family:var(--font)"
+                onchange="_preImportRecetas[${r._idx}].rubro=this.value">
+                ${RUBRO_ORDER.map(ro => `<option value="${ro}"${ro===r.rubro?' selected':''}>${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('')}
+              </select>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('arContador').textContent = `${_preImportRecetas.length} recetas encontradas`;
+  openModal('modalAsignarRubros');
+}
+
+function _cambiarGrupoRubro(rubroActual, nuevoRubro) {
+  if (!nuevoRubro) return;
+  _preImportRecetas.forEach((r, idx) => {
+    if (r.rubro === rubroActual) _preImportRecetas[idx].rubro = nuevoRubro;
+  });
+  _abrirModalAsignarRubros();
+}
+
+function _confirmarImportConRubros() {
+  const allNombres = new Set();
+  _preImportRecetas.forEach(r => (r.ingredientes||[]).forEach(ing => allNombres.add(ing.nombreOriginal)));
+  _matchMap = {};
+  allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
+  _pendingRecetas = _preImportRecetas;
+  closeModal('modalAsignarRubros');
+  _finalizarImportRecetas();
 }
 
 function _mostrarValidacion() {
