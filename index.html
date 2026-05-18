@@ -3933,47 +3933,62 @@ const _SKIP_SHEETS = new Set(['COSTO EN BLANCO','INSUMOS','Hoja 11','PRECIOS DE 
 
 function _parseExcelRecetas(wb) {
   const parsed = [];
+
   wb.SheetNames.filter(n => !_SKIP_SHEETS.has(n.trim())).forEach(sheetName => {
     const ws = wb.Sheets[sheetName];
     if (!ws) return;
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    let i = 0;
-    while (i < rows.length) {
-      const r = rows[i];
-      if (String(r[0]).trim().startsWith('PRODUCTO')) {
-        const nombreProducto = (String(r[2]).trim() || String(r[3]).trim()).toUpperCase() || 'SIN NOMBRE';
-        const precioVenta = typeof rows[i+1]?.[5] === 'number' && rows[i+1][5] > 1 ? rows[i+1][5] : null;
-        const subrecetas = [];
-        i++;
-        while (i < rows.length) {
-          const row = rows[i];
-          if (String(row[0]).trim().startsWith('PRODUCTO')) break;
-          const col1 = String(row[1]).trim();
-          const col2 = String(row[2]).trim();
-          if (col2 === 'COSTO' && (col1.startsWith('*') || /^\d+$/.test(col1))) {
-            const subNombre = String(row[3]).trim() || nombreProducto;
-            const rinde = typeof row[4] === 'number' && row[4] > 0 ? row[4] : 1;
-            const ingredientes = [];
-            i++;
-            while (i < rows.length) {
-              const ir = rows[i];
-              const c2 = String(ir[2]).trim().toUpperCase();
-              if (c2.includes('TOTAL COSTO') || c2.includes('COSTO PORCION')) { i++; break; }
-              if (String(ir[0]).trim().startsWith('PRODUCTO')) break;
-              const nombre = String(ir[3]).trim();
-              const cantRaw = ir[6];
-              const unidad  = String(ir[7]).trim() || 'kg';
-              if (nombre && !nombre.startsWith('#') && typeof cantRaw === 'number' && cantRaw > 0) {
-                ingredientes.push({ nombreOriginal: nombre.toUpperCase(), cantidad: cantRaw, unidad, insumoId: null });
-              }
+
+    // Detectar columnas base donde aparece PRODUCTO (pueden ser 0, 10, 20 o 0, 12, etc.)
+    const prodRow = rows.find(r => r.some(v => String(v).trim().startsWith('PRODUCTO')));
+    if (!prodRow) return;
+    const colOffsets = prodRow
+      .map((v, i) => [i, v])
+      .filter(([, v]) => String(v).trim().startsWith('PRODUCTO'))
+      .map(([i]) => i);
+
+    // Parsear cada bloque de columnas de forma independiente
+    colOffsets.forEach(c => {
+      let i = 0;
+      while (i < rows.length) {
+        const r = rows[i];
+        if (String(r[c] || '').trim().startsWith('PRODUCTO')) {
+          const precioVenta = typeof rows[i+1]?.[c+5] === 'number' && rows[i+1][c+5] > 1 ? rows[i+1][c+5] : null;
+          i++;
+          while (i < rows.length) {
+            const row = rows[i];
+            if (String(row[c] || '').trim().startsWith('PRODUCTO')) break;
+            const col1 = String(row[c+1] || '').trim();
+            const col2 = String(row[c+2] || '').trim();
+            if (col2 === 'COSTO' && (col1.startsWith('*') || /^\d+$/.test(col1))) {
+              const subNombre = String(row[c+3] || '').trim();
+              if (!subNombre) { i++; continue; }
+              const rinde = typeof row[c+4] === 'number' && row[c+4] > 0 ? row[c+4] : 1;
+              const ingredientes = [];
               i++;
-            }
-            if (ingredientes.length > 0) parsed.push({ nombre: subNombre, rubro: _catToRubro(sheetName), rinde, precioVenta, ingredientes });
-          } else { i++; }
-        }
-      } else { i++; }
-    }
+              while (i < rows.length) {
+                const ir = rows[i];
+                if (String(ir[c] || '').trim().startsWith('PRODUCTO')) break;
+                const c2 = String(ir[c+2] || '').trim().toUpperCase();
+                if (c2.includes('TOTAL COSTO') || c2.includes('COSTO PORCION')) { i++; break; }
+                const nombre = String(ir[c+3] || '').trim();
+                const cantRaw = ir[c+6];
+                const unidad  = String(ir[c+7] || '').trim() || 'kg';
+                if (nombre && !nombre.startsWith('#') && typeof cantRaw === 'number' && cantRaw > 0) {
+                  ingredientes.push({ nombreOriginal: nombre.toUpperCase(), cantidad: cantRaw, unidad, insumoId: null });
+                }
+                i++;
+              }
+              if (ingredientes.length > 0) {
+                parsed.push({ nombre: subNombre, rubro: _catToRubro(sheetName), rinde, precioVenta, ingredientes });
+              }
+            } else { i++; }
+          }
+        } else { i++; }
+      }
+    });
   });
+
   return parsed;
 }
 
