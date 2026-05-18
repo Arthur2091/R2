@@ -2799,7 +2799,14 @@ Si no podés leer algún campo con certeza, ponés null.`;
     const jsonStr = text.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
     const parsed = JSON.parse(jsonStr);
 
-    _boletaItems     = parsed.items || [];
+    _boletaItems = (parsed.items || []).map(it => {
+      if (it.precio_total == null && it.precio_unitario != null && it.cantidad != null) {
+        it.precio_total = it.peso_por_unidad
+          ? Math.round(it.cantidad * it.peso_por_unidad * it.precio_unitario * 100) / 100
+          : Math.round(it.cantidad * it.precio_unitario * 100) / 100;
+      }
+      return it;
+    });
     _boletaProvNombre = parsed.proveedor || null;
 
     if (parsed.fecha) {
