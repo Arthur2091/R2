@@ -4240,28 +4240,77 @@ function _erRenderIngs() {
   document.getElementById('erIngList').innerHTML = _erIngs.map((ing, ii) => {
     const ins  = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
     const subR = ing.recetaId ? recetas.find(r => r.id === ing.recetaId) : null;
-    const badge = ins
+    const vinculo = ins
       ? `<span style="font-size:11px;color:var(--accent);font-weight:600">${ins.nombre}</span>`
       : subR
       ? `<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#EDE9FE;color:#5B21B6;font-weight:600">Receta</span> <span style="font-size:11px;color:var(--info)">${subR.nombre}</span>`
       : `<span style="font-size:11px;color:var(--ink3)">sin vincular</span>`;
-    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface2);border-radius:7px">
-      <span style="flex:1;font-size:13px;font-weight:500">${ing.nombreOriginal}</span>
-      <input type="number" value="${ing.cantidad}" min="0" step="any"
-        style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:12px var(--mono);text-align:right"
-        onchange="_erSetCant(${ii},this.value)">
-      <input type="text" value="${ing.unidad}"
-        style="width:46px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:12px var(--mono)"
-        onchange="_erSetUnidad(${ii},this.value)">
-      ${badge}
-      <button onclick="_erRemoveIng(${ii})" style="font-size:12px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px;flex-shrink:0">✕</button>
+    const cambiarBtn = (ins || subR)
+      ? `<button onclick="_erDesvincular(${ii})" title="Cambiar vínculo"
+           style="font-size:10px;padding:1px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--ink2);flex-shrink:0">cambiar</button>`
+      : '';
+    const buscarRow = (!ins && !subR)
+      ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+           <input type="text" placeholder="insumo…"
+             style="flex:1;min-width:100px;padding:3px 7px;border:1px solid var(--border);border-radius:6px;font:12px var(--font)"
+             oninput="_erBuscarInsInline(this,'${ii}')">
+           <input type="text" placeholder="receta…"
+             style="flex:1;min-width:100px;padding:3px 7px;border:1px solid #C4B5FD;border-radius:6px;font:12px var(--font)"
+             oninput="_erBuscarRecInline(this,'${ii}')">
+         </div>
+         <div id="erIR_${ii}" style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px"></div>`
+      : '';
+    return `<div style="padding:6px 8px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="text" value="${ing.nombreOriginal}"
+          style="flex:1;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:13px var(--font);font-weight:500;background:var(--surface)"
+          onchange="_erSetNombre(${ii},this.value)">
+        <input type="number" value="${ing.cantidad}" min="0" step="any"
+          style="width:58px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:12px var(--mono);text-align:right"
+          onchange="_erSetCant(${ii},this.value)">
+        <input type="text" value="${ing.unidad}"
+          style="width:44px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:12px var(--mono)"
+          onchange="_erSetUnidad(${ii},this.value)">
+        ${vinculo}
+        ${cambiarBtn}
+        <button onclick="_erRemoveIng(${ii})" style="font-size:12px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px;flex-shrink:0">✕</button>
+      </div>
+      ${buscarRow}
     </div>`;
   }).join('');
 }
 
+function _erSetNombre(ii, v)  { _erIngs[ii].nombreOriginal = v.trim(); }
 function _erSetCant(ii, v)    { _erIngs[ii].cantidad = parseFloat(v) || 0; }
 function _erSetUnidad(ii, v)  { _erIngs[ii].unidad   = v.trim(); }
 function _erRemoveIng(ii)     { _erIngs.splice(ii, 1); _erRenderIngs(); }
+function _erDesvincular(ii)   { _erIngs[ii].insumoId = null; _erIngs[ii].recetaId = null; _erRenderIngs(); }
+
+function _erBuscarInsInline(input, ii) {
+  const q = input.value.toLowerCase().trim();
+  const res = document.getElementById('erIR_' + ii);
+  if (!res || !q) { if(res) res.innerHTML=''; return; }
+  const matches = insumos.filter(i => i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))).slice(0,6);
+  res.innerHTML = matches.map(ins =>
+    `<button onclick="_erVincularIns(${ii},'${ins.id}')"
+      style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--ink)">${ins.nombre}</button>`
+  ).join('');
+}
+
+function _erBuscarRecInline(input, ii) {
+  const q   = input.value.toLowerCase().trim();
+  const res = document.getElementById('erIR_' + ii);
+  const rid = document.getElementById('erRecetaId').value;
+  if (!res || !q) { if(res) res.innerHTML=''; return; }
+  const matches = recetas.filter(r => r.id !== rid && (r.nombre.toLowerCase().includes(q) || (r.rubro||'').toLowerCase().includes(q))).slice(0,6);
+  res.innerHTML = matches.map(r =>
+    `<button onclick="_erVincularRec(${ii},'${r.id}')"
+      style="font-size:11px;padding:3px 8px;border:1px solid #C4B5FD;border-radius:5px;background:var(--surface);cursor:pointer;color:#5B21B6">${r.nombre}</button>`
+  ).join('');
+}
+
+function _erVincularIns(ii, insumoId)     { _erIngs[ii].insumoId = insumoId; _erIngs[ii].recetaId = null; _erRenderIngs(); }
+function _erVincularRec(ii, subRecetaId)  { _erIngs[ii].recetaId = subRecetaId; _erIngs[ii].insumoId = null; _erRenderIngs(); }
 
 function _erBuscarIns(q) {
   const res = document.getElementById('erResIns');
