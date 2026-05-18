@@ -4047,7 +4047,7 @@ async function importarExcelRecetas(input) {
     const parsed = _parseExcelRecetas(wb);
     if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
     _preImportRecetas = parsed;
-    _abrirModalAsignarRubros();
+    _confirmarImportConRubros();
   } catch(e) {
     toast('Error al procesar el Excel', 'error');
     console.error(e);
