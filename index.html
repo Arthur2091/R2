@@ -877,6 +877,13 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
 
     <div class="field">
+      <label>Buscar en boletas</label>
+      <input id="fBuscadorBoleta" type="text" placeholder="Escribí para buscar en todos los proveedores…"
+        oninput="_filtrarBoletas(this.value)" autocomplete="off">
+      <div id="fBoletaResultados" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;max-height:160px;overflow-y:auto"></div>
+    </div>
+
+    <div class="field">
       <label>Observaciones</label>
       <input id="fObs" type="text" placeholder="">
     </div>
@@ -1340,6 +1347,72 @@ function _onProvProductoChange() {
   hint.textContent = `Último precio: $${precio.toFixed(2)}/${unidad} · ${fecha} · ${registros.length} reg.`;
 }
 
+function _filtrarBoletas(q) {
+  const res = document.getElementById('fBoletaResultados');
+  q = q.trim().toLowerCase();
+  if (!q) { res.innerHTML = ''; return; }
+
+  // Collect all provider items with at least one price record
+  const hits = [];
+  proveedores.forEach(prov => {
+    (prov.items || []).forEach(it => {
+      if (!it.insumoId) return;
+      if (!it.nombreBoleta?.toLowerCase().includes(q)) return;
+      const regs = precios
+        .filter(p => p.insumoId === it.insumoId && p.proveedorId === prov.id && p.precioUnitario)
+        .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+      if (!regs.length) return;
+      hits.push({ prov, it, ultimo: regs[0], total: regs.length });
+    });
+  });
+
+  if (!hits.length) {
+    res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>';
+    return;
+  }
+
+  res.innerHTML = hits.slice(0, 12).map(({ prov, it, ultimo, total }) => {
+    const unidad = ultimo.unidad || 'kg';
+    const precio = ultimo.precioUnitario;
+    return `<button type="button"
+      onclick="_aplicarBoletaItem('${prov.id}','${it.insumoId}')"
+      style="text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer;transition:border-color .15s"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="font-size:13px;font-weight:600;color:var(--ink)">${it.nombreBoleta}</div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:1px">${prov.nombre} · $${precio.toFixed(2)}/${unidad} · ${ultimo.fecha||''} · ${total} reg.</div>
+    </button>`;
+  }).join('');
+}
+
+function _aplicarBoletaItem(provId, itemInsumoId) {
+  const regs = precios
+    .filter(p => p.insumoId === itemInsumoId && p.proveedorId === provId && p.precioUnitario)
+    .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  if (!regs.length) return;
+
+  const ultimo = regs[0];
+  const unidad = ultimo.unidad || 'kg';
+
+  document.getElementById('fPrecioS').value = ultimo.precioUnitario.toFixed(2);
+  document.getElementById('fPrecioC').value = '';
+  const presUnit = ['kg','L','g','ml'].includes(unidad) ? unidad : 'u';
+  document.getElementById('fPresQty').value  = 1;
+  document.getElementById('fPresUnit').value = presUnit;
+  _updatePresEquiv();
+
+  // También seleccioná el proveedor en el select
+  const provSel = document.getElementById('fProveedor');
+  if (provSel) { provSel.value = provId; _onProveedorChange(); }
+
+  // Limpiar buscador
+  document.getElementById('fBuscadorBoleta').value = '';
+  document.getElementById('fBoletaResultados').innerHTML = '';
+
+  const prov = proveedores.find(p => p.id === provId);
+  const it   = (prov?.items||[]).find(i => i.insumoId === itemInsumoId);
+  toast(`Precio tomado de ${it?.nombreBoleta || ''} (${prov?.nombre || ''})`, 'success');
+}
+
 function _poblarSelectProveedor(insumoId) {
   const sel = document.getElementById('fProveedor');
   sel.innerHTML = '<option value="">— Sin asignar —</option>';
@@ -1365,6 +1438,8 @@ function openAddModal() {
   document.getElementById('fCategoria').value = '';
   document.getElementById('fPresUnit').value  = 'g';
   document.getElementById('fPresEquiv').textContent = '';
+  document.getElementById('fBuscadorBoleta').value = '';
+  document.getElementById('fBoletaResultados').innerHTML = '';
   _poblarSelectProveedor(null);
   openModal('modalInsumo');
 }
@@ -1382,6 +1457,8 @@ function openEditModal(id) {
   document.getElementById('fPresUnit').value  = ins.presUnit ?? 'g';
   document.getElementById('fObs').value       = ins.observaciones;
   document.getElementById('fEditId').value    = id;
+  document.getElementById('fBuscadorBoleta').value = '';
+  document.getElementById('fBoletaResultados').innerHTML = '';
   _poblarSelectProveedor(id);
   _updatePresEquiv();
   openModal('modalInsumo');
