@@ -1214,8 +1214,10 @@ function deleteInsumo(id) {
 }
 
 function clearAll() {
-  if (!confirm('¿Borrar TODOS los insumos? Esta acción no se puede deshacer.')) return;
+  if (!confirm('⚠️ Vas a borrar TODOS los insumos.\n\nEsta acción no se puede deshacer.')) return;
+  if (!confirm('¿Confirmás? Se eliminan todos los insumos y sus precios asociados.')) return;
   insumos = [];
+  precios = [];
   persist();
   renderInsumos();
   toast('Lista limpiada');
