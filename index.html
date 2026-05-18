@@ -4953,10 +4953,10 @@ async function _fbLoad() {
       }
     });
     _migrarRecetasFlat();
-    renderInsumos();
-    renderProveedores();
-    renderRecetas();
-    initContableView();
+    try { renderInsumos(); } catch(e) { toast('renderInsumos: '+e.message,'error',5000); }
+    try { renderProveedores(); } catch(e) { toast('renderProveedores: '+e.message,'error',5000); }
+    try { renderRecetas(); } catch(e) { toast('renderRecetas: '+e.message,'error',5000); }
+    try { initContableView(); } catch(e) { toast('initContable: '+e.message,'error',5000); }
     _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
