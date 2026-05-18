@@ -1726,7 +1726,8 @@ function renderInsumos() {
   const grouped = {};
   visible.forEach(i => {
     const prov = insumoAProv[i.id];
-    const key  = prov ? prov.nombre : 'Sin proveedor';
+    if (!prov) return; // ocultar sin proveedor
+    const key = prov.nombre;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(i);
   });
