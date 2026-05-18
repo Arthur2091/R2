@@ -203,25 +203,34 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .placeholder h2 { color: var(--ink2); margin-bottom: 8px; }
 .placeholder p { color: var(--ink3); font-size: 13px; }
 
-/* RUBROS */
+/* RUBROS — pills */
 .rubro-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
 .rubro-filter { font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; padding:7px 16px; border-radius:999px; border:2px solid transparent; cursor:pointer; transition:all .15s; white-space:nowrap; opacity:.7; }
 .rubro-filter:hover { opacity:1; }
 .rubro-filter.active { opacity:1; border-color:currentColor; }
-.rubro-section { margin-bottom:28px; }
-.rubro-header { display:flex; align-items:center; gap:10px; margin-bottom:12px; padding-bottom:8px; border-bottom:2px solid var(--border); }
-.rubro-icon { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
-.rubro-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink2); }
-.rubro-badge { font-size:11px; font-family:'DM Mono',monospace; padding:2px 8px; border-radius:999px; background:var(--surface2); color:var(--ink3); }
-.recetas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+/* RUBROS — secciones acordeón (igual que Dev) */
+.rubro-section { border-radius:var(--radius); overflow:hidden; margin-bottom:10px; border:1.5px solid transparent; transition:border-color .15s; }
+.rubro-section-header { display:flex; align-items:center; gap:12px; padding:13px 16px; cursor:pointer; transition:filter .15s; user-select:none; }
+.rubro-section-header:hover { filter:brightness(.96); }
+.rubro-icon { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.rubro-info { flex:1; display:flex; flex-direction:column; gap:1px; }
+.rubro-label { font-size:14px; font-weight:700; letter-spacing:-.2px; }
+.rubro-badge { font-size:11px; opacity:.65; }
+.rubro-toggle { font-size:10px; opacity:.5; transition:transform .2s; flex-shrink:0; }
+.rubro-toggle.open { transform:rotate(90deg); }
+.rubro-body { display:none; padding:14px; background:var(--bg); }
+.rubro-body.open { display:block; }
+/* Cards */
+.recetas-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px; }
 .receta-card { background:var(--surface); border-radius:var(--radius); border:1px solid var(--border); box-shadow:var(--shadow); overflow:hidden; transition:box-shadow .2s; }
 .receta-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.06); }
 .receta-card-header { padding:14px 18px; display:flex; align-items:flex-start; gap:8px; cursor:pointer; transition:background .1s; }
 .receta-card-header:hover { background:var(--surface2); }
 .receta-card-title { font-size:15px; font-weight:600; letter-spacing:-.2px; }
 .receta-card-meta { font-size:11px; color:var(--ink3); margin-top:3px; font-family:var(--mono); }
+/* Grupo sub-header dentro del body */
 .receta-grupo-header { display:flex; align-items:center; gap:10px; padding:6px 2px 10px 2px; border-bottom:1px solid var(--border); margin-bottom:10px; }
-.receta-grupo-label { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; flex:1; }
+.receta-grupo-label { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; flex:1; }
 .receta-grupo-count { font-size:11px; font-family:var(--mono); padding:2px 8px; border-radius:999px; background:var(--surface2); color:var(--ink3); }
 
 /* MODAL */
@@ -4790,13 +4799,16 @@ function renderRecetas() {
       ? `<div class="recetas-grid">${sinGrupo.map(r => renderCardConSelector(r)).join('')}</div>`
       : '';
 
-    return `<div class="rubro-section">
-      <div class="rubro-header">
-        <div class="rubro-icon" style="background:${s.bg}">${s.icon}</div>
-        <span class="rubro-label" style="color:${s.color}">${label}</span>
-        <span class="rubro-badge">${rs.length}</span>
+    return `<div class="rubro-section" style="border-color:${s.bg}">
+      <div class="rubro-section-header" style="background:${s.bg}" onclick="_toggleRubroSection(this)">
+        <div class="rubro-icon" style="background:rgba(255,255,255,0.55);color:${s.color}">${s.icon}</div>
+        <div class="rubro-info">
+          <span class="rubro-label" style="color:${s.color}">${label}</span>
+          <span class="rubro-badge" style="color:${s.color}">${rs.length} receta${rs.length!==1?'s':''}</span>
+        </div>
+        <span class="rubro-toggle open" style="color:${s.color}">▶</span>
       </div>
-      ${gruposHtml}${sinGrupoHtml}
+      <div class="rubro-body open">${gruposHtml}${sinGrupoHtml}</div>
     </div>`;
   }).join('');
 }
@@ -4812,6 +4824,13 @@ function _cambiarRubroReceta(id, nuevoRubro) {
   r.rubro = nuevoRubro;
   persistRecetas();
   renderRecetas();
+}
+
+function _toggleRubroSection(header) {
+  const body = header.nextElementSibling;
+  const tog  = header.querySelector('.rubro-toggle');
+  body.classList.toggle('open');
+  tog.classList.toggle('open');
 }
 
 function _cambiarRubroGrupo(grupo, nuevoRubro) {
