@@ -465,6 +465,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewContable">Contable</button>
     <button class="nav-btn" data-view="viewPrecios">Precios</button>
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
+    <button class="nav-btn" data-view="viewRecetas">Recetas</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
 
@@ -492,6 +493,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
           <th>Unidad</th>
           <th style="text-align:right">Precio C/IVA</th>
           <th style="text-align:right">Precio S/IVA</th>
+          <th>Presentación</th>
           <th>Observaciones</th>
           <th>Proveedores</th>
           <th></th>
@@ -733,6 +735,34 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<!-- RECETAS -->
+<div id="viewRecetas" class="view">
+  <div class="toolbar">
+    <input id="searchRecetas" class="search-input" type="text" placeholder="Buscar receta…" oninput="renderRecetas()">
+    <select id="filterCatReceta" onchange="renderRecetas()">
+      <option value="">Todas las categorías</option>
+    </select>
+    <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar Excel</button>
+    <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
+    <button class="btn btn-danger btn-sm" onclick="limpiarRecetas()" style="margin-left:auto">Limpiar recetas</button>
+  </div>
+  <div id="statsRecetas" class="stats-bar"></div>
+  <div id="recetasScreen"></div>
+</div>
+
+<!-- MODAL: Matching ingredientes recetas -->
+<div id="modalMatchRecetas" class="overlay">
+  <div class="modal" style="width:700px;max-height:82vh;display:flex;flex-direction:column">
+    <h2 style="margin-bottom:4px">Vincular ingredientes</h2>
+    <p style="color:var(--ink2);font-size:13px;margin-bottom:16px">Estos ingredientes del Excel no se encontraron en el sistema. Seleccioná el insumo equivalente o elegí una acción.</p>
+    <div id="matchRecetasList" style="overflow-y:auto;flex:1;margin-bottom:16px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalMatchRecetas')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_confirmarMatchRecetas()">Confirmar e importar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Agregar / Editar Insumo -->
 <div id="modalInsumo" class="overlay">
   <div class="modal">
@@ -775,12 +805,28 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div class="row">
       <div class="field">
         <label>Precio C/IVA</label>
-        <input id="fPrecioC" type="number" step="0.01" min="0" placeholder="0.00">
+        <input id="fPrecioC" type="number" step="0.01" min="0" placeholder="0.00" oninput="_updatePresEquiv()">
       </div>
       <div class="field">
         <label>Precio S/IVA</label>
-        <input id="fPrecioS" type="number" step="0.01" min="0" placeholder="0.00">
+        <input id="fPrecioS" type="number" step="0.01" min="0" placeholder="0.00" oninput="_updatePresEquiv()">
       </div>
+    </div>
+
+    <div class="field">
+      <label>Presentación (bulto/paquete)</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input id="fPresQty" type="number" step="any" min="0" placeholder="ej. 500" style="width:90px" oninput="_updatePresEquiv()">
+        <select id="fPresUnit" onchange="_updatePresEquiv()" style="width:80px">
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="L">L</option>
+          <option value="u">u</option>
+        </select>
+        <span id="fPresEquiv" style="font-size:12px;color:var(--accent);font-family:'DM Mono',monospace"></span>
+      </div>
+      <span style="font-size:11px;color:var(--ink3)">Cuánto trae el paquete que comprás (ej. manteca 500g, crema 1L)</span>
     </div>
 
     <div class="field">
@@ -967,6 +1013,10 @@ let insumos     = [];
 let proveedores = [];
 let precios     = [];
 let facturas    = [];
+let recetas     = [];
+let _pendingRecetas  = [];
+let _matchMap        = {};
+let _matchPendientes = [];
 
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
 function persist() {
@@ -981,6 +1031,7 @@ function hydrate() {
   try { proveedores = JSON.parse(localStorage.getItem('cons_proveedores') || '[]'); } catch { proveedores = []; }
   try { precios     = JSON.parse(localStorage.getItem('cons_precios')     || '[]'); } catch { precios = []; }
   try { facturas    = JSON.parse(localStorage.getItem('cons_facturas')    || '[]'); } catch { facturas = []; }
+  try { recetas     = JSON.parse(localStorage.getItem('cons_recetas')     || '[]'); } catch { recetas = []; }
 }
 
 
@@ -989,7 +1040,7 @@ function hydrate() {
 const EXPORT_KEYS = [
   'cons_insumos','cons_proveedores','cons_precios','cons_facturas',
   'cons_ventas','cons_sueldos','cons_otros','cons_prod_rubros',
-  'cons_apikey','boletaArchivos','cons_mes','cons_anio'
+  'cons_apikey','boletaArchivos','cons_mes','cons_anio','cons_recetas'
 ];
 
 function _importarDatosLegacy(input) {
@@ -1021,6 +1072,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'viewBoletas')    initBoletasView();
     if (btn.dataset.view === 'viewContable')   initContableView();
     if (btn.dataset.view === 'viewProductos')  renderProductos();
+    if (btn.dataset.view === 'viewRecetas')    renderRecetas();
   });
 });
 
@@ -1157,10 +1209,27 @@ function parseInsumosSheet(rows) {
 }
 
 /* ── ADD / EDIT INSUMO ──────────────────────────────────────────── */
+const _PRES_BASE = { kg: 1000, g: 1, L: 1000, ml: 1, u: 1 };
+
+function _updatePresEquiv() {
+  const qty   = parseFloat(document.getElementById('fPresQty').value);
+  const unit  = document.getElementById('fPresUnit').value;
+  const precio = parseFloat(document.getElementById('fPrecioS').value) || parseFloat(document.getElementById('fPrecioC').value);
+  const el    = document.getElementById('fPresEquiv');
+  if (!qty || !precio) { el.textContent = ''; return; }
+  const base = _PRES_BASE[unit] || 1;
+  const por100 = (precio / (qty * base)) * 100;
+  const label = (unit === 'u') ? `$${(precio/qty).toFixed(2)}/u` : (unit === 'kg' || unit === 'g') ? `$${por100.toFixed(2)}/100g` : `$${por100.toFixed(2)}/100ml`;
+  el.textContent = `= ${label}`;
+}
+
 function openAddModal() {
   document.getElementById('modalInsumoTitle').textContent = 'Nuevo Insumo';
-  ['fNombre','fUnidad','fCategoria','fObs','fEditId'].forEach(id => document.getElementById(id).value = '');
+  ['fNombre','fUnidad','fObs','fEditId','fPresQty'].forEach(id => document.getElementById(id).value = '');
   ['fPrecioC','fPrecioS'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('fCategoria').value = '';
+  document.getElementById('fPresUnit').value  = 'g';
+  document.getElementById('fPresEquiv').textContent = '';
   openModal('modalInsumo');
 }
 
@@ -1173,8 +1242,11 @@ function openEditModal(id) {
   document.getElementById('fCategoria').value = ins.categoria;
   document.getElementById('fPrecioC').value   = ins.precioConIVA ?? '';
   document.getElementById('fPrecioS').value   = ins.precioSinIVA ?? '';
+  document.getElementById('fPresQty').value   = ins.presQty ?? '';
+  document.getElementById('fPresUnit').value  = ins.presUnit ?? 'g';
   document.getElementById('fObs').value       = ins.observaciones;
   document.getElementById('fEditId').value    = id;
+  _updatePresEquiv();
   openModal('modalInsumo');
 }
 
@@ -1188,6 +1260,8 @@ function saveInsumo() {
     categoria:    document.getElementById('fCategoria').value || '',
     precioConIVA: parseFloat(document.getElementById('fPrecioC').value) || null,
     precioSinIVA: parseFloat(document.getElementById('fPrecioS').value) || null,
+    presQty:      parseFloat(document.getElementById('fPresQty').value) || null,
+    presUnit:     document.getElementById('fPresUnit').value || 'g',
     observaciones: document.getElementById('fObs').value.trim(),
   };
 
@@ -1301,7 +1375,7 @@ function renderInsumos() {
     .forEach(([provNombre, items]) => {
       rows.push(`
         <tr class="cat-row">
-          <td colspan="7">${provNombre} <span style="font-weight:400;color:var(--ink3)">(${items.length})</span></td>
+          <td colspan="8">${provNombre} <span style="font-weight:400;color:var(--ink3)">(${items.length})</span></td>
         </tr>`);
 
       items.sort((a,b) => a.nombre.localeCompare(b.nombre, 'es')).forEach(i => {
@@ -1311,6 +1385,7 @@ function renderInsumos() {
             <td style="color:var(--ink2)">${i.unidad || '—'}</td>
             <td class="mono price-civa" style="text-align:right">${fmt(i.precioConIVA)}</td>
             <td class="mono price-siva" style="text-align:right">${fmt(i.precioSinIVA)}</td>
+            <td style="font-size:12px;color:var(--ink2);font-family:'DM Mono',monospace">${_fmtPres(i)}</td>
             <td style="color:var(--ink3);font-size:12px;max-width:200px">${i.observaciones || ''}</td>
             <td></td>
             <td style="white-space:nowrap">
@@ -3152,6 +3227,355 @@ function deleteEgreso(id) {
   otrosEgresos = otrosEgresos.filter(e => e.id !== id);
   persistContable();
   renderContable();
+}
+
+/* ── PRESENTACION / COSTO ───────────────────────────────────────── */
+function _fmtPres(ins) {
+  if (!ins.presQty || !ins.presUnit) return '—';
+  const precio = ins.precioSinIVA ?? ins.precioConIVA;
+  if (!precio) return `${ins.presQty} ${ins.presUnit}`;
+  const base = _PRES_BASE[ins.presUnit] || 1;
+  const por100 = (precio / (ins.presQty * base)) * 100;
+  if (ins.presUnit === 'u') return `${ins.presQty}u · $${(precio/ins.presQty).toFixed(2)}/u`;
+  const isWeight = ins.presUnit === 'kg' || ins.presUnit === 'g';
+  return `${ins.presQty}${ins.presUnit} · $${por100.toFixed(2)}/100${isWeight?'g':'ml'}`;
+}
+
+const _UNIDAD_BASE = { kg: 1000, g: 1, L: 1000, ml: 1, u: 1 };
+
+function calcCostoIng(ins, cantidad, unidad) {
+  if (!ins) return null;
+  const precio = ins.precioSinIVA ?? ins.precioConIVA;
+  if (!precio) return null;
+
+  // If no presentation defined, assume precio is per kg/L/u (old behavior)
+  if (!ins.presQty || !ins.presUnit) {
+    const base = _UNIDAD_BASE[ins.presUnit || 'kg'] || 1000;
+    const cantBase = cantidad * (_UNIDAD_BASE[unidad] || 1000);
+    return (precio / base) * cantBase / (_UNIDAD_BASE[ins.presUnit || 'kg'] || 1) * (_UNIDAD_BASE[unidad] || 1);
+  }
+
+  const presBase = ins.presQty * (_UNIDAD_BASE[ins.presUnit] || 1);
+  const cantBase = cantidad * (_UNIDAD_BASE[unidad] || 1);
+
+  // Check type compatibility (weight ↔ weight, volume ↔ volume, u ↔ u)
+  const typeOf = u => ['kg','g'].includes(u) ? 'w' : ['L','ml'].includes(u) ? 'v' : 'u';
+  if (typeOf(ins.presUnit) !== typeOf(unidad)) {
+    // Fallback: assume precio is per kg when no pres type match
+    return precio * cantidad;
+  }
+
+  return (precio / presBase) * cantBase;
+}
+
+/* ── RECETAS ─────────────────────────────────────────────────────── */
+function persistRecetas() { localStorage.setItem('cons_recetas', JSON.stringify(recetas)); }
+
+const _SKIP_SHEETS = new Set(['COSTO EN BLANCO','INSUMOS','Hoja 11','PRECIOS DE CARTA ','PRESUPUESTOS','RESUMEN cafe']);
+
+function _parseExcelRecetas(wb) {
+  const parsed = [];
+  wb.SheetNames.filter(n => !_SKIP_SHEETS.has(n.trim())).forEach(sheetName => {
+    const ws = wb.Sheets[sheetName];
+    if (!ws) return;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    let i = 0;
+    while (i < rows.length) {
+      const r = rows[i];
+      if (String(r[0]).trim().startsWith('PRODUCTO')) {
+        const nombreProducto = (String(r[2]).trim() || String(r[3]).trim()).toUpperCase() || 'SIN NOMBRE';
+        const precioVenta = typeof rows[i+1]?.[5] === 'number' && rows[i+1][5] > 1 ? rows[i+1][5] : null;
+        const subrecetas = [];
+        i++;
+        while (i < rows.length) {
+          const row = rows[i];
+          if (String(row[0]).trim().startsWith('PRODUCTO')) break;
+          const col1 = String(row[1]).trim();
+          const col2 = String(row[2]).trim();
+          if (col2 === 'COSTO' && (col1.startsWith('*') || /^\d+$/.test(col1))) {
+            const subNombre = String(row[3]).trim() || nombreProducto;
+            const rinde = typeof row[4] === 'number' && row[4] > 0 ? row[4] : 1;
+            const ingredientes = [];
+            i++;
+            while (i < rows.length) {
+              const ir = rows[i];
+              const c2 = String(ir[2]).trim().toUpperCase();
+              if (c2.includes('TOTAL COSTO') || c2.includes('COSTO PORCION')) { i++; break; }
+              if (String(ir[0]).trim().startsWith('PRODUCTO')) break;
+              const nombre = String(ir[3]).trim();
+              const cantRaw = ir[6];
+              const unidad  = String(ir[7]).trim() || 'kg';
+              if (nombre && !nombre.startsWith('#') && typeof cantRaw === 'number' && cantRaw > 0) {
+                ingredientes.push({ nombreOriginal: nombre.toUpperCase(), cantidad: cantRaw, unidad, insumoId: null });
+              }
+              i++;
+            }
+            if (ingredientes.length > 0) subrecetas.push({ nombre: subNombre, tipo: col1, rinde, ingredientes });
+          } else { i++; }
+        }
+        if (subrecetas.length > 0) parsed.push({ nombre: nombreProducto, categoria: sheetName, precioVenta, subrecetas });
+      } else { i++; }
+    }
+  });
+  return parsed;
+}
+
+function _normIng(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+function _matchIngrediente(nombre) {
+  const n = _normIng(nombre);
+  let match = insumos.find(i => _normIng(i.nombre) === n);
+  if (match) return match.id;
+  match = insumos.find(i => { const ni = _normIng(i.nombre); return ni.includes(n) || n.includes(ni); });
+  if (match) return match.id;
+  const tris = s => { const set = new Set(); for (let j=0;j<s.length-2;j++) set.add(s.slice(j,j+3)); return set; };
+  const jac  = (a,b) => { const sa=tris(a),sb=tris(b); let x=0; sa.forEach(t=>sb.has(t)&&x++); return sa.size+sb.size-x ? x/(sa.size+sb.size-x) : 0; };
+  let best=null, bestScore=0.42;
+  insumos.forEach(i => { const sc=jac(n,_normIng(i.nombre)); if(sc>bestScore){bestScore=sc;best=i;} });
+  return best ? best.id : null;
+}
+
+function _crearInsumoDesdeNombre(nombre) {
+  const id = crypto.randomUUID();
+  const limpio = nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase();
+  insumos.push({ id, nombre: limpio, unidad: '', categoria: categorizarInsumo(limpio), precioConIVA: null, precioSinIVA: null, observaciones: '', aliases: [] });
+  return id;
+}
+
+async function importarExcelRecetas(input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Procesando Excel…');
+  try {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const parsed = _parseExcelRecetas(wb);
+    if (!parsed.length) { toast('No se encontraron recetas', 'error'); return; }
+
+    const allNombres = new Set();
+    parsed.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
+
+    _matchMap = {};
+    const sinMatch = [];
+    allNombres.forEach(nombre => {
+      const id = _matchIngrediente(nombre);
+      _matchMap[nombre] = id || null;
+      if (!id) sinMatch.push(nombre);
+    });
+
+    _pendingRecetas = parsed;
+    if (!sinMatch.length) {
+      _finalizarImportRecetas();
+    } else {
+      _matchPendientes = sinMatch.sort();
+      _renderMatchModal();
+      openModal('modalMatchRecetas');
+    }
+  } catch(e) {
+    toast('Error al procesar el Excel', 'error');
+    console.error(e);
+  }
+  input.value = '';
+}
+
+function _renderMatchModal() {
+  const catOrder = [...new Set([...CATEGORIAS_INSUMOS, ...insumos.map(i=>i.categoria||'Otros')])];
+  const grouped  = {};
+  [...insumos].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).forEach(i => {
+    const c = i.categoria || 'Sin categoría';
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push(i);
+  });
+  const opts = catOrder.filter(c=>grouped[c]?.length).map(cat =>
+    `<optgroup label="${cat}">${grouped[cat].map(i=>`<option value="${i.id}">${i.nombre}</option>`).join('')}</optgroup>`
+  ).join('');
+
+  document.getElementById('matchRecetasList').innerHTML = `
+    <p style="font-size:12px;color:var(--ink3);margin-bottom:10px">${_matchPendientes.length} ingrediente${_matchPendientes.length>1?'s':''} sin mapear</p>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--ink3);border-bottom:1px solid var(--border)">Ingrediente (Excel)</th>
+        <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--ink3);border-bottom:1px solid var(--border)">Insumo en el sistema</th>
+      </tr></thead>
+      <tbody>${_matchPendientes.map(nombre=>`
+        <tr>
+          <td style="padding:6px 8px;font-size:13px">${nombre}</td>
+          <td style="padding:4px 8px">
+            <select data-nombre="${nombre}" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:13px">
+              <option value="skip">— Ignorar —</option>
+              <option value="new">+ Crear nuevo insumo</option>
+              ${opts}
+            </select>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function _confirmarMatchRecetas() {
+  document.querySelectorAll('#matchRecetasList select').forEach(sel => {
+    _matchMap[sel.dataset.nombre] = sel.value;
+  });
+  _finalizarImportRecetas();
+}
+
+function _finalizarImportRecetas() {
+  const nuevosIds = {};
+  _pendingRecetas.forEach(receta => {
+    receta.subrecetas.forEach(sub => {
+      sub.ingredientes.forEach(ing => {
+        const mapped = _matchMap[ing.nombreOriginal];
+        if (!mapped || mapped === 'skip') {
+          ing.insumoId = null;
+        } else if (mapped === 'new') {
+          if (!nuevosIds[ing.nombreOriginal]) nuevosIds[ing.nombreOriginal] = _crearInsumoDesdeNombre(ing.nombreOriginal);
+          ing.insumoId = nuevosIds[ing.nombreOriginal];
+        } else {
+          ing.insumoId = mapped;
+        }
+      });
+    });
+  });
+
+  let created=0, updated=0;
+  _pendingRecetas.forEach(r => {
+    const ex = recetas.find(x => x.nombre===r.nombre && x.categoria===r.categoria);
+    if (ex) { Object.assign(ex, r); updated++; }
+    else { recetas.push({ id: crypto.randomUUID(), ...r }); created++; }
+  });
+
+  const nNuevos = Object.keys(nuevosIds).length;
+  if (nNuevos) { persist(); renderInsumos(); }
+  persistRecetas();
+  renderRecetas();
+  closeModal('modalMatchRecetas');
+  toast(`${created} recetas importadas${updated?', '+updated+' actualizadas':''}${nNuevos?', '+nNuevos+' insumos creados':''}`, 'success');
+}
+
+function renderRecetas() {
+  const search    = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
+  const catFilter = document.getElementById('filterCatReceta')?.value || '';
+
+  const cats = [...new Set(recetas.map(r=>r.categoria))].sort();
+  const sel  = document.getElementById('filterCatReceta');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Todas las categorías</option>';
+    cats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; if(c===prev)o.selected=true; sel.appendChild(o); });
+  }
+
+  const visible = recetas.filter(r =>
+    (!search || r.nombre.toLowerCase().includes(search) || r.categoria.toLowerCase().includes(search)) &&
+    (!catFilter || r.categoria === catFilter)
+  );
+
+  document.getElementById('statsRecetas').innerHTML = `
+    <div class="stat-chip"><strong>${recetas.length}</strong> recetas</div>
+    <div class="stat-chip"><strong>${cats.length}</strong> categorías</div>
+    ${visible.length !== recetas.length ? `<div class="stat-chip"><strong>${visible.length}</strong> resultados</div>` : ''}
+  `;
+
+  if (!recetas.length) {
+    document.getElementById('recetasScreen').innerHTML = `<div class="empty-state"><h3>Sin recetas</h3><p>Importá el Excel de recetas para comenzar.</p></div>`;
+    return;
+  }
+
+  const byCat = {};
+  visible.forEach(r => { if(!byCat[r.categoria]) byCat[r.categoria]=[]; byCat[r.categoria].push(r); });
+
+  document.getElementById('recetasScreen').innerHTML = Object.entries(byCat).sort(([a],[b])=>a.localeCompare(b,'es')).map(([cat,rs])=>`
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">${cat}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+        ${rs.map(r=>{
+          const totalIng = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.length,0);
+          const mapeados = r.subrecetas.reduce((s,sub)=>s+sub.ingredientes.filter(i=>i.insumoId).length,0);
+          return `<button onclick="verReceta('${r.id}')" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+            <div style="font-weight:600;font-size:14px;margin-bottom:4px">${r.nombre}</div>
+            <div style="font-size:12px;color:var(--ink2)">${mapeados}/${totalIng} ing.${r.precioVenta?` · $${r.precioVenta}`:''}</div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function verReceta(id) {
+  const r = recetas.find(r=>r.id===id);
+  if (!r) return;
+
+  let costoTotal = 0;
+  r.subrecetas.forEach(sub => {
+    sub.ingredientes.forEach(ing => {
+      if (!ing.insumoId) return;
+      const ins = insumos.find(i=>i.id===ing.insumoId);
+      const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
+      if (c) costoTotal += c;
+    });
+  });
+  const rinde0 = r.subrecetas[0]?.rinde || 1;
+  const costoUnd = costoTotal > 0 ? costoTotal / rinde0 : 0;
+
+  document.getElementById('recetasScreen').innerHTML = `
+    <button class="btn btn-outline" style="margin-bottom:16px" onclick="renderRecetas()">← Recetas</button>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
+        <div style="font-size:13px;color:var(--ink2);margin-top:2px">${r.categoria}</div>
+      </div>
+      <div style="display:flex;gap:20px;align-items:center">
+        ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
+        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/unidad</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
+        ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
+      </div>
+    </div>
+    ${r.subrecetas.map(sub=>`
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px;display:flex;gap:8px;align-items:center">
+          <span style="background:var(--surface2);padding:2px 8px;border-radius:4px">${sub.tipo}</span>
+          <span>${sub.nombre}</span>
+          <span style="color:var(--ink3)">· Rinde: ${sub.rinde}</span>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th>Ingrediente</th><th style="text-align:right">Cantidad</th><th>Unidad</th>
+            <th>Presentación</th><th style="text-align:right">Precio/bulto</th><th style="text-align:right">Subtotal</th>
+          </tr></thead>
+          <tbody>${sub.ingredientes.map(ing=>{
+            const ins = ing.insumoId ? insumos.find(i=>i.id===ing.insumoId) : null;
+            const p = ins?.precioSinIVA ?? ins?.precioConIVA ?? null;
+            const st = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
+            const presLabel = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : '<span style="color:var(--warn);font-size:11px">sin pres.</span>';
+            return `<tr>
+              <td>${ins ? ins.nombre : `<span style="color:var(--ink3)">${ing.nombreOriginal} <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px">sin mapear</span></span>`}</td>
+              <td style="text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
+              <td style="color:var(--ink2)">${ing.unidad}</td>
+              <td style="font-size:12px;font-family:'DM Mono',monospace;color:var(--ink2)">${presLabel}</td>
+              <td style="text-align:right">${p?'$'+p.toFixed(2):'—'}</td>
+              <td style="text-align:right;font-weight:600">${st?'$'+st.toFixed(2):'—'}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>`).join('')}
+    <div style="margin-top:8px">
+      <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">Eliminar receta</button>
+    </div>`;
+}
+
+function eliminarReceta(id) {
+  if (!confirm('¿Eliminar esta receta?')) return;
+  recetas = recetas.filter(r=>r.id!==id);
+  persistRecetas();
+  renderRecetas();
+}
+
+function limpiarRecetas() {
+  if (!confirm('¿Borrar TODAS las recetas? No se puede deshacer.')) return;
+  recetas = [];
+  persistRecetas();
+  renderRecetas();
+  toast('Recetas eliminadas');
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
