@@ -1028,6 +1028,44 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<!-- MODAL: Editar Boleta -->
+<div id="modalEditFactura" class="overlay">
+  <div class="modal" style="max-width:540px;max-height:90vh;overflow-y:auto">
+    <h2>Editar boleta</h2>
+    <div class="row">
+      <div class="field">
+        <label>N° Boleta</label>
+        <input id="efNro" type="text" placeholder="Sin número">
+      </div>
+      <div class="field">
+        <label>Fecha</label>
+        <input id="efFecha" type="date">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Hora</label>
+        <input id="efHora" type="time">
+      </div>
+      <div class="field">
+        <label>Total</label>
+        <input id="efTotal" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+    </div>
+    <div class="field">
+      <label>Ítems</label>
+      <div id="efItemsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+      <button class="btn btn-outline btn-sm" onclick="_efAddItem()">+ Agregar ítem</button>
+    </div>
+    <input type="hidden" id="efFacturaId">
+    <input type="hidden" id="efProvId">
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalEditFactura')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditFactura()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* ── CATEGORIAS ─────────────────────────────────────────────────── */
@@ -1951,14 +1989,17 @@ function renderProveedorFacturas(provId) {
       ? '<p style="color:var(--ink2)">Sin facturas cargadas.</p>'
       : `<div style="display:flex;flex-direction:column;gap:.6rem">
           ${lista.map(f => `
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer" onclick="renderFacturaDetalle('${f.id}','${provId}')">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem">
-                <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
-                <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer;flex:1" onclick="renderFacturaDetalle('${f.id}','${provId}')">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem">
+                  <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
+                  <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+                </div>
+                <div style="font-size:.82rem;color:var(--ink2)">
+                  ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems
+                </div>
               </div>
-              <div style="font-size:.82rem;color:var(--ink2)">
-                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems
-              </div>
+              <button class="btn btn-outline" onclick="openEditFactura('${f.id}','${provId}')" style="white-space:nowrap;align-self:center">Editar</button>
             </div>`).join('')}
         </div>`}`;
 }
@@ -2246,6 +2287,63 @@ function renderFacturaDetalle(facturaId, provId) {
           </div>
         </div>`).join('')}
     </div>`;
+}
+
+/* ── EDITAR FACTURA ─────────────────────────────────────────────── */
+let _efItems = [];
+
+function openEditFactura(facturaId, provId) {
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  document.getElementById('efNro').value   = f.nroBoleta || '';
+  document.getElementById('efFecha').value = f.fecha || '';
+  document.getElementById('efHora').value  = f.hora || '';
+  document.getElementById('efTotal').value = f.importeTotal || '';
+  document.getElementById('efFacturaId').value = facturaId;
+  document.getElementById('efProvId').value    = provId;
+  _efItems = (f.items || []).map(it => ({...it}));
+  _efRefreshItems();
+  openModal('modalEditFactura');
+}
+
+function _efRefreshItems() {
+  document.getElementById('efItemsList').innerHTML = _efItems.map((it, i) => `
+    <div style="display:flex;gap:6px;align-items:center;background:var(--bg);border-radius:8px;padding:6px 8px">
+      <input style="flex:2;font:13px var(--font);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+        placeholder="Nombre" value="${_efEsc(it.nombre||'')}" oninput="_efSet(${i},'nombre',this.value)">
+      <input style="width:60px;font:13px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+        type="number" step="any" placeholder="Cant." value="${it.cantidad??''}" oninput="_efSet(${i},'cantidad',parseFloat(this.value)||null)">
+      <input style="width:48px;font:13px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+        placeholder="Ud." value="${_efEsc(it.unidad||'')}" oninput="_efSet(${i},'unidad',this.value)">
+      <input style="width:88px;font:13px var(--mono);padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none"
+        type="number" step="0.01" placeholder="$ Total" value="${it.precio_total??''}" oninput="_efSet(${i},'precio_total',parseFloat(this.value)||null)">
+      <button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 4px;line-height:1;flex-shrink:0" onclick="_efRemove(${i})">✕</button>
+    </div>`).join('');
+}
+
+function _efEsc(s) { return String(s).replace(/"/g, '&quot;'); }
+function _efSet(i, field, val) { _efItems[i][field] = val; }
+function _efRemove(i) { _efItems.splice(i, 1); _efRefreshItems(); }
+function _efAddItem() {
+  _efItems.push({ nombre: '', cantidad: null, unidad: '', precio_total: null, precio_unitario: null });
+  _efRefreshItems();
+  document.getElementById('efItemsList').querySelectorAll('input[placeholder="Nombre"]')[_efItems.length - 1]?.focus();
+}
+
+function saveEditFactura() {
+  const facturaId = document.getElementById('efFacturaId').value;
+  const provId    = document.getElementById('efProvId').value;
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  f.nroBoleta    = document.getElementById('efNro').value.trim();
+  f.fecha        = document.getElementById('efFecha').value;
+  f.hora         = document.getElementById('efHora').value;
+  f.importeTotal = parseFloat(document.getElementById('efTotal').value) || null;
+  f.items        = _efItems;
+  persist();
+  closeModal('modalEditFactura');
+  toast('Boleta actualizada', 'success');
+  renderProveedorFacturas(provId);
 }
 
 /* ── BOLETAS ────────────────────────────────────────────────────── */
