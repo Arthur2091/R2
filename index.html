@@ -3513,28 +3513,14 @@ function _finalizarValidacion() {
   closeModal('modalValidacionReceta');
   if (!_approvedRecetas.length) { toast('No se aprobó ninguna receta', 'info'); return; }
 
-  // Auto-match ingredients
+  // Auto-match what we can; unresolved stay null — user links from within each recipe
   const allNombres = new Set();
   _approvedRecetas.forEach(r => r.subrecetas.forEach(s => s.ingredientes.forEach(ing => allNombres.add(ing.nombreOriginal))));
-
   _matchMap = {};
-  _matchPendientes = [];
-  allNombres.forEach(nombre => {
-    const id = _matchIngrediente(nombre);
-    _matchMap[nombre] = id || null;
-    if (!id) _matchPendientes.push(nombre);
-  });
+  allNombres.forEach(nombre => { _matchMap[nombre] = _matchIngrediente(nombre) || null; });
 
   _pendingRecetas = _approvedRecetas;
-
-  if (!_matchPendientes.length) {
-    _finalizarImportRecetas();
-  } else {
-    _matchPendientes.sort();
-    _renderMatchModal();
-    document.getElementById('matchCounter').textContent = `${_matchPendientes.length} sin mapear`;
-    openModal('modalMatchRecetas');
-  }
+  _finalizarImportRecetas();
 }
 
 /* ── MATCHING CON BUSCADOR ──────────────────────────────────────── */
@@ -3677,21 +3663,22 @@ function renderRecetas() {
     </div>`).join('');
 }
 
-function verReceta(id) {
-  const r = recetas.find(r=>r.id===id);
+function verReceta(recetaId) {
+  const r = recetas.find(r => r.id === recetaId);
   if (!r) return;
 
   let costoTotal = 0;
   r.subrecetas.forEach(sub => {
     sub.ingredientes.forEach(ing => {
       if (!ing.insumoId) return;
-      const ins = insumos.find(i=>i.id===ing.insumoId);
+      const ins = insumos.find(i => i.id === ing.insumoId);
       const c = calcCostoIng(ins, ing.cantidad, ing.unidad);
       if (c) costoTotal += c;
     });
   });
-  const rinde0 = r.subrecetas[0]?.rinde || 1;
+  const rinde0   = r.subrecetas[0]?.rinde || 1;
   const costoUnd = costoTotal > 0 ? costoTotal / rinde0 : 0;
+  const sinVincular = r.subrecetas.reduce((s,sub) => s + sub.ingredientes.filter(i=>!i.insumoId).length, 0);
 
   document.getElementById('recetasScreen').innerHTML = `
     <button class="btn btn-outline" style="margin-bottom:16px" onclick="renderRecetas()">← Recetas</button>
@@ -3699,6 +3686,7 @@ function verReceta(id) {
       <div>
         <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
         <div style="font-size:13px;color:var(--ink2);margin-top:2px">${r.categoria}</div>
+        ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:4px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
       </div>
       <div style="display:flex;gap:20px;align-items:center">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
@@ -3706,7 +3694,7 @@ function verReceta(id) {
         ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
       </div>
     </div>
-    ${r.subrecetas.map(sub=>`
+    ${r.subrecetas.map((sub, si) => `
       <div style="margin-bottom:20px">
         <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px;display:flex;gap:8px;align-items:center">
           <span style="background:var(--surface2);padding:2px 8px;border-radius:4px">${sub.tipo}</span>
@@ -3715,21 +3703,37 @@ function verReceta(id) {
         </div>
         <div class="table-wrap"><table>
           <thead><tr>
-            <th>Ingrediente</th><th style="text-align:right">Cantidad</th><th>Unidad</th>
-            <th>Presentación</th><th style="text-align:right">Precio/bulto</th><th style="text-align:right">Subtotal</th>
+            <th>Ingrediente (receta)</th>
+            <th style="text-align:right">Cant.</th>
+            <th>Und.</th>
+            <th>Insumo vinculado</th>
+            <th>Presentación</th>
+            <th style="text-align:right">Subtotal</th>
           </tr></thead>
-          <tbody>${sub.ingredientes.map(ing=>{
-            const ins = ing.insumoId ? insumos.find(i=>i.id===ing.insumoId) : null;
-            const p = ins?.precioSinIVA ?? ins?.precioConIVA ?? null;
-            const st = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
-            const presLabel = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : '<span style="color:var(--warn);font-size:11px">sin pres.</span>';
-            return `<tr>
-              <td>${ins ? ins.nombre : `<span style="color:var(--ink3)">${ing.nombreOriginal} <span style="font-size:11px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px">sin mapear</span></span>`}</td>
+          <tbody>${sub.ingredientes.map((ing, ii) => {
+            const sid  = `${recetaId}_${si}_${ii}`.replace(/-/g,'_');
+            const ins  = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
+            const st   = ins ? calcCostoIng(ins, ing.cantidad, ing.unidad) : null;
+            const pres = ins?.presQty ? `${ins.presQty}${ins.presUnit}` : ins ? '<span style="color:var(--warn);font-size:11px">sin pres.</span>' : '';
+            const vinculado = ins
+              ? `<div style="display:flex;align-items:center;gap:6px">
+                   <span style="color:var(--accent);font-size:13px">${ins.nombre}</span>
+                   <button onclick="_desvincularIng('${recetaId}',${si},${ii})"
+                     style="font-size:11px;color:var(--ink3);border:none;background:none;cursor:pointer;padding:0 2px">✕</button>
+                 </div>`
+              : `<div>
+                   <input id="ib_${sid}" type="text" placeholder="Buscar insumo…"
+                     style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px"
+                     oninput="_buscarIngMatch(this,'${recetaId}',${si},${ii})">
+                   <div id="ir_${sid}" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
+                 </div>`;
+            return `<tr style="${!ins ? 'background:#fffbeb' : ''}">
+              <td style="font-weight:500">${ing.nombreOriginal}</td>
               <td style="text-align:right;font-family:'DM Mono',monospace">${ing.cantidad}</td>
               <td style="color:var(--ink2)">${ing.unidad}</td>
-              <td style="font-size:12px;font-family:'DM Mono',monospace;color:var(--ink2)">${presLabel}</td>
-              <td style="text-align:right">${p?'$'+p.toFixed(2):'—'}</td>
-              <td style="text-align:right;font-weight:600">${st?'$'+st.toFixed(2):'—'}</td>
+              <td style="min-width:200px">${vinculado}</td>
+              <td style="font-size:12px;font-family:'DM Mono',monospace;color:var(--ink2)">${pres}</td>
+              <td style="text-align:right;font-weight:600">${st ? '$'+st.toFixed(2) : '—'}</td>
             </tr>`;
           }).join('')}</tbody>
         </table></div>
@@ -3737,6 +3741,69 @@ function verReceta(id) {
     <div style="margin-top:8px">
       <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">Eliminar receta</button>
     </div>`;
+}
+
+function _buscarIngMatch(input, recetaId, si, ii) {
+  const q   = input.value.toLowerCase().trim();
+  const sid = `${recetaId}_${si}_${ii}`.replace(/-/g,'_');
+  const res = document.getElementById('ir_' + sid);
+  if (!res) return;
+  if (!q) { res.innerHTML = ''; return; }
+
+  // Solo insumos con precio cargado
+  const conPrecio = insumos.filter(i => i.precioSinIVA || i.precioConIVA);
+  const matches   = conPrecio.filter(i =>
+    i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))
+  ).slice(0, 10);
+
+  res.innerHTML = matches.map(ins => {
+    const precio = ins.precioSinIVA ?? ins.precioConIVA;
+    const pres   = ins.presQty ? `${ins.presQty}${ins.presUnit}` : ins.unidad || '';
+    return `<button onclick="_vincularIng('${recetaId}',${si},${ii},'${ins.id}')"
+      style="font-size:12px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;color:var(--ink);white-space:nowrap;text-align:left;display:flex;flex-direction:column;gap:1px">
+      <span style="font-weight:600">${ins.nombre}</span>
+      <span style="font-size:11px;color:var(--accent);font-family:'DM Mono',monospace">$${precio.toFixed(2)}${pres ? ' · '+pres : ''}</span>
+    </button>`;
+  }).join('') || '<span style="font-size:12px;color:var(--ink3)">Sin resultados con precio</span>';
+}
+
+function _vincularIng(recetaId, si, ii, insumoId) {
+  // Obtener el nombreOriginal del ingrediente para vincular en todas las recetas
+  const receta = recetas.find(r => r.id === recetaId);
+  if (!receta) return;
+  const nombreOriginal = receta.subrecetas[si]?.ingredientes[ii]?.nombreOriginal;
+
+  // Actualizar en TODAS las recetas el mismo nombreOriginal
+  recetas.forEach(r => {
+    r.subrecetas.forEach(sub => {
+      sub.ingredientes.forEach(ing => {
+        if (ing.nombreOriginal === nombreOriginal) ing.insumoId = insumoId;
+      });
+    });
+  });
+
+  persistRecetas();
+  verReceta(recetaId);
+  const ins = insumos.find(i => i.id === insumoId);
+  toast(`"${nombreOriginal}" vinculado a "${ins?.nombre}" en todas las recetas`, 'success');
+}
+
+function _desvincularIng(recetaId, si, ii) {
+  const receta = recetas.find(r => r.id === recetaId);
+  if (!receta) return;
+  const nombreOriginal = receta.subrecetas[si]?.ingredientes[ii]?.nombreOriginal;
+
+  // Desvincular en TODAS las recetas
+  recetas.forEach(r => {
+    r.subrecetas.forEach(sub => {
+      sub.ingredientes.forEach(ing => {
+        if (ing.nombreOriginal === nombreOriginal) ing.insumoId = null;
+      });
+    });
+  });
+
+  persistRecetas();
+  verReceta(recetaId);
 }
 
 function eliminarReceta(id) {
