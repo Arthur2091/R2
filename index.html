@@ -4806,9 +4806,9 @@ function renderRecetas() {
           <span class="rubro-label" style="color:${s.color}">${label}</span>
           <span class="rubro-badge" style="color:${s.color}">${rs.length} receta${rs.length!==1?'s':''}</span>
         </div>
-        <span class="rubro-toggle open" style="color:${s.color}">▶</span>
+        <span class="rubro-toggle" style="color:${s.color}">▶</span>
       </div>
-      <div class="rubro-body open">${gruposHtml}${sinGrupoHtml}</div>
+      <div class="rubro-body">${gruposHtml}${sinGrupoHtml}</div>
     </div>`;
   }).join('');
 }
