@@ -4930,6 +4930,7 @@ async function _fbLoad() {
   _syncChip('syncing');
   try {
     const snap = await _db.collection('data').get();
+    toast(`Firebase: ${snap.size} docs`, snap.size ? 'success' : 'error', 5000);
     snap.forEach(doc => {
       const d = doc.data();
       switch(doc.id) {
