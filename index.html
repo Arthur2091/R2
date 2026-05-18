@@ -1068,6 +1068,7 @@ let proveedores = [];
 let precios     = [];
 let facturas    = [];
 let recetas     = [];
+let _currentVerRecetaId = null;
 let _pendingRecetas  = [];
 let _matchMap        = {};
 let _matchPendientes = [];
@@ -1516,9 +1517,10 @@ function saveInsumo() {
   }
 
   persist();
-  renderInsumos();
   closeModal('modalInsumo');
   toast('Insumo guardado', 'success');
+  if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
+  else renderInsumos();
 }
 
 function deleteInsumo(id) {
@@ -3851,6 +3853,7 @@ function _finalizarImportRecetas() {
 }
 
 function renderRecetas() {
+  _currentVerRecetaId = null;
   const search    = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
   const catFilter = document.getElementById('filterCatReceta')?.value || '';
 
@@ -3898,6 +3901,7 @@ function renderRecetas() {
 }
 
 function verReceta(recetaId) {
+  _currentVerRecetaId = recetaId;
   const r = recetas.find(r => r.id === recetaId);
   if (!r) return;
 
