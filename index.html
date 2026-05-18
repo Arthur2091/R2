@@ -481,6 +481,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </select>
     <button class="btn btn-outline" onclick="openModal('modalImport')">Importar Excel</button>
     <button class="btn btn-outline" onclick="buscarDuplicados()">Buscar duplicados</button>
+    <button class="btn btn-outline" onclick="limpiarSinProveedor()" style="color:var(--danger)">Limpiar sin proveedor</button>
     <button class="btn btn-outline" onclick="clearAll()" style="color:var(--danger)">Limpiar todo</button>
     <button class="btn btn-primary" onclick="openAddModal()">+ Insumo</button>
   </div>
@@ -608,6 +609,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </select>
     <select id="contableAnio"></select>
     <button class="btn btn-outline" onclick="savePeriod();renderContable()">Actualizar</button>
+    <button class="btn btn-primary" onclick="verConsolidado()">Ver consolidado</button>
     <div style="flex:1"></div>
     <label class="btn btn-outline" style="cursor:pointer">
       Importar ventas Excel
@@ -651,6 +653,17 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <div class="section-total" id="totalOtros" style="color:var(--danger)"></div>
     </div>
     <div id="secOtrosBody" class="contable-section-body"></div>
+  </div>
+</div>
+
+<!-- MODAL: Consolidado financiero -->
+<div id="modalConsolidado" class="overlay">
+  <div class="modal" style="width:760px;max-height:88vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 id="consolidadoTitle" style="margin:0"></h2>
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modalConsolidado')">Cerrar</button>
+    </div>
+    <div id="consolidadoBody" style="overflow-y:auto;flex:1"></div>
   </div>
 </div>
 
@@ -1305,6 +1318,20 @@ function deleteInsumo(id) {
   persist();
   renderInsumos();
   toast('Insumo eliminado');
+}
+
+function limpiarSinProveedor() {
+  const linked = new Set();
+  proveedores.forEach(p => (p.items||[]).forEach(it => { if (it.insumoId) linked.add(it.insumoId); }));
+  const sinLink = insumos.filter(i => !linked.has(i.id));
+  if (!sinLink.length) { toast('No hay insumos sin proveedor', 'info'); return; }
+  if (!confirm(`¿Eliminar ${sinLink.length} insumo${sinLink.length>1?'s':''} que no están vinculados a ningún proveedor?\n\nEstos son los importados del Excel que no vienen de boletas.`)) return;
+  const ids = new Set(sinLink.map(i => i.id));
+  insumos = insumos.filter(i => !ids.has(i.id));
+  precios = precios.filter(p => !ids.has(p.insumoId));
+  persist();
+  renderInsumos();
+  toast(`${sinLink.length} insumos eliminados`, 'success');
 }
 
 function clearAll() {
@@ -3819,6 +3846,146 @@ function limpiarRecetas() {
   persistRecetas();
   renderRecetas();
   toast('Recetas eliminadas');
+}
+
+/* ── CONSOLIDADO FINANCIERO ─────────────────────────────────────── */
+function verConsolidado() {
+  const mes  = parseInt(document.getElementById('contableMes').value);
+  const anio = parseInt(document.getElementById('contableAnio').value);
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  function inPeriod(f) {
+    if (!f) return false;
+    const [y,m] = String(f).slice(0,10).split('-').map(Number);
+    return y === anio && (m-1) === mes;
+  }
+
+  // INGRESOS
+  const ventasPeriod   = ventas.filter(v => inPeriod(v.fecha));
+  const totalIngresos  = ventasPeriod.reduce((s,v) => s + (v.total||0), 0);
+  const esArticulos    = ventasPeriod.some(v => v.producto);
+  const byRubro = {};
+  ventasPeriod.forEach(v => {
+    const k = v.concepto || 'Otros';
+    if (!byRubro[k]) byRubro[k] = { total:0, count:0 };
+    byRubro[k].total += v.total||0; byRubro[k].count += v.unidades||1;
+  });
+
+  // EGRESOS
+  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal);
+  const totalCompras  = comprasPeriod.reduce((s,p) => s+(p.precioTotal||0), 0);
+  const byProv = {};
+  comprasPeriod.forEach(p => {
+    const k = proveedores.find(pr=>pr.id===p.proveedorId)?.nombre || 'Sin proveedor';
+    if (!byProv[k]) byProv[k] = 0; byProv[k] += p.precioTotal||0;
+  });
+
+  const sueldosPeriod = sueldos.filter(s => { if(!s.mes) return false; const [y,m]=s.mes.split('-').map(Number); return y===anio&&(m-1)===mes; });
+  const totalSueldos  = sueldosPeriod.reduce((s,x) => s+(x.monto||0), 0);
+
+  const otrosPeriod  = otrosEgresos.filter(e => inPeriod(e.fecha));
+  const totalOtros   = otrosPeriod.reduce((s,e) => s+(e.monto||0), 0);
+  const byCategoria  = {};
+  otrosPeriod.forEach(e => { const k=e.categoria||'Otros'; if(!byCategoria[k])byCategoria[k]=0; byCategoria[k]+=e.monto||0; });
+
+  const totalEgresos = totalCompras + totalSueldos + totalOtros;
+  const resultado    = totalIngresos - totalEgresos;
+  const resColor     = resultado >= 0 ? 'var(--accent)' : 'var(--danger)';
+  const margen       = totalIngresos > 0 ? (resultado/totalIngresos*100).toFixed(1) : '—';
+
+  document.getElementById('consolidadoTitle').textContent = `Consolidado — ${MESES[mes]} ${anio}`;
+
+  document.getElementById('consolidadoBody').innerHTML = `
+    <!-- Resultado destacado -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px">
+      <div style="background:var(--surface2);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Ingresos</div>
+        <div style="font-size:1.3rem;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace">${pesos(totalIngresos)}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:4px">${ventasPeriod.length} transacciones</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--radius);padding:16px;text-align:center">
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Egresos</div>
+        <div style="font-size:1.3rem;font-weight:700;color:var(--danger);font-family:'DM Mono',monospace">${pesos(totalEgresos)}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:4px">Compras · Sueldos · Otros</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:var(--radius);padding:16px;text-align:center;border:2px solid ${resColor}">
+        <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Resultado neto</div>
+        <div style="font-size:1.3rem;font-weight:700;color:${resColor};font-family:'DM Mono',monospace">${resultado>=0?'':'−'}${pesos(Math.abs(resultado))}</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:4px">Margen: ${margen}%</div>
+      </div>
+    </div>
+
+    <!-- Detalle Ingresos -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:8px">Ingresos por rubro</div>
+      ${!ventasPeriod.length
+        ? `<p style="color:var(--ink3);font-size:13px">Sin ventas registradas en el período.</p>`
+        : `<table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr>
+              <th style="text-align:left;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">${esArticulos?'Rubro':'Canal'}</th>
+              <th style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">Und.</th>
+              <th style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">Total</th>
+              <th style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">%</th>
+            </tr></thead>
+            <tbody>
+              ${Object.entries(byRubro).sort(([,a],[,b])=>b.total-a.total).map(([k,v])=>`
+                <tr>
+                  <td style="padding:5px 8px">${k}</td>
+                  <td style="padding:5px 8px;text-align:right;color:var(--ink2)">${v.count}</td>
+                  <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(v.total)}</td>
+                  <td style="padding:5px 8px;text-align:right;color:var(--ink3)">${totalIngresos?((v.total/totalIngresos)*100).toFixed(1)+'%':'—'}</td>
+                </tr>`).join('')}
+              <tr style="font-weight:700;background:var(--surface2)">
+                <td style="padding:6px 8px">Total</td><td></td>
+                <td style="padding:6px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(totalIngresos)}</td>
+                <td style="padding:6px 8px;text-align:right">100%</td>
+              </tr>
+            </tbody>
+          </table>`}
+    </div>
+
+    <!-- Detalle Egresos -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--danger);margin-bottom:8px">Egresos por tipo</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="text-align:left;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">Concepto</th>
+          <th style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">Monto</th>
+          <th style="text-align:right;padding:5px 8px;border-bottom:1px solid var(--border);color:var(--ink3);font-weight:500">% s/ egresos</th>
+        </tr></thead>
+        <tbody>
+          <tr><td style="padding:5px 8px;font-weight:600">Compras a proveedores</td>
+              <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(totalCompras)}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--ink3)">${totalEgresos?((totalCompras/totalEgresos)*100).toFixed(1)+'%':'—'}</td></tr>
+          ${Object.entries(byProv).sort(([,a],[,b])=>b-a).map(([k,v])=>`
+            <tr><td style="padding:3px 8px 3px 20px;color:var(--ink2);font-size:12px">${k}</td>
+                <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:12px">${pesos(v)}</td>
+                <td></td></tr>`).join('')}
+          <tr><td style="padding:5px 8px;font-weight:600">Sueldos</td>
+              <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(totalSueldos)}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--ink3)">${totalEgresos?((totalSueldos/totalEgresos)*100).toFixed(1)+'%':'—'}</td></tr>
+          ${sueldosPeriod.map(s=>`
+            <tr><td style="padding:3px 8px 3px 20px;color:var(--ink2);font-size:12px">${s.empleado}</td>
+                <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:12px">${pesos(s.monto)}</td>
+                <td></td></tr>`).join('')}
+          <tr><td style="padding:5px 8px;font-weight:600">Otros gastos</td>
+              <td style="padding:5px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(totalOtros)}</td>
+              <td style="padding:5px 8px;text-align:right;color:var(--ink3)">${totalEgresos?((totalOtros/totalEgresos)*100).toFixed(1)+'%':'—'}</td></tr>
+          ${Object.entries(byCategoria).sort(([,a],[,b])=>b-a).map(([k,v])=>`
+            <tr><td style="padding:3px 8px 3px 20px;color:var(--ink2);font-size:12px">${k}</td>
+                <td style="padding:3px 8px;text-align:right;font-family:'DM Mono',monospace;font-size:12px">${pesos(v)}</td>
+                <td></td></tr>`).join('')}
+          <tr style="font-weight:700;background:var(--surface2);border-top:2px solid var(--border)">
+            <td style="padding:7px 8px">Total egresos</td>
+            <td style="padding:7px 8px;text-align:right;font-family:'DM Mono',monospace">${pesos(totalEgresos)}</td>
+            <td style="padding:7px 8px;text-align:right">100%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  openModal('modalConsolidado');
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
