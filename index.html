@@ -4379,8 +4379,8 @@ function renderContable() {
       <tr style="font-weight:600;background:var(--surface2)"><td>Total</td><td></td><td style="text-align:right;font-family:var(--mono)">${pesos(totalIngresos)}</td></tr>
     </tbody></table>`;
 
-  // ── COMPRAS (de boletas) ──
-  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal);
+  // ── COMPRAS (solo de boletas reales subidas con IA — excluye manuales y pedidos) ──
+  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal && p.fuente !== 'manual');
   const totalCompras = comprasPeriod.reduce((s,p) => s + (p.precioTotal || 0), 0);
 
   const byProv = {};
@@ -5926,8 +5926,8 @@ function verConsolidado() {
     byRubro[k].total += v.total||0; byRubro[k].count += v.unidades||1;
   });
 
-  // EGRESOS
-  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal);
+  // EGRESOS (solo boletas reales subidas con IA — excluye manuales y pedidos)
+  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal && p.fuente !== 'manual');
   const totalCompras  = comprasPeriod.reduce((s,p) => s+(p.precioTotal||0), 0);
   const byProv = {};
   comprasPeriod.forEach(p => {
