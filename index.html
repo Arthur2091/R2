@@ -5675,15 +5675,68 @@ async function extraerListaPrecios() {
     const items = (parsed.items || []).filter(it => it.nombre && it.precio_unitario != null);
     if (!items.length) { toast('La IA no encontró ítems con precio', 'error'); document.getElementById('lpBtnExtraer').disabled = false; document.getElementById('lpStatus').textContent = ''; return; }
 
-    _lpExtraido = { proveedorId: provId, items };
-    closeListaPreciosModal();
-    abrirMatchListaModal();
+    // Auto-match contra historial de boletas (prov.items + precios + insumos)
+    const auto = items.map(it => _lpAutoMatch(it.nombre, provId));
+    const matchedFromBoletas = auto.filter(a => a.fuente === 'prov').length;
+    const matchedFromInsumos = auto.filter(a => a.fuente === 'ins').length;
+    const sinMatch = auto.filter(a => !a.insumoId).length;
+
+    _lpExtraido = { proveedorId: provId, items, autoMatch: auto };
+
+    document.getElementById('lpStatus').innerHTML = `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.6">
+        <div style="font-weight:600;color:var(--ink)">✓ ${items.length} ítems extraídos</div>
+        <div style="font-size:12px;color:var(--ink2)">
+          ${matchedFromBoletas ? `<span style="color:#065F46">●</span> ${matchedFromBoletas} matcheados desde boletas previas de este proveedor<br>` : ''}
+          ${matchedFromInsumos ? `<span style="color:#1D4ED8">●</span> ${matchedFromInsumos} matcheados por nombre con tus insumos<br>` : ''}
+          ${sinMatch ? `<span style="color:#92400E">●</span> ${sinMatch} sin match — los confirmás vos` : ''}
+        </div>
+      </div>`;
+
+    setTimeout(() => {
+      closeListaPreciosModal();
+      abrirMatchListaModal();
+    }, 1200);
   } catch(e) {
     console.error(e);
     document.getElementById('lpStatus').textContent = '✕ ' + e.message;
     document.getElementById('lpBtnExtraer').disabled = false;
     toast('Error: ' + e.message, 'error');
   }
+}
+
+function _lpNormStr(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function _lpAutoMatch(nombre, provId) {
+  // 1. Match contra prov.items (más fuerte: ya vinculado en boletas previas)
+  // 2. Match contra precios[].nombreBoleta de ese proveedor
+  // 3. Match contra insumos[].nombre (fallback general)
+  const n = _lpNormStr(nombre);
+  if (!n) return { insumoId: '', fuente: null };
+
+  const prov = proveedores.find(p => p.id === provId);
+  if (prov?.items?.length) {
+    // exact
+    const ex = prov.items.find(it => it.insumoId && _lpNormStr(it.nombreBoleta) === n);
+    if (ex) return { insumoId: ex.insumoId, fuente: 'prov' };
+    // contains
+    const ct = prov.items.find(it => it.insumoId && (_lpNormStr(it.nombreBoleta).includes(n) || n.includes(_lpNormStr(it.nombreBoleta))));
+    if (ct) return { insumoId: ct.insumoId, fuente: 'prov' };
+  }
+
+  // Por historial de precios cargados via boletas de este proveedor
+  const precioMatch = precios.find(p => p.proveedorId === provId && p.insumoId && _lpNormStr(p.nombreBoleta) === n);
+  if (precioMatch) return { insumoId: precioMatch.insumoId, fuente: 'prov' };
+
+  // Fallback a insumos por nombre
+  const exactIns = insumos.find(i => _lpNormStr(i.nombre) === n);
+  if (exactIns) return { insumoId: exactIns.id, fuente: 'ins' };
+  const containsIns = insumos.find(i => _lpNormStr(i.nombre).includes(n) || n.includes(_lpNormStr(i.nombre)));
+  if (containsIns) return { insumoId: containsIns.id, fuente: 'ins' };
+
+  return { insumoId: '', fuente: null };
 }
 
 function abrirMatchListaModal() {
@@ -5693,25 +5746,39 @@ function abrirMatchListaModal() {
     .forEach(i => opts.push(`<option value="${i.id}">${i.nombre}</option>`));
   const optsHtml = opts.join('');
 
-  // Auto-match por similaridad de nombre
-  const lower = s => (s || '').toLowerCase().trim();
-  const autoMatch = (nombre) => {
-    const n = lower(nombre);
-    if (!n) return '';
-    const exact = insumos.find(i => lower(i.nombre) === n);
-    if (exact) return exact.id;
-    const contains = insumos.find(i => lower(i.nombre).includes(n) || n.includes(lower(i.nombre)));
-    return contains?.id || '';
+  const auto = _lpExtraido.autoMatch || _lpExtraido.items.map(it => _lpAutoMatch(it.nombre, _lpExtraido.proveedorId));
+  const matchedProv = auto.filter(a => a.fuente === 'prov').length;
+  const matchedIns  = auto.filter(a => a.fuente === 'ins').length;
+  const sinMatch    = auto.filter(a => !a.insumoId).length;
+
+  const badge = (fuente) => {
+    if (fuente === 'prov') return `<span style="font-size:10px;padding:2px 6px;background:#D1FAE5;color:#065F46;border-radius:4px;font-weight:600">BOLETAS</span>`;
+    if (fuente === 'ins')  return `<span style="font-size:10px;padding:2px 6px;background:#DBEAFE;color:#1D4ED8;border-radius:4px;font-weight:600">INSUMO</span>`;
+    return `<span style="font-size:10px;padding:2px 6px;background:#FEF3C7;color:#92400E;border-radius:4px;font-weight:600">NUEVO</span>`;
   };
 
-  screen.innerHTML = _lpExtraido.items.map((it, idx) => {
-    const guess = autoMatch(it.nombre);
+  const header = `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.6">
+    <strong>${_lpExtraido.items.length} ítems</strong> ·
+    <span style="color:#065F46">●</span> ${matchedProv} desde boletas ·
+    <span style="color:#1D4ED8">●</span> ${matchedIns} por nombre ·
+    <span style="color:#92400E">●</span> ${sinMatch} sin match
+  </div>`;
+
+  screen.innerHTML = header + _lpExtraido.items.map((it, idx) => {
+    const m = auto[idx];
+    const guess = m.insumoId || '';
+    const selectHtml = guess
+      ? optsHtml.replace(`value="${guess}"`, `value="${guess}" selected`)
+      : optsHtml;
     return `<div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:10px;padding:10px;border-bottom:1px solid var(--border);align-items:center">
       <div>
-        <div style="font-weight:600">${it.nombre}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-weight:600">${it.nombre}</span>
+          ${badge(m.fuente)}
+        </div>
         <div style="font-size:12px;color:var(--ink2)">${it.unidad || ''} ${it.peso_por_unidad ? `· ${it.peso_por_unidad}${it.unidad_peso || ''}` : ''}</div>
       </div>
-      <select data-lp-idx="${idx}" style="width:100%">${optsHtml.replace(`value="${guess}"`, `value="${guess}" selected`)}</select>
+      <select data-lp-idx="${idx}" style="width:100%">${selectHtml}</select>
       <div style="text-align:right;font-weight:600">${_fmtMoney(it.precio_unitario)}</div>
     </div>`;
   }).join('');
