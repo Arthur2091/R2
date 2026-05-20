@@ -5617,14 +5617,30 @@ async function _lpCallIA(payloadContent) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 4096,
+      model: 'claude-sonnet-4-6', max_tokens: 16000,
       messages: [{ role: 'user', content: payloadContent }]
     })
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || res.statusText); }
   const data = await res.json();
-  const text = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
-  return JSON.parse(text);
+  let text = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+
+  // Detectar truncamiento (stop_reason = "max_tokens") y avisar
+  const truncated = data.stop_reason === 'max_tokens';
+
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    if (truncated) throw new Error('La lista es muy larga y la respuesta se cortó. Probá subiendo el archivo en partes (ej: páginas 1-5 y luego 6-10).');
+    // Recovery: intentar cortar en el último item completo
+    const lastCompleteItem = text.lastIndexOf('},');
+    if (lastCompleteItem > 0) {
+      const repaired = text.slice(0, lastCompleteItem + 1) + ']}';
+      try { return JSON.parse(repaired); } catch(_) {}
+    }
+    console.error('JSON inválido:', text.slice(-500));
+    throw new Error('La IA devolvió un JSON inválido. Probá con menos ítems o un archivo más limpio.');
+  }
 }
 
 function _fileToBase64(file) {
