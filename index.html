@@ -7115,17 +7115,7 @@ function enviarPedidoWA(provId) {
   });
   msg += `\n¡Gracias! 🙏`;
 
-  const telNorm = (prov.telefono || '').replace(/\D/g,'');
-  let url;
-  if (telNorm) {
-    const telFinal = telNorm.startsWith('54') ? telNorm : '54' + telNorm;
-    url = `https://wa.me/${telFinal}?text=${encodeURIComponent(msg)}`;
-  } else {
-    url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  }
-  window.open(url, '_blank');
-
-  // Guardar pedido como pendiente
+  // Construir items + guardar pedido como pendiente ANTES de abrir WhatsApp
   const itemsPedido = items.map(([iid, qty]) => {
     const ultimo = _ultimoPrecio(provId, iid);
     return {
@@ -7145,11 +7135,22 @@ function enviarPedidoWA(provId) {
   });
   persist();
 
-  // Auto-limpiar las cantidades del card (el pedido ya quedó guardado en pendientes)
+  // RESET cantidades antes de abrir WA (por si el popup bloquea código posterior)
   delete _pedQty[provId];
   _persistPed();
   renderPedidos();
   toast(`Pedido enviado a ${prov.nombre}. Quedó en "Pedidos por Ingresar".`, 'success');
+
+  // Abrir WhatsApp al final
+  const telNorm = (prov.telefono || '').replace(/\D/g,'');
+  let url;
+  if (telNorm) {
+    const telFinal = telNorm.startsWith('54') ? telNorm : '54' + telNorm;
+    url = `https://wa.me/${telFinal}?text=${encodeURIComponent(msg)}`;
+  } else {
+    url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  }
+  window.open(url, '_blank');
 }
 
 function _pedIrAPendientes(provId) {
