@@ -3601,8 +3601,10 @@ function confirmarBoleta() {
     toast(`${creados} insumos dados de alta`, 'success');
   if (pendientes.length) _mostrarRevisionNombres(pendientes);
 
-  // Auto-link con pedidos pendientes de este proveedor
-  setTimeout(() => _autoLinkPedidoPendiente(_bProvId, facturaGuardada), 300);
+  // Auto-link con pedidos pendientes de este proveedor (capturar IDs ANTES del resetBoleta)
+  const _provIdSnap   = _bProvId;
+  const _facturaSnap  = facturaGuardada;
+  setTimeout(() => _autoLinkPedidoPendiente(_provIdSnap, _facturaSnap), 300);
   if (_bFile) {
     const arr = JSON.parse(localStorage.getItem('boletaArchivos') || '[]');
     if (!arr.includes(_bFile)) { arr.push(_bFile); localStorage.setItem('boletaArchivos', JSON.stringify(arr)); }
