@@ -1309,6 +1309,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (window['pdfjsLib']) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script>
 /* ── CATEGORIAS ─────────────────────────────────────────────────── */
 const CATEGORIAS_INSUMOS = [
@@ -5672,11 +5674,20 @@ async function extraerListaPrecios() {
       const csv = XLSX.utils.sheet_to_csv(sheet);
       content = [{ type: 'text', text: csv + '\n\n' + _LP_PROMPT }];
     } else if (file && /\.pdf$/i.test(file.name)) {
-      const b64 = await _fileToBase64(file);
-      content = [
-        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
-        { type: 'text', text: _LP_PROMPT }
-      ];
+      // Extraer texto del PDF en el browser (ignora imágenes embebidas)
+      document.getElementById('lpStatus').textContent = 'Extrayendo texto del PDF…';
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let textoCompleto = '';
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const tc = await page.getTextContent();
+        textoCompleto += tc.items.map(i => i.str).join(' ') + '\n';
+      }
+      textoCompleto = textoCompleto.trim();
+      if (!textoCompleto) throw new Error('El PDF no tiene texto (probablemente escaneado como imagen). Subilo como imagen o pegá el texto a mano.');
+      document.getElementById('lpStatus').textContent = `Texto extraído (${textoCompleto.length.toLocaleString()} caracteres). Analizando con IA…`;
+      content = [{ type: 'text', text: textoCompleto + '\n\n' + _LP_PROMPT }];
     } else if (file && file.type.startsWith('image/')) {
       const b64 = await _fileToBase64(file);
       content = [
