@@ -68,6 +68,23 @@ nav { display: flex; gap: 2px; }
 .view { display: none; padding: 24px; max-width: 1280px; margin: 0 auto; }
 .view.active { display: block; }
 
+/* PREC SUBTABS + HEATMAP */
+.prec-subtab { background:transparent; border:none; padding:8px 16px; border-radius:8px; font:600 13px var(--font); color:var(--ink2); cursor:pointer; transition:background .12s, color .12s; }
+.prec-subtab:hover { color:var(--ink); }
+.prec-subtab-active { background:#FFF; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.06); }
+.prec-grid { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.prec-grid th, .prec-grid td { padding:8px 10px; border-bottom:1px solid var(--border); border-right:1px solid var(--border); text-align:right; white-space:nowrap; }
+.prec-grid th:last-child, .prec-grid td:last-child { border-right:none; }
+.prec-grid tr:last-child td { border-bottom:none; }
+.prec-grid thead th { background:var(--surface2); font-weight:600; color:var(--ink2); font-size:12px; text-align:center; position:sticky; top:56px; z-index:5; }
+.prec-grid thead th:first-child { text-align:left; }
+.prec-grid tbody td:first-child { text-align:left; font-weight:600; color:var(--ink); background:var(--surface); position:sticky; left:0; z-index:4; }
+.prec-cell-down { background:#D1FAE5; color:#065F46; }
+.prec-cell-up   { background:#FEE2E2; color:#991B1B; }
+.prec-cell-best { background:#D1FAE5; color:#065F46; font-weight:700; }
+.prec-cell-worst{ background:#FEE2E2; color:#991B1B; }
+.prec-scroll { overflow-x:auto; }
+
 /* TOOLBAR */
 .toolbar {
   display: flex;
@@ -758,9 +775,85 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- PRECIOS -->
 <div id="viewPrecios" class="view">
-  <div class="placeholder">
-    <h2>Historial de Precios</h2>
-    <p>Próximamente — trazabilidad de precios por proveedor e insumo a lo largo del tiempo.</p>
+  <div class="toolbar" style="margin-bottom:18px;gap:4px;padding:4px;background:var(--surface2);border-radius:10px;width:fit-content">
+    <button id="precTabHist" class="prec-subtab prec-subtab-active" onclick="precSwitchTab('hist')">Histórico semanal</button>
+    <button id="precTabComp" class="prec-subtab" onclick="precSwitchTab('comp')">Listas y comparativa</button>
+  </div>
+
+  <!-- BLOQUE A: Histórico semanal -->
+  <div id="precSecHist">
+    <div class="toolbar" style="gap:12px;align-items:center;margin-bottom:16px">
+      <select id="precProvFilter" onchange="renderPrecHist()" style="min-width:200px">
+        <option value="">Todos los proveedores</option>
+      </select>
+      <select id="precWeeksRange" onchange="renderPrecHist()">
+        <option value="8">Últimas 8 semanas</option>
+        <option value="12" selected>Últimas 12 semanas</option>
+        <option value="24">Últimas 24 semanas</option>
+      </select>
+      <span style="margin-left:auto;font-size:12px;color:var(--ink2)">
+        <span style="display:inline-block;width:10px;height:10px;background:#D1FAE5;border-radius:2px;vertical-align:middle"></span> bajó &nbsp;
+        <span style="display:inline-block;width:10px;height:10px;background:#FEE2E2;border-radius:2px;vertical-align:middle"></span> subió
+      </span>
+    </div>
+    <div id="precHistScreen"></div>
+  </div>
+
+  <!-- BLOQUE B: Listas y comparativa -->
+  <div id="precSecComp" style="display:none">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:15px">Cargar lista de precios</div>
+          <div style="font-size:13px;color:var(--ink2);margin-top:2px">Subí archivo (xlsx/pdf/imagen) o pegá el texto que te mandó el proveedor.</div>
+        </div>
+        <button class="btn btn-primary" onclick="openListaPreciosModal()">+ Nueva lista</button>
+      </div>
+      <div id="listasCargadas"></div>
+    </div>
+
+    <div style="font-weight:700;font-size:15px;margin-bottom:10px">Comparativa por insumo (precio normalizado)</div>
+    <div style="font-size:13px;color:var(--ink2);margin-bottom:14px">Cada celda muestra el precio por unidad base (kg / lt / u) de la lista más reciente de cada proveedor. <span style="color:#065F46;font-weight:600">Verde</span> = mejor precio del insumo, <span style="color:#991B1B;font-weight:600">rojo</span> = peor.</div>
+    <div id="precCompScreen"></div>
+  </div>
+</div>
+
+<!-- MODAL: Cargar lista de precios -->
+<div id="modalListaPrecios" class="overlay">
+  <div class="modal" style="max-width:720px">
+    <h2>Cargar lista de precios</h2>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-top:12px">
+      <div>
+        <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Proveedor</label>
+        <select id="lpProveedor" style="width:100%"></select>
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Archivo (xlsx, pdf, imagen) — opcional</label>
+        <input id="lpFile" type="file" accept=".xlsx,.xls,.csv,.pdf,image/*" style="width:100%">
+      </div>
+      <div>
+        <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">O pegá el texto de la lista</label>
+        <textarea id="lpTexto" rows="6" placeholder="Ej:&#10;Harina 000 25kg — $30000&#10;Azúcar 1kg — $1300&#10;Aceite girasol 5lt — $9800" style="width:100%;font-family:var(--mono);font-size:13px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical"></textarea>
+      </div>
+      <div id="lpStatus" style="font-size:13px;color:var(--ink2);min-height:18px"></div>
+    </div>
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="btn btn-outline" onclick="closeListaPreciosModal()">Cancelar</button>
+      <button id="lpBtnExtraer" class="btn btn-primary" onclick="extraerListaPrecios()">✦ Extraer con IA</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Match de items de lista -->
+<div id="modalMatchLista" class="overlay">
+  <div class="modal" style="max-width:840px">
+    <h2>Matchear ítems con tus insumos</h2>
+    <p class="modal-sub">Asigná cada ítem de la lista a un insumo interno. Los que dejes en "— sin match —" no entran en la comparativa.</p>
+    <div id="lpMatchScreen" style="max-height:60vh;overflow-y:auto;margin-top:10px"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeMatchListaModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarListaPrecios()">Guardar lista</button>
+    </div>
   </div>
 </div>
 
@@ -1251,11 +1344,14 @@ function categorizarInsumo(nombre) {
 }
 
 /* ── STATE ─────────────────────────────────────────────────────── */
-let insumos     = [];
-let proveedores = [];
-let precios     = [];
-let facturas    = [];
-let recetas     = [];
+let insumos       = [];
+let proveedores   = [];
+let precios       = [];
+let facturas      = [];
+let recetas       = [];
+let listasPrecios = [];
+let _lpExtraido   = null;
+let _lpProvIdSel  = null;
 let _currentVerRecetaId = null;
 let _pendingRecetas  = [];
 let _matchMap        = {};
@@ -1266,10 +1362,11 @@ let _matchPendientes = [];
 function persist() {
   _syncChip('syncing');
   Promise.all([
-    _fbWrite('insumos',     { items: insumos }),
-    _fbWrite('proveedores', { items: proveedores }),
-    _fbWrite('precios',     { items: precios }),
-    _fbWrite('facturas',    { items: facturas }),
+    _fbWrite('insumos',       { items: insumos }),
+    _fbWrite('proveedores',   { items: proveedores }),
+    _fbWrite('precios',       { items: precios }),
+    _fbWrite('facturas',      { items: facturas }),
+    _fbWrite('listasPrecios', { items: listasPrecios }),
   ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
@@ -1316,6 +1413,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'viewContable')   initContableView();
     if (btn.dataset.view === 'viewProductos')  renderProductos();
     if (btn.dataset.view === 'viewRecetas')    renderRecetas();
+    if (btn.dataset.view === 'viewPrecios')    renderPrecios();
   });
 });
 
@@ -5233,6 +5331,7 @@ async function _fbLoad() {
         case 'precios':     if (d.items?.length)     precios      = d.items;           break;
         case 'facturas':    if (d.items?.length)     facturas     = d.items;           break;
         case 'recetas':     if (d.items?.length)     recetas      = d.items;           break;
+        case 'listasPrecios': if (d.items?.length)   listasPrecios = d.items;           break;
         case 'contable':
           if (d.ventas?.length)       ventas         = d.ventas;
           if (d.sueldos?.length)      sueldos        = d.sueldos;
@@ -5266,9 +5365,9 @@ async function _fbLoad() {
 
 async function _borrarTodo() {
   if (!confirm('¿Borrar TODO? Esto elimina insumos, proveedores, precios, boletas, recetas y contable de Firebase. No se puede deshacer.')) return;
-  const docs = ['insumos','proveedores','precios','facturas','recetas','contable'];
+  const docs = ['insumos','proveedores','precios','facturas','recetas','contable','listasPrecios'];
   await Promise.all(docs.map(id => _db.collection('data').doc(id).delete()));
-  insumos = []; proveedores = []; precios = []; facturas = []; recetas = [];
+  insumos = []; proveedores = []; precios = []; facturas = []; recetas = []; listasPrecios = [];
   ventas = []; sueldos = []; otrosEgresos = [];
   localStorage.removeItem('boletaArchivos');
   renderInsumos(); renderProveedores(); renderRecetas(); initContableView();
@@ -5318,6 +5417,429 @@ function importarDatos(input) {
     } catch { toast('Error al leer el archivo', 'error'); }
   };
   reader.readAsText(file);
+}
+
+/* ── PRECIOS — TABLERO ──────────────────────────────────────────── */
+
+function precSwitchTab(tab) {
+  const hist = tab === 'hist';
+  document.getElementById('precSecHist').style.display = hist ? '' : 'none';
+  document.getElementById('precSecComp').style.display = hist ? 'none' : '';
+  document.getElementById('precTabHist').classList.toggle('prec-subtab-active', hist);
+  document.getElementById('precTabComp').classList.toggle('prec-subtab-active', !hist);
+  if (hist) renderPrecHist(); else renderPrecComp();
+}
+
+function renderPrecios() {
+  // Llenar dropdown de proveedores del filtro histórico
+  const sel = document.getElementById('precProvFilter');
+  if (sel) {
+    const cur = sel.value;
+    const provsConPrecios = [...new Set(precios.map(p => p.proveedorId))];
+    const opts = ['<option value="">Todos los proveedores</option>'];
+    proveedores
+      .filter(p => provsConPrecios.includes(p.id))
+      .sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
+      .forEach(p => opts.push(`<option value="${p.id}" ${cur === p.id ? 'selected' : ''}>${p.nombre}</option>`));
+    sel.innerHTML = opts.join('');
+  }
+  const histVisible = document.getElementById('precSecHist').style.display !== 'none';
+  if (histVisible) renderPrecHist(); else renderPrecComp();
+}
+
+/* ── BLOQUE A — Histórico semanal ───────────────────────────────── */
+
+function _isoWeekKey(dateStr) {
+  // dateStr formato YYYY-MM-DD o DD/MM/YYYY
+  let d;
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) d = new Date(dateStr);
+  else if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) { const [dd,mm,yy] = dateStr.split('/'); d = new Date(`${yy}-${mm}-${dd}`); }
+  else d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+  return `${target.getUTCFullYear()}-W${String(weekNum).padStart(2,'0')}`;
+}
+
+function _weekLabel(weekKey) {
+  return weekKey.replace(/^\d{4}-/, '');  // "W18"
+}
+
+function _lastNWeeks(n) {
+  const weeks = [];
+  const now = new Date();
+  for (let i = 0; i < n; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i*7);
+    weeks.push(_isoWeekKey(d.toISOString().slice(0,10)));
+  }
+  return weeks.reverse();
+}
+
+function _fmtMoney(n) {
+  if (n == null || isNaN(n)) return '—';
+  return '$' + Math.round(n).toLocaleString('es-AR');
+}
+
+function renderPrecHist() {
+  const screen = document.getElementById('precHistScreen');
+  const provFilter = document.getElementById('precProvFilter')?.value || '';
+  const nWeeks = parseInt(document.getElementById('precWeeksRange')?.value || '12', 10);
+  const weeks = _lastNWeeks(nWeeks);
+
+  let datos = precios;
+  if (provFilter) datos = datos.filter(p => p.proveedorId === provFilter);
+
+  if (!datos.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin datos</h3><p>No hay precios cargados para este filtro. Cargá boletas en la pestaña Boletas.</p></div>`;
+    return;
+  }
+
+  // Agrupar: insumoId → weekKey → [precios]
+  const matriz = {};
+  datos.forEach(p => {
+    const wk = _isoWeekKey(p.fecha);
+    if (!wk || !weeks.includes(wk)) return;
+    if (!p.insumoId || p.precioUnitario == null) return;
+    matriz[p.insumoId] = matriz[p.insumoId] || {};
+    matriz[p.insumoId][wk] = matriz[p.insumoId][wk] || [];
+    matriz[p.insumoId][wk].push(Number(p.precioUnitario));
+  });
+
+  const insumoIds = Object.keys(matriz).sort((a,b) => {
+    const na = insumos.find(i => i.id === a)?.nombre || '';
+    const nb = insumos.find(i => i.id === b)?.nombre || '';
+    return na.localeCompare(nb, 'es');
+  });
+
+  if (!insumoIds.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin coincidencias</h3><p>Ningún precio cae en el rango de semanas elegido.</p></div>`;
+    return;
+  }
+
+  let html = `<div class="prec-scroll"><table class="prec-grid"><thead><tr><th>Insumo</th>`;
+  weeks.forEach(w => { html += `<th>${_weekLabel(w)}</th>`; });
+  html += `</tr></thead><tbody>`;
+
+  insumoIds.forEach(iid => {
+    const ins = insumos.find(i => i.id === iid);
+    const nombre = ins?.nombre || iid.slice(0,8);
+    html += `<tr><td>${nombre}</td>`;
+    let lastVal = null;
+    weeks.forEach(w => {
+      const arr = matriz[iid][w];
+      if (!arr) { html += `<td style="color:var(--ink3)">—</td>`; return; }
+      const avg = arr.reduce((s,x) => s+x, 0) / arr.length;
+      let cls = '';
+      if (lastVal != null) {
+        if (avg < lastVal * 0.999) cls = 'prec-cell-down';
+        else if (avg > lastVal * 1.001) cls = 'prec-cell-up';
+      }
+      html += `<td class="${cls}">${_fmtMoney(avg)}</td>`;
+      lastVal = avg;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  screen.innerHTML = html;
+}
+
+/* ── BLOQUE B — Listas y comparativa ────────────────────────────── */
+
+function _unidadBase(unidad, pesoPorUnidad, unidadPeso) {
+  // Devuelve { factor, base } donde precio/factor da precio en unidad base
+  // Base: kg si masa, lt si volumen, u si unidad
+  if (!unidad) return { factor: 1, base: 'u' };
+  const u = unidad.toLowerCase().trim();
+  // Si hay peso por unidad, normalizar a kg/lt
+  if (pesoPorUnidad && unidadPeso) {
+    const up = unidadPeso.toLowerCase();
+    if (up === 'kg') return { factor: pesoPorUnidad, base: 'kg' };
+    if (up === 'g')  return { factor: pesoPorUnidad / 1000, base: 'kg' };
+    if (up === 'l' || up === 'lt') return { factor: pesoPorUnidad, base: 'lt' };
+    if (up === 'ml') return { factor: pesoPorUnidad / 1000, base: 'lt' };
+  }
+  // Sin peso por unidad: la unidad misma puede ser kg/g/l/ml
+  if (u === 'kg')         return { factor: 1, base: 'kg' };
+  if (u === 'g' || u === 'gr') return { factor: 0.001, base: 'kg' };
+  if (u === 'l' || u === 'lt') return { factor: 1, base: 'lt' };
+  if (u === 'ml')         return { factor: 0.001, base: 'lt' };
+  return { factor: 1, base: 'u' };
+}
+
+function _precioNormalizado(item) {
+  if (item.precioUnitario == null) return null;
+  const { factor, base } = _unidadBase(item.unidad, item.pesoPorUnidad, item.unidadPeso);
+  if (!factor) return null;
+  return { valor: Number(item.precioUnitario) / factor, base };
+}
+
+function openListaPreciosModal() {
+  _lpExtraido = null;
+  document.getElementById('lpFile').value = '';
+  document.getElementById('lpTexto').value = '';
+  document.getElementById('lpStatus').textContent = '';
+  document.getElementById('lpBtnExtraer').disabled = false;
+  const sel = document.getElementById('lpProveedor');
+  const opts = ['<option value="">— Elegí un proveedor —</option>'];
+  [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .forEach(p => opts.push(`<option value="${p.id}">${p.nombre}</option>`));
+  sel.innerHTML = opts.join('');
+  document.getElementById('modalListaPrecios').classList.add('open');
+}
+function closeListaPreciosModal() { document.getElementById('modalListaPrecios').classList.remove('open'); }
+function closeMatchListaModal()   { document.getElementById('modalMatchLista').classList.remove('open'); }
+
+const _LP_PROMPT = `Sos un parser de listas de precios de proveedores gastronómicos en Argentina. Te paso una lista de precios (puede venir como texto, tabla o imagen). Extraé un JSON con esta estructura:
+
+{
+  "items": [
+    {
+      "nombre": "nombre del producto exactamente como aparece",
+      "unidad": "kg, g, L, ml, un, caja, bolsa, etc.",
+      "peso_por_unidad": número si cada unidad tiene peso (ej: bolsa de 25kg → 25), si no null,
+      "unidad_peso": "'kg', 'g', 'L' o 'ml'. null si peso_por_unidad es null.",
+      "precio_unitario": número sin símbolo
+    }
+  ]
+}
+
+NOTACIÓN ARGENTINA: en PRECIOS, punto separa miles y coma decimales. "$1.029" → 1029, "$12.345,67" → 12345.67. Convertí a JSON estándar.
+Devolvé SOLO el JSON, sin texto adicional.`;
+
+async function _lpCallIA(payloadContent) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Sin API key — configurala en Boletas');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6', max_tokens: 4096,
+      messages: [{ role: 'user', content: payloadContent }]
+    })
+  });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || res.statusText); }
+  const data = await res.json();
+  const text = data.content[0].text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+  return JSON.parse(text);
+}
+
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+async function extraerListaPrecios() {
+  const provId = document.getElementById('lpProveedor').value;
+  if (!provId) { toast('Elegí un proveedor', 'error'); return; }
+  const file = document.getElementById('lpFile').files[0];
+  const texto = document.getElementById('lpTexto').value.trim();
+  if (!file && !texto) { toast('Subí un archivo o pegá el texto', 'error'); return; }
+
+  document.getElementById('lpBtnExtraer').disabled = true;
+  document.getElementById('lpStatus').textContent = 'Analizando con IA…';
+
+  try {
+    let content;
+    if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
+      // Excel/CSV → texto plano via SheetJS
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const csv = XLSX.utils.sheet_to_csv(sheet);
+      content = [{ type: 'text', text: csv + '\n\n' + _LP_PROMPT }];
+    } else if (file && /\.pdf$/i.test(file.name)) {
+      const b64 = await _fileToBase64(file);
+      content = [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+        { type: 'text', text: _LP_PROMPT }
+      ];
+    } else if (file && file.type.startsWith('image/')) {
+      const b64 = await _fileToBase64(file);
+      content = [
+        { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } },
+        { type: 'text', text: _LP_PROMPT }
+      ];
+    } else {
+      content = [{ type: 'text', text: texto + '\n\n' + _LP_PROMPT }];
+    }
+
+    const parsed = await _lpCallIA(content);
+    const items = (parsed.items || []).filter(it => it.nombre && it.precio_unitario != null);
+    if (!items.length) { toast('La IA no encontró ítems con precio', 'error'); document.getElementById('lpBtnExtraer').disabled = false; document.getElementById('lpStatus').textContent = ''; return; }
+
+    _lpExtraido = { proveedorId: provId, items };
+    closeListaPreciosModal();
+    abrirMatchListaModal();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('lpStatus').textContent = '✕ ' + e.message;
+    document.getElementById('lpBtnExtraer').disabled = false;
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function abrirMatchListaModal() {
+  const screen = document.getElementById('lpMatchScreen');
+  const opts = ['<option value="">— sin match —</option>'];
+  [...insumos].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .forEach(i => opts.push(`<option value="${i.id}">${i.nombre}</option>`));
+  const optsHtml = opts.join('');
+
+  // Auto-match por similaridad de nombre
+  const lower = s => (s || '').toLowerCase().trim();
+  const autoMatch = (nombre) => {
+    const n = lower(nombre);
+    if (!n) return '';
+    const exact = insumos.find(i => lower(i.nombre) === n);
+    if (exact) return exact.id;
+    const contains = insumos.find(i => lower(i.nombre).includes(n) || n.includes(lower(i.nombre)));
+    return contains?.id || '';
+  };
+
+  screen.innerHTML = _lpExtraido.items.map((it, idx) => {
+    const guess = autoMatch(it.nombre);
+    return `<div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:10px;padding:10px;border-bottom:1px solid var(--border);align-items:center">
+      <div>
+        <div style="font-weight:600">${it.nombre}</div>
+        <div style="font-size:12px;color:var(--ink2)">${it.unidad || ''} ${it.peso_por_unidad ? `· ${it.peso_por_unidad}${it.unidad_peso || ''}` : ''}</div>
+      </div>
+      <select data-lp-idx="${idx}" style="width:100%">${optsHtml.replace(`value="${guess}"`, `value="${guess}" selected`)}</select>
+      <div style="text-align:right;font-weight:600">${_fmtMoney(it.precio_unitario)}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('modalMatchLista').classList.add('open');
+}
+
+function confirmarListaPrecios() {
+  const selects = document.querySelectorAll('#lpMatchScreen select[data-lp-idx]');
+  const items = _lpExtraido.items.map((it, idx) => {
+    const insumoId = selects[idx]?.value || null;
+    return {
+      nombreEnLista: it.nombre,
+      insumoId,
+      unidad: it.unidad || null,
+      pesoPorUnidad: it.peso_por_unidad ?? null,
+      unidadPeso: it.unidad_peso ?? null,
+      precioUnitario: Number(it.precio_unitario)
+    };
+  });
+
+  // Reemplazar lista vigente del proveedor (una lista vigente por proveedor)
+  listasPrecios = listasPrecios.filter(l => l.proveedorId !== _lpExtraido.proveedorId);
+  listasPrecios.push({
+    id: crypto.randomUUID(),
+    proveedorId: _lpExtraido.proveedorId,
+    fecha: new Date().toISOString().slice(0,10),
+    items
+  });
+  persist();
+  closeMatchListaModal();
+  _lpExtraido = null;
+  renderPrecComp();
+  toast('Lista guardada', 'success');
+}
+
+function eliminarListaPrecios(id) {
+  if (!confirm('¿Eliminar esta lista de precios?')) return;
+  listasPrecios = listasPrecios.filter(l => l.id !== id);
+  persist();
+  renderPrecComp();
+}
+
+function renderPrecComp() {
+  // Render listas cargadas
+  const cargadas = document.getElementById('listasCargadas');
+  if (!listasPrecios.length) {
+    cargadas.innerHTML = `<div style="font-size:13px;color:var(--ink3);padding:8px 0">Aún no cargaste ninguna lista.</div>`;
+  } else {
+    cargadas.innerHTML = listasPrecios.map(l => {
+      const prov = proveedores.find(p => p.id === l.proveedorId);
+      const matcheados = l.items.filter(i => i.insumoId).length;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600">${prov?.nombre || '?'}</div>
+          <div style="font-size:12px;color:var(--ink2)">${l.fecha} · ${matcheados}/${l.items.length} ítems matcheados</div>
+        </div>
+        <button class="btn btn-sm btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="eliminarListaPrecios('${l.id}')">Eliminar</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Tabla cruzada
+  const screen = document.getElementById('precCompScreen');
+  if (!listasPrecios.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin listas</h3><p>Cargá al menos una lista de precios para empezar a comparar.</p></div>`;
+    return;
+  }
+
+  // Recolectar insumos que aparecen matcheados en al menos una lista
+  const insumoSet = new Set();
+  listasPrecios.forEach(l => l.items.forEach(i => { if (i.insumoId) insumoSet.add(i.insumoId); }));
+  const insumoIds = [...insumoSet].sort((a,b) => {
+    const na = insumos.find(i => i.id === a)?.nombre || '';
+    const nb = insumos.find(i => i.id === b)?.nombre || '';
+    return na.localeCompare(nb, 'es');
+  });
+
+  if (!insumoIds.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin matches</h3><p>Las listas no tienen ítems matcheados a tus insumos. Editá una lista y asigná los matches.</p></div>`;
+    return;
+  }
+
+  const provIds = listasPrecios.map(l => l.proveedorId);
+
+  let html = `<div class="prec-scroll"><table class="prec-grid"><thead><tr><th>Insumo</th>`;
+  provIds.forEach(pid => {
+    const prov = proveedores.find(p => p.id === pid);
+    html += `<th>${prov?.nombre || '?'}</th>`;
+  });
+  html += `<th style="background:#FEF3C7">Mejor</th></tr></thead><tbody>`;
+
+  insumoIds.forEach(iid => {
+    const ins = insumos.find(i => i.id === iid);
+    const nombre = ins?.nombre || iid.slice(0,8);
+    const fila = provIds.map(pid => {
+      const lista = listasPrecios.find(l => l.proveedorId === pid);
+      const item = lista.items.find(i => i.insumoId === iid);
+      if (!item) return { precio: null, base: null };
+      const norm = _precioNormalizado(item);
+      return norm ? { precio: norm.valor, base: norm.base } : { precio: null, base: null };
+    });
+    const precios_validos = fila.map(f => f.precio).filter(p => p != null);
+    const min = precios_validos.length ? Math.min(...precios_validos) : null;
+    const max = precios_validos.length ? Math.max(...precios_validos) : null;
+    const base = fila.find(f => f.base)?.base || 'u';
+
+    html += `<tr><td>${nombre}</td>`;
+    fila.forEach(f => {
+      if (f.precio == null) { html += `<td style="color:var(--ink3)">—</td>`; return; }
+      let cls = '';
+      if (precios_validos.length > 1) {
+        if (Math.abs(f.precio - min) < 0.01) cls = 'prec-cell-best';
+        else if (Math.abs(f.precio - max) < 0.01) cls = 'prec-cell-worst';
+      }
+      html += `<td class="${cls}">${_fmtMoney(f.precio)}/<span style="font-size:11px">${f.base}</span></td>`;
+    });
+    if (min != null) {
+      const ganadorIdx = fila.findIndex(f => f.precio != null && Math.abs(f.precio - min) < 0.01);
+      const provGanador = proveedores.find(p => p.id === provIds[ganadorIdx]);
+      const ahorro = max && max !== min ? Math.round(((max - min) / max) * 100) : 0;
+      html += `<td style="background:#FEF3C7;font-weight:600">${provGanador?.nombre || '?'}${ahorro ? ` <span style="color:#065F46;font-size:11px">−${ahorro}%</span>` : ''}</td>`;
+    } else {
+      html += `<td style="background:#FEF3C7;color:var(--ink3)">—</td>`;
+    }
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+  screen.innerHTML = html;
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
