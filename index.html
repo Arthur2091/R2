@@ -5500,50 +5500,64 @@ function renderPrecHist() {
     return;
   }
 
-  // Agrupar: insumoId → weekKey → [precios]
+  // Agrupar: provId → insumoId → weekKey → [precios]
   const matriz = {};
   datos.forEach(p => {
     const wk = _isoWeekKey(p.fecha);
     if (!wk || !weeks.includes(wk)) return;
-    if (!p.insumoId || p.precioUnitario == null) return;
-    matriz[p.insumoId] = matriz[p.insumoId] || {};
-    matriz[p.insumoId][wk] = matriz[p.insumoId][wk] || [];
-    matriz[p.insumoId][wk].push(Number(p.precioUnitario));
+    if (!p.insumoId || p.precioUnitario == null || !p.proveedorId) return;
+    matriz[p.proveedorId] = matriz[p.proveedorId] || {};
+    matriz[p.proveedorId][p.insumoId] = matriz[p.proveedorId][p.insumoId] || {};
+    matriz[p.proveedorId][p.insumoId][wk] = matriz[p.proveedorId][p.insumoId][wk] || [];
+    matriz[p.proveedorId][p.insumoId][wk].push(Number(p.precioUnitario));
   });
 
-  const insumoIds = Object.keys(matriz).sort((a,b) => {
-    const na = insumos.find(i => i.id === a)?.nombre || '';
-    const nb = insumos.find(i => i.id === b)?.nombre || '';
+  const provIds = Object.keys(matriz).sort((a,b) => {
+    const na = proveedores.find(p => p.id === a)?.nombre || '';
+    const nb = proveedores.find(p => p.id === b)?.nombre || '';
     return na.localeCompare(nb, 'es');
   });
 
-  if (!insumoIds.length) {
+  if (!provIds.length) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin coincidencias</h3><p>Ningún precio cae en el rango de semanas elegido.</p></div>`;
     return;
   }
 
-  let html = `<div class="prec-scroll"><table class="prec-grid"><thead><tr><th>Insumo</th>`;
+  let html = `<div class="prec-scroll"><table class="prec-grid"><thead><tr><th>Proveedor / Insumo</th>`;
   weeks.forEach(w => { html += `<th>${_weekLabel(w)}</th>`; });
   html += `</tr></thead><tbody>`;
 
-  insumoIds.forEach(iid => {
-    const ins = insumos.find(i => i.id === iid);
-    const nombre = ins?.nombre || iid.slice(0,8);
-    html += `<tr><td>${nombre}</td>`;
-    let lastVal = null;
-    weeks.forEach(w => {
-      const arr = matriz[iid][w];
-      if (!arr) { html += `<td style="color:var(--ink3)">—</td>`; return; }
-      const avg = arr.reduce((s,x) => s+x, 0) / arr.length;
-      let cls = '';
-      if (lastVal != null) {
-        if (avg < lastVal * 0.999) cls = 'prec-cell-down';
-        else if (avg > lastVal * 1.001) cls = 'prec-cell-up';
-      }
-      html += `<td class="${cls}">${_fmtMoney(avg)}</td>`;
-      lastVal = avg;
+  provIds.forEach(pid => {
+    const prov = proveedores.find(p => p.id === pid);
+    const provNombre = prov?.nombre || '?';
+    const insIds = Object.keys(matriz[pid]).sort((a,b) => {
+      const na = insumos.find(i => i.id === a)?.nombre || '';
+      const nb = insumos.find(i => i.id === b)?.nombre || '';
+      return na.localeCompare(nb, 'es');
     });
-    html += `</tr>`;
+
+    // Header de proveedor
+    html += `<tr style="background:var(--surface2)"><td colspan="${weeks.length + 1}" style="background:var(--surface2);font-weight:700;color:var(--ink);padding:10px 12px;border-top:2px solid var(--border)">${provNombre} <span style="color:var(--ink2);font-weight:500;font-size:12px">· ${insIds.length} insumo${insIds.length === 1 ? '' : 's'}</span></td></tr>`;
+
+    insIds.forEach(iid => {
+      const ins = insumos.find(i => i.id === iid);
+      const nombre = ins?.nombre || iid.slice(0,8);
+      html += `<tr><td style="padding-left:24px">${nombre}</td>`;
+      let lastVal = null;
+      weeks.forEach(w => {
+        const arr = matriz[pid][iid][w];
+        if (!arr) { html += `<td style="color:var(--ink3)">—</td>`; return; }
+        const avg = arr.reduce((s,x) => s+x, 0) / arr.length;
+        let cls = '';
+        if (lastVal != null) {
+          if (avg < lastVal * 0.999) cls = 'prec-cell-down';
+          else if (avg > lastVal * 1.001) cls = 'prec-cell-up';
+        }
+        html += `<td class="${cls}">${_fmtMoney(avg)}</td>`;
+        lastVal = avg;
+      });
+      html += `</tr>`;
+    });
   });
   html += `</tbody></table></div>`;
   screen.innerHTML = html;
