@@ -2288,7 +2288,7 @@ function renderProveedores() {
       ${lista.map(p => {
         const nFacturas = facturas.filter(f => f.proveedorId === p.id).length;
         const ultima    = facturas.filter(f => f.proveedorId === p.id).sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
-        const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta')).length;
+        const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta' || pp.estado === 'vinculado')).length;
         return `<div style="display:flex;align-items:center;gap:8px">
           <button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;flex:1" onclick="renderProveedorFacturas('${p.id}')">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -2408,7 +2408,7 @@ function renderProveedorFacturas(provId, subtab) {
   if (bot) bot.style.display = 'none';
   const prov   = proveedores.find(p => p.id === provId);
   const lista  = facturas.filter(f => f.proveedorId === provId).sort((a,b) => b.fecha.localeCompare(a.fecha));
-  const pendientes = pedidosPendientes.filter(p => p.proveedorId === provId && (p.estado === 'pendiente' || p.estado === 'esperando_boleta'));
+  const pendientes = pedidosPendientes.filter(p => p.proveedorId === provId && (p.estado === 'pendiente' || p.estado === 'esperando_boleta' || p.estado === 'vinculado'));
 
   // Default: si hay pendientes, abrir esa tab; sino facturas
   const tab = subtab || (pendientes.length ? 'pend' : 'fact');
@@ -2442,18 +2442,27 @@ function renderProveedorFacturas(provId, subtab) {
         const fechaPedido = new Date(ped.fechaPedido).toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
         const totalItems = ped.items.reduce((s, it) => s + it.cantidad, 0);
         const esperando = ped.estado === 'esperando_boleta';
+        const vinculado = ped.estado === 'vinculado';
         const fechaRecib = esperando && ped.fechaRecibido ? new Date(ped.fechaRecibido).toLocaleDateString('es-AR', { day:'numeric', month:'long' }) : null;
-        const badge = esperando
-          ? `<span style="background:#FEF3C7;color:#92400E;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">⏳ ESPERANDO BOLETA</span>`
-          : `<span style="background:var(--accent-light);color:var(--accent);font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">📤 PEDIDO ENVIADO</span>`;
-        return `<div style="background:var(--surface);border:1px solid ${esperando ? '#FCD34D' : 'var(--border)'};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+        let badge, borderColor;
+        if (vinculado) {
+          badge = `<span style="background:#D1FAE5;color:#065F46;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">✓ VINCULADO A BOLETA${ped.nroBoleta ? ' N° ' + ped.nroBoleta : ''}</span>`;
+          borderColor = '#10B981';
+        } else if (esperando) {
+          badge = `<span style="background:#FEF3C7;color:#92400E;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">⏳ ESPERANDO BOLETA</span>`;
+          borderColor = '#FCD34D';
+        } else {
+          badge = `<span style="background:var(--accent-light);color:var(--accent);font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">📤 PEDIDO ENVIADO</span>`;
+          borderColor = 'var(--border)';
+        }
+        return `<div style="background:var(--surface);border:1.5px solid ${borderColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
             <div>
               <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
                 <span style="font-weight:700;font-size:14px">Pedido del ${fechaPedido}</span>
                 ${badge}
               </div>
-              <div style="font-size:12px;color:var(--ink2)">${ped.items.length} insumos · ${totalItems} unidades totales${fechaRecib ? ` · Recibido el ${fechaRecib}` : ''}</div>
+              <div style="font-size:12px;color:var(--ink2)">${ped.items.length} insumos · ${totalItems} unidades totales${fechaRecib ? ` · Recibido el ${fechaRecib}` : ''}${vinculado && ped.fechaBoleta ? ` · Boleta del ${ped.fechaBoleta}` : ''}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:11px;color:var(--ink2)">Total estimado</div>
@@ -2480,11 +2489,13 @@ function renderProveedorFacturas(provId, subtab) {
               }).join('')}
             </tbody>
           </table>
-          <div style="display:flex;gap:8px;justify-content:flex-end">
-            <button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
-            ${esperando
-              ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
-              : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}
+          <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center">
+            ${vinculado
+              ? `<button class="btn btn-primary btn-sm" style="background:#10B981" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
+              : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
+                 ${esperando
+                   ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
+                   : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
           </div>
         </div>`;
       }).join('');
@@ -2514,6 +2525,16 @@ function cancelarPedidoPendiente(pedidoId) {
   persist();
   renderProveedorFacturas(provId, 'pend');
   toast('Pedido cancelado', 'info');
+}
+
+function cerrarPedidoVinculado(pedidoId) {
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const provId = ped.proveedorId;
+  pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
+  persist();
+  renderProveedorFacturas(provId, 'pend');
+  toast('Pedido cerrado', 'success');
 }
 
 function marcarPedidoRecibido(pedidoId) {
@@ -2648,10 +2669,18 @@ function _cerrarAutoLink(vincular) {
   const overlay = document.getElementById('autoLinkOverlay');
   if (overlay) overlay.remove();
   if (vincular && _autoLinkData) {
-    pedidosPendientes = pedidosPendientes.filter(p => p.id !== _autoLinkData.pedidoId);
-    persist();
-    renderProveedores();
-    toast('Pedido cerrado y vinculado a la factura', 'success');
+    const ped = pedidosPendientes.find(p => p.id === _autoLinkData.pedidoId);
+    const factura = facturas.find(f => f.id === _autoLinkData.facturaId);
+    if (ped) {
+      ped.estado = 'vinculado';
+      ped.facturaId = _autoLinkData.facturaId;
+      ped.nroBoleta = factura?.nroBoleta || null;
+      ped.fechaBoleta = factura?.fecha || null;
+      ped.fechaVinculado = new Date().toISOString();
+      persist();
+      renderProveedores();
+      toast('Pedido vinculado a la factura. Hacé "OK" en el detalle del proveedor para cerrarlo.', 'success');
+    }
   }
   _autoLinkData = null;
 }
