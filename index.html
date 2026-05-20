@@ -546,12 +546,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- PROVEEDORES -->
 <div id="viewProveedores" class="view">
-  <div class="toolbar" style="margin-bottom:16px">
-    <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()">
+  <div id="provListTop" style="margin-bottom:20px">
+    <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="width:100%;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
+  </div>
+  <div id="proveedoresScreen"></div>
+  <div id="provListBottom" class="toolbar" style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border)">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
     <button class="btn btn-outline" onclick="detectarDuplicadosProveedores()">Unificar duplicados</button>
   </div>
-  <div id="proveedoresScreen"></div>
 </div>
 
 <!-- BOLETAS -->
@@ -2095,6 +2097,10 @@ function savePeriod() {
 
 function renderProveedores() {
   const screen = document.getElementById('proveedoresScreen');
+  const top    = document.getElementById('provListTop');
+  const bot    = document.getElementById('provListBottom');
+  if (top) top.style.display = '';
+  if (bot) bot.style.display = '';
   const q      = (document.getElementById('searchProveedores')?.value || '').toLowerCase().trim();
   let   lista  = [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -2229,11 +2235,18 @@ function detectarDuplicadosProveedores() {
 
 function renderProveedorFacturas(provId) {
   const screen = document.getElementById('proveedoresScreen');
+  const top    = document.getElementById('provListTop');
+  const bot    = document.getElementById('provListBottom');
+  if (top) top.style.display = 'none';
+  if (bot) bot.style.display = 'none';
   const prov   = proveedores.find(p => p.id === provId);
   const lista  = facturas.filter(f => f.proveedorId === provId).sort((a,b) => b.fecha.localeCompare(a.fecha));
 
   screen.innerHTML = `
-    <button class="btn btn-outline" style="margin-bottom:1rem" onclick="renderProveedores()">← Proveedores</button>
+    <div onclick="renderProveedores()" style="position:sticky;top:56px;background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;z-index:50;display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <span style="font-size:18px;line-height:1">←</span>
+      <span>Volver a proveedores</span>
+    </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
       <div style="font-size:1.1rem;font-weight:700">${prov?.nombre}</div>
       <div style="display:flex;gap:8px">
