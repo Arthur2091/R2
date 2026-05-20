@@ -1398,14 +1398,15 @@ function categorizarInsumo(nombre) {
 }
 
 /* ── STATE ─────────────────────────────────────────────────────── */
-let insumos       = [];
-let proveedores   = [];
-let precios       = [];
-let facturas      = [];
-let recetas       = [];
-let listasPrecios = [];
-let _lpExtraido   = null;
-let _lpProvIdSel  = null;
+let insumos           = [];
+let proveedores       = [];
+let precios           = [];
+let facturas          = [];
+let recetas           = [];
+let listasPrecios     = [];
+let pedidosPendientes = [];
+let _lpExtraido       = null;
+let _lpProvIdSel      = null;
 let _currentVerRecetaId = null;
 let _pendingRecetas  = [];
 let _matchMap        = {};
@@ -1420,7 +1421,8 @@ function persist() {
     _fbWrite('proveedores',   { items: proveedores }),
     _fbWrite('precios',       { items: precios }),
     _fbWrite('facturas',      { items: facturas }),
-    _fbWrite('listasPrecios', { items: listasPrecios }),
+    _fbWrite('listasPrecios',     { items: listasPrecios }),
+    _fbWrite('pedidosPendientes', { items: pedidosPendientes }),
   ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
@@ -2278,9 +2280,13 @@ function renderProveedores() {
       ${lista.map(p => {
         const nFacturas = facturas.filter(f => f.proveedorId === p.id).length;
         const ultima    = facturas.filter(f => f.proveedorId === p.id).sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
+        const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && pp.estado === 'pendiente').length;
         return `<div style="display:flex;align-items:center;gap:8px">
           <button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;flex:1" onclick="renderProveedorFacturas('${p.id}')">
-            <div style="font-size:1rem;font-weight:700">${p.nombre}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:1rem;font-weight:700">${p.nombre}</span>
+              ${nPend ? `<span style="background:var(--accent);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700">${nPend} pendiente${nPend === 1 ? '' : 's'}</span>` : ''}
+            </div>
             <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">
               ${nFacturas} factura${nFacturas !== 1 ? 's' : ''}
               ${ultima ? ' · Última: ' + ultima.fecha : ''}
@@ -2386,7 +2392,7 @@ function detectarDuplicadosProveedores() {
   toast(`${duplicados.length} grupo${duplicados.length > 1 ? 's' : ''} unificado${duplicados.length > 1 ? 's' : ''}`, 'success');
 }
 
-function renderProveedorFacturas(provId) {
+function renderProveedorFacturas(provId, subtab) {
   const screen = document.getElementById('proveedoresScreen');
   const top    = document.getElementById('provListTop');
   const bot    = document.getElementById('provListBottom');
@@ -2394,6 +2400,76 @@ function renderProveedorFacturas(provId) {
   if (bot) bot.style.display = 'none';
   const prov   = proveedores.find(p => p.id === provId);
   const lista  = facturas.filter(f => f.proveedorId === provId).sort((a,b) => b.fecha.localeCompare(a.fecha));
+  const pendientes = pedidosPendientes.filter(p => p.proveedorId === provId && p.estado === 'pendiente');
+
+  // Default: si hay pendientes, abrir esa tab; sino facturas
+  const tab = subtab || (pendientes.length ? 'pend' : 'fact');
+
+  const tabsHtml = `<div class="toolbar" style="margin:0 0 16px 0;gap:4px;padding:4px;background:var(--surface2);border-radius:10px;width:fit-content">
+    <button class="prec-subtab ${tab === 'fact' ? 'prec-subtab-active' : ''}" onclick="renderProveedorFacturas('${provId}','fact')">Facturas <span style="color:var(--ink2);font-weight:500">· ${lista.length}</span></button>
+    <button class="prec-subtab ${tab === 'pend' ? 'prec-subtab-active' : ''}" onclick="renderProveedorFacturas('${provId}','pend')">Pedidos por Ingresar ${pendientes.length ? `<span style="background:var(--accent);color:#fff;font-size:11px;padding:1px 7px;border-radius:999px;margin-left:4px">${pendientes.length}</span>` : ''}</button>
+  </div>`;
+
+  const facturasHtml = !lista.length
+    ? '<p style="color:var(--ink2)">Sin facturas cargadas.</p>'
+    : `<div style="display:flex;flex-direction:column;gap:.6rem">
+        ${lista.map(f => `
+          <div style="display:flex;gap:8px;align-items:stretch">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer;flex:1" onclick="renderFacturaDetalle('${f.id}','${provId}')">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem">
+                <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
+                <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+              </div>
+              <div style="font-size:.82rem;color:var(--ink2)">
+                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems
+              </div>
+            </div>
+            <button class="btn btn-outline" onclick="openEditFactura('${f.id}','${provId}')" style="white-space:nowrap;align-self:center">Editar</button>
+          </div>`).join('')}
+      </div>`;
+
+  const pendientesHtml = !pendientes.length
+    ? '<p style="color:var(--ink2)">No hay pedidos pendientes de ingreso. Cuando mandes uno por WhatsApp aparece acá hasta que cargues la boleta correspondiente.</p>'
+    : pendientes.sort((a,b) => (b.fechaPedido || '').localeCompare(a.fechaPedido || '')).map(ped => {
+        const fechaPedido = new Date(ped.fechaPedido).toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
+        const totalItems = ped.items.reduce((s, it) => s + it.cantidad, 0);
+        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+            <div>
+              <div style="font-weight:700;font-size:14px">Pedido del ${fechaPedido}</div>
+              <div style="font-size:12px;color:var(--ink2);margin-top:2px">${ped.items.length} insumos · ${totalItems} unidades totales</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--ink2)">Total estimado</div>
+              <div style="font-weight:700;font-size:16px;color:var(--accent)">${ped.totalEstimado ? pesos(ped.totalEstimado) : '—'}</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+            <thead><tr style="color:var(--ink2);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:6px 0">Insumo</th>
+              <th style="text-align:center;padding:6px 0">Cant.</th>
+              <th style="text-align:right;padding:6px 0">Precio ref.</th>
+              <th style="text-align:right;padding:6px 0">Subtotal est.</th>
+            </tr></thead>
+            <tbody>
+              ${ped.items.map(it => {
+                const ins = insumos.find(i => i.id === it.insumoId);
+                const subtotal = it.precioRefAlPedir ? it.precioRefAlPedir * it.cantidad : null;
+                return `<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:8px 0">${ins?.nombre || '?'}</td>
+                  <td style="text-align:center;padding:8px 0;font-weight:600">${it.cantidad}</td>
+                  <td style="text-align:right;padding:8px 0;color:var(--ink2)">${it.precioRefAlPedir ? _fmtMoney(it.precioRefAlPedir) : '—'}</td>
+                  <td style="text-align:right;padding:8px 0;font-weight:600">${subtotal ? _fmtMoney(subtotal) : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
+            <button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>
+          </div>
+        </div>`;
+      }).join('');
 
   screen.innerHTML = `
     <div onclick="renderProveedores()" style="position:sticky;top:56px;background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;z-index:50;display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.04)">
@@ -2407,23 +2483,129 @@ function renderProveedorFacturas(provId) {
         <button class="btn btn-primary" onclick="altaInsumosDesdeFacturas('${provId}')">+ Dar de alta en Insumos</button>
       </div>
     </div>
-    ${!lista.length
-      ? '<p style="color:var(--ink2)">Sin facturas cargadas.</p>'
-      : `<div style="display:flex;flex-direction:column;gap:.6rem">
-          ${lista.map(f => `
-            <div style="display:flex;gap:8px;align-items:stretch">
-              <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer;flex:1" onclick="renderFacturaDetalle('${f.id}','${provId}')">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem">
-                  <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
-                  <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
-                </div>
-                <div style="font-size:.82rem;color:var(--ink2)">
-                  ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems
-                </div>
-              </div>
-              <button class="btn btn-outline" onclick="openEditFactura('${f.id}','${provId}')" style="white-space:nowrap;align-self:center">Editar</button>
-            </div>`).join('')}
-        </div>`}`;
+    ${tabsHtml}
+    ${tab === 'pend' ? pendientesHtml : facturasHtml}`;
+}
+
+function cancelarPedidoPendiente(pedidoId) {
+  if (!confirm('¿Cancelar este pedido pendiente? Esta acción no se puede deshacer.')) return;
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const provId = ped.proveedorId;
+  pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
+  persist();
+  renderProveedorFacturas(provId, 'pend');
+  toast('Pedido cancelado', 'info');
+}
+
+function marcarPedidoRecibido(pedidoId) {
+  if (!confirm('¿Marcar este pedido como recibido?')) return;
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const provId = ped.proveedorId;
+  pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
+  persist();
+  renderProveedorFacturas(provId, 'pend');
+  toast('Pedido marcado como recibido', 'success');
+}
+
+function _autoLinkPedidoPendiente(provId, factura) {
+  const pend = pedidosPendientes.filter(p => p.proveedorId === provId && p.estado === 'pendiente');
+  if (!pend.length || !factura) return;
+  // Tomar el más reciente
+  pend.sort((a,b) => (b.fechaPedido || '').localeCompare(a.fechaPedido || ''));
+  const ped = pend[0];
+
+  // Insumos en la factura
+  const facturaInsIds = new Set(factura.items.map(it => it.insumoId).filter(Boolean));
+  const pedidoInsIds  = new Set(ped.items.map(it => it.insumoId));
+
+  // Matcheados: en ambos
+  const matched = [...pedidoInsIds].filter(id => facturaInsIds.has(id));
+  // Extras en factura: en factura pero no en pedido
+  const extras  = [...facturaInsIds].filter(id => !pedidoInsIds.has(id));
+  // Faltantes: en pedido pero no en factura
+  const faltantes = [...pedidoInsIds].filter(id => !facturaInsIds.has(id));
+
+  if (!matched.length) return; // Sin coincidencias, no proponemos nada
+
+  _autoLinkData = { provId, pedidoId: ped.id, facturaId: factura.id, matched, extras, faltantes };
+  _mostrarAutoLinkModal();
+}
+
+let _autoLinkData = null;
+
+function _mostrarAutoLinkModal() {
+  if (!_autoLinkData) return;
+  const { provId, pedidoId, matched, extras, faltantes } = _autoLinkData;
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const factura = facturas.find(f => f.id === _autoLinkData.facturaId);
+  if (!factura) return;
+
+  const fechaPed = new Date(ped.fechaPedido).toLocaleDateString('es-AR', { day:'numeric', month:'long' });
+  const insName = id => insumos.find(i => i.id === id)?.nombre || '?';
+
+  // Comparar precios del pedido vs factura
+  const cambios = matched.map(iid => {
+    const pedItem = ped.items.find(it => it.insumoId === iid);
+    const facItem = factura.items.find(it => it.insumoId === iid);
+    const precioPed = pedItem?.precioRefAlPedir;
+    const precioFac = facItem?.precio_unitario;
+    let delta = null;
+    if (precioPed && precioFac) {
+      delta = ((precioFac - precioPed) / precioPed) * 100;
+    }
+    return { iid, nombre: insName(iid), cantPed: pedItem.cantidad, cantFac: facItem.cantidad, precioPed, precioFac, delta };
+  });
+
+  const cambiosPrecio = cambios.filter(c => c.delta != null && Math.abs(c.delta) > 0.5);
+
+  const html = `<div class="overlay open" id="autoLinkOverlay" style="display:flex">
+    <div class="modal" style="max-width:720px">
+      <h2>Pedido pendiente detectado</h2>
+      <p class="modal-sub">Hay un pedido del <strong>${fechaPed}</strong> con ${matched.length} ítem${matched.length === 1 ? '' : 's'} que coincide${matched.length === 1 ? '' : 'n'} con esta boleta.</p>
+
+      ${cambiosPrecio.length ? `<div style="margin:14px 0;padding:12px;background:#FEF3C7;border-radius:8px">
+        <div style="font-weight:700;font-size:13px;color:#92400E;margin-bottom:6px">⚠ Cambios de precio detectados</div>
+        ${cambiosPrecio.map(c => `<div style="font-size:13px;display:flex;justify-content:space-between;padding:3px 0">
+          <span>${c.nombre}</span>
+          <span><span style="color:var(--ink2)">${_fmtMoney(c.precioPed)}</span> → <strong>${_fmtMoney(c.precioFac)}</strong> <span style="color:${c.delta > 0 ? '#991B1B' : '#065F46'};font-weight:600">${c.delta > 0 ? '+' : ''}${c.delta.toFixed(1)}%</span></span>
+        </div>`).join('')}
+      </div>` : ''}
+
+      ${extras.length ? `<div style="margin:14px 0;padding:12px;background:#FEE2E2;border-radius:8px">
+        <div style="font-weight:700;font-size:13px;color:#991B1B;margin-bottom:6px">⚠ Productos en la boleta que NO pediste (${extras.length})</div>
+        <div style="font-size:13px;color:var(--ink)">${extras.map(insName).join(', ')}</div>
+        <div style="font-size:12px;color:var(--ink2);margin-top:6px">Si no los querés, eliminalos editando la factura desde el detalle del proveedor.</div>
+      </div>` : ''}
+
+      ${faltantes.length ? `<div style="margin:14px 0;padding:12px;background:var(--surface2);border-radius:8px">
+        <div style="font-weight:700;font-size:13px;color:var(--ink);margin-bottom:6px">Faltantes (pediste pero no llegaron) — ${faltantes.length}</div>
+        <div style="font-size:13px;color:var(--ink2)">${faltantes.map(insName).join(', ')}</div>
+        <div style="font-size:12px;color:var(--ink2);margin-top:6px">El pedido se cierra igual; si quedó algo pendiente, hacé un nuevo pedido.</div>
+      </div>` : ''}
+
+      <div class="modal-actions" style="margin-top:18px">
+        <button class="btn btn-outline" onclick="_cerrarAutoLink(false)">Después</button>
+        <button class="btn btn-primary" onclick="_cerrarAutoLink(true)">Vincular y cerrar pedido</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function _cerrarAutoLink(vincular) {
+  const overlay = document.getElementById('autoLinkOverlay');
+  if (overlay) overlay.remove();
+  if (vincular && _autoLinkData) {
+    pedidosPendientes = pedidosPendientes.filter(p => p.id !== _autoLinkData.pedidoId);
+    persist();
+    renderProveedores();
+    toast('Pedido cerrado y vinculado a la factura', 'success');
+  }
+  _autoLinkData = null;
 }
 
 /* ── BUSCAR DUPLICADOS ──────────────────────────────────────────── */
@@ -3303,6 +3485,9 @@ function confirmarBoleta() {
   else if (creados)
     toast(`${creados} insumos dados de alta`, 'success');
   if (pendientes.length) _mostrarRevisionNombres(pendientes);
+
+  // Auto-link con pedidos pendientes de este proveedor
+  setTimeout(() => _autoLinkPedidoPendiente(_bProvId, facturaGuardada), 300);
   if (_bFile) {
     const arr = JSON.parse(localStorage.getItem('boletaArchivos') || '[]');
     if (!arr.includes(_bFile)) { arr.push(_bFile); localStorage.setItem('boletaArchivos', JSON.stringify(arr)); }
@@ -5387,6 +5572,7 @@ async function _fbLoad() {
         case 'facturas':    if (d.items?.length)     facturas     = d.items;           break;
         case 'recetas':     if (d.items?.length)     recetas      = d.items;           break;
         case 'listasPrecios': if (d.items?.length)   listasPrecios = d.items;           break;
+        case 'pedidosPendientes': if (d.items?.length) pedidosPendientes = d.items;     break;
         case 'contable':
           if (d.ventas?.length)       ventas         = d.ventas;
           if (d.sueldos?.length)      sueldos        = d.sueldos;
@@ -5421,9 +5607,9 @@ async function _fbLoad() {
 
 async function _borrarTodo() {
   if (!confirm('¿Borrar TODO? Esto elimina insumos, proveedores, precios, boletas, recetas y contable de Firebase. No se puede deshacer.')) return;
-  const docs = ['insumos','proveedores','precios','facturas','recetas','contable','listasPrecios'];
+  const docs = ['insumos','proveedores','precios','facturas','recetas','contable','listasPrecios','pedidosPendientes'];
   await Promise.all(docs.map(id => _db.collection('data').doc(id).delete()));
-  insumos = []; proveedores = []; precios = []; facturas = []; recetas = []; listasPrecios = [];
+  insumos = []; proveedores = []; precios = []; facturas = []; recetas = []; listasPrecios = []; pedidosPendientes = [];
   ventas = []; sueldos = []; otrosEgresos = [];
   localStorage.removeItem('boletaArchivos');
   renderInsumos(); renderProveedores(); renderRecetas(); initContableView();
@@ -6312,9 +6498,29 @@ function enviarPedidoWA(provId) {
   }
   window.open(url, '_blank');
 
+  // Guardar pedido como pendiente
+  const itemsPedido = items.map(([iid, qty]) => {
+    const ultimo = _ultimoPrecio(provId, iid);
+    return {
+      insumoId: iid,
+      cantidad: qty,
+      precioRefAlPedir: ultimo ? ultimo.precio : null
+    };
+  });
+  const totalEstimado = itemsPedido.reduce((s, it) => s + (it.precioRefAlPedir ? it.precioRefAlPedir * it.cantidad : 0), 0);
+  pedidosPendientes.push({
+    id: crypto.randomUUID(),
+    proveedorId: provId,
+    fechaPedido: new Date().toISOString(),
+    items: itemsPedido,
+    totalEstimado,
+    estado: 'pendiente'
+  });
+  persist();
+
   // Preguntar si limpiar después
   setTimeout(() => {
-    if (confirm('¿Limpiar las cantidades de este pedido?')) {
+    if (confirm('Pedido guardado como pendiente. ¿Limpiar las cantidades?')) {
       delete _pedQty[provId];
       _persistPed();
       renderPedidos();
