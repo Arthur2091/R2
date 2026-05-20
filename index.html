@@ -641,7 +641,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="toolbar">
     <label class="btn btn-outline" style="cursor:pointer">
       📷 Subir fotos
-      <input id="boletaFoto" type="file" accept="image/*" multiple style="display:none" onchange="onBoletaFoto(event)">
+      <input id="boletaFoto" type="file" accept="image/*,.pdf,application/pdf" multiple style="display:none" onchange="onBoletaFoto(event)">
     </label>
     <button id="btnExtraer" class="btn btn-primary" onclick="extraerBoleta()" disabled>✦ Extraer con IA</button>
     <button id="btnConfirmar" class="btn btn-primary" onclick="confirmarBoleta()" style="display:none;background:var(--info)">✓ Confirmar y guardar</button>
@@ -3142,11 +3142,20 @@ async function _bProcesarCola(idx, ok, errs) {
 }
 
 function _bCargar(file) {
-  _bFile = file.name; _bImgMime = file.type;
+  _bFile = file.name; _bImgMime = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'image/jpeg');
+  const isPdf = _bImgMime === 'application/pdf' || /\.pdf$/i.test(file.name);
   const reader = new FileReader();
   reader.onload = ev => {
     _bImg64 = ev.target.result.split(',')[1];
-    document.getElementById('boletaPhotoWrap').innerHTML = `<img src="${ev.target.result}" alt="boleta">`;
+    if (isPdf) {
+      document.getElementById('boletaPhotoWrap').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--ink2);text-align:center;gap:8px">
+        <div style="font-size:48px">📄</div>
+        <div style="font-weight:600;color:var(--ink)">${file.name}</div>
+        <div style="font-size:12px">PDF · ${(file.size / 1024).toFixed(0)} KB</div>
+      </div>`;
+    } else {
+      document.getElementById('boletaPhotoWrap').innerHTML = `<img src="${ev.target.result}" alt="boleta">`;
+    }
     document.getElementById('btnExtraer').disabled = false;
     document.getElementById('btnConfirmar').style.display = 'none';
     document.getElementById('btnDescartar').style.display = 'none';
@@ -3226,15 +3235,16 @@ Si no podés leer algún campo con certeza, ponés null.`;
 async function _bCallIA(b64, mime) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Sin API key');
+  const isPdf = mime === 'application/pdf';
+  const block = isPdf
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }
+    : { type: 'image',    source: { type: 'base64', media_type: mime, data: b64 } };
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 4096,
-      messages: [{ role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: mime, data: b64 } },
-        { type: 'text', text: _BPROMPT }
-      ]}]
+      model: 'claude-sonnet-4-6', max_tokens: 8192,
+      messages: [{ role: 'user', content: [ block, { type: 'text', text: _BPROMPT } ]}]
     }),
   });
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || res.statusText); }
