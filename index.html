@@ -7021,9 +7021,16 @@ function renderPedidos() {
       </div>
       <div class="ped-prods">${filasHtml}</div>
       <div class="ped-card-actions">
-        <button class="btn-wa" onclick="enviarPedidoWA('${prov.id}')" ${itemsConQty === 0 ? 'disabled' : ''}>
-          📱 Pedir por WhatsApp
-        </button>
+        ${(() => {
+          const nPend = pedidosPendientes.filter(pp => pp.proveedorId === prov.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta' || pp.estado === 'vinculado')).length;
+          if (itemsConQty > 0) {
+            return `<button class="btn-wa" onclick="enviarPedidoWA('${prov.id}')">📱 Pedir por WhatsApp</button>`;
+          }
+          if (nPend > 0) {
+            return `<button class="btn-wa" onclick="_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}</button>`;
+          }
+          return `<button class="btn-wa" disabled>📱 Pedir por WhatsApp</button>`;
+        })()}
       </div>
     </div>`;
   });
@@ -7126,14 +7133,20 @@ function enviarPedidoWA(provId) {
   });
   persist();
 
-  // Preguntar si limpiar después
-  setTimeout(() => {
-    if (confirm('Pedido guardado como pendiente. ¿Limpiar las cantidades?')) {
-      delete _pedQty[provId];
-      _persistPed();
-      renderPedidos();
-    }
-  }, 500);
+  // Auto-limpiar las cantidades del card (el pedido ya quedó guardado en pendientes)
+  delete _pedQty[provId];
+  _persistPed();
+  renderPedidos();
+  toast(`Pedido enviado a ${prov.nombre}. Quedó en "Pedidos por Ingresar".`, 'success');
+}
+
+function _pedIrAPendientes(provId) {
+  // Navegar a Proveedores → detalle del proveedor → tab Pedidos por Ingresar
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('viewProveedores').classList.add('active');
+  document.querySelector('.nav-btn[data-view="viewProveedores"]')?.classList.add('active');
+  renderProveedorFacturas(provId, 'pend');
 }
 
 function limpiarTodosPedidos() {
