@@ -2280,7 +2280,7 @@ function renderProveedores() {
       ${lista.map(p => {
         const nFacturas = facturas.filter(f => f.proveedorId === p.id).length;
         const ultima    = facturas.filter(f => f.proveedorId === p.id).sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
-        const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && pp.estado === 'pendiente').length;
+        const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta')).length;
         return `<div style="display:flex;align-items:center;gap:8px">
           <button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;flex:1" onclick="renderProveedorFacturas('${p.id}')">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -2400,7 +2400,7 @@ function renderProveedorFacturas(provId, subtab) {
   if (bot) bot.style.display = 'none';
   const prov   = proveedores.find(p => p.id === provId);
   const lista  = facturas.filter(f => f.proveedorId === provId).sort((a,b) => b.fecha.localeCompare(a.fecha));
-  const pendientes = pedidosPendientes.filter(p => p.proveedorId === provId && p.estado === 'pendiente');
+  const pendientes = pedidosPendientes.filter(p => p.proveedorId === provId && (p.estado === 'pendiente' || p.estado === 'esperando_boleta'));
 
   // Default: si hay pendientes, abrir esa tab; sino facturas
   const tab = subtab || (pendientes.length ? 'pend' : 'fact');
@@ -2433,11 +2433,19 @@ function renderProveedorFacturas(provId, subtab) {
     : pendientes.sort((a,b) => (b.fechaPedido || '').localeCompare(a.fechaPedido || '')).map(ped => {
         const fechaPedido = new Date(ped.fechaPedido).toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
         const totalItems = ped.items.reduce((s, it) => s + it.cantidad, 0);
-        return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+        const esperando = ped.estado === 'esperando_boleta';
+        const fechaRecib = esperando && ped.fechaRecibido ? new Date(ped.fechaRecibido).toLocaleDateString('es-AR', { day:'numeric', month:'long' }) : null;
+        const badge = esperando
+          ? `<span style="background:#FEF3C7;color:#92400E;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">⏳ ESPERANDO BOLETA</span>`
+          : `<span style="background:var(--accent-light);color:var(--accent);font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">📤 PEDIDO ENVIADO</span>`;
+        return `<div style="background:var(--surface);border:1px solid ${esperando ? '#FCD34D' : 'var(--border)'};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
             <div>
-              <div style="font-weight:700;font-size:14px">Pedido del ${fechaPedido}</div>
-              <div style="font-size:12px;color:var(--ink2);margin-top:2px">${ped.items.length} insumos · ${totalItems} unidades totales</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+                <span style="font-weight:700;font-size:14px">Pedido del ${fechaPedido}</span>
+                ${badge}
+              </div>
+              <div style="font-size:12px;color:var(--ink2)">${ped.items.length} insumos · ${totalItems} unidades totales${fechaRecib ? ` · Recibido el ${fechaRecib}` : ''}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:11px;color:var(--ink2)">Total estimado</div>
@@ -2466,7 +2474,9 @@ function renderProveedorFacturas(provId, subtab) {
           </table>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
-            <button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>
+            ${esperando
+              ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
+              : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}
           </div>
         </div>`;
       }).join('');
@@ -2499,21 +2509,24 @@ function cancelarPedidoPendiente(pedidoId) {
 }
 
 function marcarPedidoRecibido(pedidoId) {
-  if (!confirm('¿Marcar este pedido como recibido?')) return;
+  if (!confirm('¿Confirmás que llegó la mercadería? El pedido pasa a "Esperando boleta" hasta que cargues la factura.')) return;
   const ped = pedidosPendientes.find(p => p.id === pedidoId);
   if (!ped) return;
-  const provId = ped.proveedorId;
-  pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
+  ped.estado = 'esperando_boleta';
+  ped.fechaRecibido = new Date().toISOString();
   persist();
-  renderProveedorFacturas(provId, 'pend');
-  toast('Pedido marcado como recibido', 'success');
+  renderProveedorFacturas(ped.proveedorId, 'pend');
+  toast('Mercadería marcada como recibida. Cargá la boleta para cerrar el pedido.', 'success');
 }
 
 function _autoLinkPedidoPendiente(provId, factura) {
-  const pend = pedidosPendientes.filter(p => p.proveedorId === provId && p.estado === 'pendiente');
+  const pend = pedidosPendientes.filter(p => p.proveedorId === provId && (p.estado === 'pendiente' || p.estado === 'esperando_boleta'));
   if (!pend.length || !factura) return;
-  // Tomar el más reciente
-  pend.sort((a,b) => (b.fechaPedido || '').localeCompare(a.fechaPedido || ''));
+  // Priorizar "esperando_boleta" (mercadería ya en mano), luego por fecha de pedido más reciente
+  pend.sort((a,b) => {
+    if (a.estado !== b.estado) return a.estado === 'esperando_boleta' ? -1 : 1;
+    return (b.fechaPedido || '').localeCompare(a.fechaPedido || '');
+  });
   const ped = pend[0];
 
   // Insumos en la factura
