@@ -620,13 +620,36 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- PROVEEDORES -->
 <div id="viewProveedores" class="view">
-  <div id="provListTop" style="margin-bottom:20px">
-    <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="width:100%;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
+  <div id="provListTop" style="margin-bottom:20px;display:flex;gap:10px;align-items:center">
+    <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="flex:1;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
+    <button class="btn btn-primary" style="padding:14px 20px;white-space:nowrap" onclick="openNuevoProvModal()">+ Nuevo proveedor</button>
   </div>
   <div id="proveedoresScreen"></div>
   <div id="provListBottom" class="toolbar" style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border)">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
     <button class="btn btn-outline" onclick="detectarDuplicadosProveedores()">Unificar duplicados</button>
+  </div>
+
+  <!-- MODAL: Nuevo proveedor -->
+  <div id="nuevoProvModal" class="overlay">
+    <div class="modal" style="max-width:460px">
+      <h2>Nuevo proveedor</h2>
+      <p class="modal-sub">Va a aparecer en la pestaña Pedidos como un card vacío. A medida que cargues boletas suyas, sus insumos van apareciendo automáticamente.</p>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Nombre *</label>
+          <input id="nuevoProvNombre" type="text" placeholder="Ej: La Serenísima" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Teléfono</label>
+          <input id="nuevoProvTel" type="tel" placeholder="11 1234 5678" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:18px">
+        <button class="btn btn-outline" onclick="closeNuevoProvModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarNuevoProv()">Crear proveedor</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2305,6 +2328,40 @@ function renderProveedores() {
         </div>`;
       }).join('')}
     </div>`;
+}
+
+function openNuevoProvModal() {
+  document.getElementById('nuevoProvNombre').value = '';
+  document.getElementById('nuevoProvTel').value = '';
+  document.getElementById('nuevoProvModal').classList.add('open');
+  setTimeout(() => document.getElementById('nuevoProvNombre').focus(), 50);
+}
+
+function closeNuevoProvModal() {
+  document.getElementById('nuevoProvModal').classList.remove('open');
+}
+
+function guardarNuevoProv() {
+  const nombre = document.getElementById('nuevoProvNombre').value.trim();
+  const tel    = document.getElementById('nuevoProvTel').value.trim();
+  if (!nombre) { toast('Ingresá el nombre', 'error'); return; }
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const dup = proveedores.find(p => norm(p.nombre) === norm(nombre));
+  if (dup) { toast(`Ya existe un proveedor llamado "${dup.nombre}"`, 'error'); return; }
+  proveedores.push({
+    id: crypto.randomUUID(),
+    nombre,
+    telefono: tel,
+    email: '',
+    notas: '',
+    pago: 'transferencia',
+    items: []
+  });
+  persist();
+  closeNuevoProvModal();
+  renderProveedores();
+  renderPedidos();
+  toast(`Proveedor "${nombre}" creado`, 'success');
 }
 
 function renombrarProveedor(id) {
