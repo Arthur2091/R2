@@ -2521,6 +2521,7 @@ function marcarPedidoRecibido(pedidoId) {
 
 function _autoLinkPedidoPendiente(provId, factura) {
   const pend = pedidosPendientes.filter(p => p.proveedorId === provId && (p.estado === 'pendiente' || p.estado === 'esperando_boleta'));
+  console.log('[autoLink] provId:', provId, 'pendientes:', pend.length);
   if (!pend.length || !factura) return;
   // Priorizar "esperando_boleta" (mercadería ya en mano), luego por fecha de pedido más reciente
   pend.sort((a,b) => {
@@ -2529,8 +2530,30 @@ function _autoLinkPedidoPendiente(provId, factura) {
   });
   const ped = pend[0];
 
-  // Insumos en la factura
-  const facturaInsIds = new Set(factura.items.map(it => it.insumoId).filter(Boolean));
+  // Para items de la factura sin insumoId, intentar resolverlo por nombre contra prov.items
+  const prov = proveedores.find(p => p.id === provId);
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const resolveInsumoIdPorNombre = (nombre) => {
+    if (!nombre) return null;
+    const n = norm(nombre);
+    // 1. Match exacto en prov.items
+    const ex = (prov?.items || []).find(it => it.insumoId && norm(it.nombreBoleta) === n);
+    if (ex) return ex.insumoId;
+    // 2. Match contains en prov.items
+    const ct = (prov?.items || []).find(it => it.insumoId && (norm(it.nombreBoleta).includes(n) || n.includes(norm(it.nombreBoleta))));
+    if (ct) return ct.insumoId;
+    // 3. Match exacto en insumos[]
+    const insEx = insumos.find(i => norm(i.nombre) === n);
+    if (insEx) return insEx.id;
+    return null;
+  };
+
+  // Insumos en la factura (con resolución por nombre)
+  const facturaInsIds = new Set();
+  factura.items.forEach(it => {
+    const id = it.insumoId || resolveInsumoIdPorNombre(it.nombre);
+    if (id) facturaInsIds.add(id);
+  });
   const pedidoInsIds  = new Set(ped.items.map(it => it.insumoId));
 
   // Matcheados: en ambos
@@ -2540,8 +2563,10 @@ function _autoLinkPedidoPendiente(provId, factura) {
   // Faltantes: en pedido pero no en factura
   const faltantes = [...pedidoInsIds].filter(id => !facturaInsIds.has(id));
 
-  if (!matched.length) return; // Sin coincidencias, no proponemos nada
+  console.log('[autoLink] facturaInsIds:', facturaInsIds.size, 'pedidoInsIds:', pedidoInsIds.size, 'matched:', matched.length, 'extras:', extras.length, 'faltantes:', faltantes.length);
 
+  // Siempre mostrar el modal si hay un pedido pendiente del proveedor — aunque matches sea 0
+  // así el usuario puede decidir manualmente si vincular
   _autoLinkData = { provId, pedidoId: ped.id, facturaId: factura.id, matched, extras, faltantes };
   _mostrarAutoLinkModal();
 }
@@ -2577,7 +2602,9 @@ function _mostrarAutoLinkModal() {
   const html = `<div class="overlay open" id="autoLinkOverlay" style="display:flex">
     <div class="modal" style="max-width:720px">
       <h2>Pedido pendiente detectado</h2>
-      <p class="modal-sub">Hay un pedido del <strong>${fechaPed}</strong> con ${matched.length} ítem${matched.length === 1 ? '' : 's'} que coincide${matched.length === 1 ? '' : 'n'} con esta boleta.</p>
+      <p class="modal-sub">${matched.length === 0
+        ? `Hay un pedido del <strong>${fechaPed}</strong> de este proveedor, pero <strong>no detectamos ítems en común</strong> con la boleta. Esto suele pasar cuando los ítems de la boleta aún no están vinculados a tus insumos internos. Podés vincular manualmente igual.`
+        : `Hay un pedido del <strong>${fechaPed}</strong> con ${matched.length} ítem${matched.length === 1 ? '' : 's'} que coincide${matched.length === 1 ? '' : 'n'} con esta boleta.`}</p>
 
       ${cambiosPrecio.length ? `<div style="margin:14px 0;padding:12px;background:#FEF3C7;border-radius:8px">
         <div style="font-weight:700;font-size:13px;color:#92400E;margin-bottom:6px">⚠ Cambios de precio detectados</div>
