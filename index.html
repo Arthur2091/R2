@@ -2813,14 +2813,124 @@ function cerrarPedidoVinculado(pedidoId) {
 }
 
 function marcarPedidoRecibido(pedidoId) {
-  if (!confirm('¿Confirmás que llegó la mercadería? El pedido pasa a "Esperando boleta" hasta que cargues la factura.')) return;
   const ped = pedidosPendientes.find(p => p.id === pedidoId);
   if (!ped) return;
-  ped.estado = 'esperando_boleta';
-  ped.fechaRecibido = new Date().toISOString();
+  const prov = proveedores.find(p => p.id === ped.proveedorId);
+  if (!prov) return;
+
+  const html = `<div class="overlay open" id="recibidoOptModal" style="display:flex">
+    <div class="modal" style="max-width:520px">
+      <h2>Confirmar recepción del pedido</h2>
+      <p class="modal-sub">¿<strong>${prov.nombre}</strong> te envía factura por este pedido?</p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+        <button class="btn btn-outline" style="text-align:left;padding:14px 16px" onclick="_resolverRecepcion('${pedidoId}','esperar')">
+          <div style="font-weight:700;font-size:14px;color:var(--ink)">📄 Sí, espero la factura</div>
+          <div style="font-size:12px;color:var(--ink2);margin-top:2px">El pedido pasa a "Esperando boleta" hasta que la cargues.</div>
+        </button>
+        <button class="btn btn-outline" style="text-align:left;padding:14px 16px" onclick="_resolverRecepcion('${pedidoId}','manual')">
+          <div style="font-weight:700;font-size:14px;color:var(--ink)">✍ No envía factura — registrar manual</div>
+          <div style="font-size:12px;color:var(--ink2);margin-top:2px">Creo una factura interna con los ítems del pedido y un N° correlativo (manual-NNN). El pedido se cierra.</div>
+        </button>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="document.getElementById('recibidoOptModal').remove()">Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function _resolverRecepcion(pedidoId, modo) {
+  const overlay = document.getElementById('recibidoOptModal');
+  if (overlay) overlay.remove();
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+
+  if (modo === 'esperar') {
+    ped.estado = 'esperando_boleta';
+    ped.fechaRecibido = new Date().toISOString();
+    persist();
+    renderProveedorFacturas(ped.proveedorId, 'pend');
+    toast('Mercadería recibida. Cargá la boleta para cerrar el pedido.', 'success');
+    return;
+  }
+
+  // modo === 'manual': crear factura interna con correlativo por proveedor
+  const provId = ped.proveedorId;
+  const prov = proveedores.find(p => p.id === provId);
+  if (!prov) return;
+
+  // Calcular siguiente correlativo manual-NNN para este proveedor
+  const previos = facturas.filter(f => f.proveedorId === provId && /^manual-\d+$/.test(f.nroBoleta || ''));
+  const ultimo = previos.reduce((max, f) => {
+    const n = parseInt((f.nroBoleta || '').replace('manual-',''), 10);
+    return isFinite(n) && n > max ? n : max;
+  }, 0);
+  const nroBoleta = `manual-${String(ultimo + 1).padStart(3,'0')}`;
+  const fecha = ped.fechaRecibido?.slice(0,10) || new Date().toISOString().slice(0,10);
+
+  // Construir items de la factura desde el pedido
+  const itemsFactura = ped.items.map(it => {
+    const ins = insumos.find(i => i.id === it.insumoId);
+    const precioUnit = it.precioRefAlPedir || ins?.precioConIVA || 0;
+    return {
+      nombre: ins?.nombre || '?',
+      cantidad: it.cantidad,
+      unidad: ins?.unidad || null,
+      peso_por_unidad: ins?.presUnitWeight ?? null,
+      unidad_peso: ins?.presUnitWeightUnit ?? null,
+      precio_unitario: precioUnit,
+      precio_total: precioUnit * it.cantidad,
+      iva: null,
+      insumoId: it.insumoId
+    };
+  });
+  const importeTotal = itemsFactura.reduce((s, it) => s + (it.precio_total || 0), 0);
+
+  const factura = {
+    id: crypto.randomUUID(),
+    proveedorId: provId,
+    nroBoleta,
+    fecha,
+    hora: null,
+    importeTotal,
+    items: itemsFactura,
+    creadaEn: new Date().toISOString(),
+    fuente: 'manual'
+  };
+  facturas.push(factura);
+
+  // Registrar precios[] para cada item
+  itemsFactura.forEach(it => {
+    if (!it.insumoId || it.precio_unitario == null) return;
+    precios.push({
+      id: crypto.randomUUID(),
+      insumoId: it.insumoId,
+      proveedorId: provId,
+      fecha,
+      nroBoleta,
+      nombreBoleta: it.nombre,
+      cantidad: it.cantidad,
+      unidad: it.unidad,
+      pesoPorUnidad: it.peso_por_unidad ?? null,
+      unidadPeso: it.unidad_peso ?? null,
+      precioUnitario: Number(it.precio_unitario),
+      precioTotal: it.precio_total != null ? Number(it.precio_total) : null,
+      fuente: 'manual'
+    });
+  });
+
+  // Vincular el pedido a esta factura y cerrarlo
+  ped.estado = 'vinculado';
+  ped.facturaId = factura.id;
+  ped.nroBoleta = nroBoleta;
+  ped.fechaBoleta = fecha;
+  ped.fechaVinculado = new Date().toISOString();
+  ped.fechaRecibido = ped.fechaRecibido || new Date().toISOString();
+
   persist();
-  renderProveedorFacturas(ped.proveedorId, 'pend');
-  toast('Mercadería marcada como recibida. Cargá la boleta para cerrar el pedido.', 'success');
+  renderProveedorFacturas(provId, 'pend');
+  toast(`Factura interna ${nroBoleta} creada por ${_fmtMoney(importeTotal)}. Dale OK para cerrar el pedido.`, 'success');
 }
 
 function _autoLinkPedidoPendiente(provId, factura) {
