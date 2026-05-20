@@ -676,7 +676,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div>
       <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Proveedor detectado</div>
       <div style="display:flex;align-items:center;gap:6px">
-        <input id="boletaDetectedProv" type="text" style="font-weight:600;font-size:15px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none;min-width:200px" oninput="_bProvName=this.value" list="boletaProvDatalist">
+        <input id="boletaDetectedProv" type="text" style="font-weight:600;font-size:15px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);outline:none;min-width:200px" oninput="_bProvName=this.value; _bCheckPedidoPendiente();" list="boletaProvDatalist">
         <datalist id="boletaProvDatalist"></datalist>
       </div>
       <div id="boletaDetectedStatus" style="font-size:12px;margin-top:2px"></div>
@@ -699,6 +699,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div>
       <div style="font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Total boleta</div>
       <div id="boletaImporteTotal" style="font-size:14px;font-weight:700;color:var(--accent);padding:6px 0">—</div>
+    </div>
+  </div>
+
+  <div id="boletaPedidoPendienteBanner" style="display:none;margin-bottom:16px;padding:14px 16px;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:var(--radius);align-items:center;gap:12px">
+    <span style="font-size:22px">⚠️</span>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#92400E" id="boletaPedidoBannerTitle">Hay un pedido pendiente de este proveedor</div>
+      <div style="font-size:12px;color:#92400E;margin-top:2px" id="boletaPedidoBannerSub"></div>
     </div>
   </div>
 
@@ -3231,6 +3239,33 @@ function _bRefreshProvDatalist() {
   dl.innerHTML = proveedores.map(p => `<option value="${p.nombre.replace(/"/g,'&quot;')}">`).join('');
 }
 
+function _bCheckPedidoPendiente() {
+  const banner = document.getElementById('boletaPedidoPendienteBanner');
+  if (!banner) return;
+  const nombre = (_bProvName || '').trim();
+  if (!nombre) { banner.style.display = 'none'; return; }
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const n = norm(nombre);
+  // Resolver proveedor por similitud de nombre (misma lógica que confirmarBoleta)
+  const prov = proveedores.find(p => norm(p.nombre).includes(n) || n.includes(norm(p.nombre)));
+  if (!prov) { banner.style.display = 'none'; return; }
+  const pendientes = pedidosPendientes.filter(p => p.proveedorId === prov.id && (p.estado === 'pendiente' || p.estado === 'esperando_boleta'));
+  if (!pendientes.length) { banner.style.display = 'none'; return; }
+
+  const conMercaderia = pendientes.filter(p => p.estado === 'esperando_boleta').length;
+  const sinMercaderia = pendientes.length - conMercaderia;
+  const totalEstimado = pendientes.reduce((s, p) => s + (p.totalEstimado || 0), 0);
+
+  document.getElementById('boletaPedidoBannerTitle').textContent = `⚠️ ${prov.nombre} tiene ${pendientes.length} pedido${pendientes.length === 1 ? '' : 's'} sin ingresar`;
+  const partes = [];
+  if (conMercaderia) partes.push(`${conMercaderia} esperando boleta`);
+  if (sinMercaderia) partes.push(`${sinMercaderia} pedido${sinMercaderia === 1 ? '' : 's'} enviado${sinMercaderia === 1 ? '' : 's'} por WhatsApp`);
+  partes.push(`Total estimado: ${_fmtMoney(totalEstimado)}`);
+  partes.push(`Al confirmar la boleta vas a poder vincularla con el pedido.`);
+  document.getElementById('boletaPedidoBannerSub').textContent = partes.join(' · ');
+  banner.style.display = 'flex';
+}
+
 function _saltearBoleta() {
   document.getElementById('boletaNewProvBanner').style.display = 'none';
   resetBoleta();
@@ -3358,6 +3393,7 @@ async function extraerBoleta() {
     _bRefreshProvDatalist();
     document.getElementById('btnConfirmar').style.display     = 'inline-flex';
     document.getElementById('btnDescartar').style.display     = 'inline-flex';
+    _bCheckPedidoPendiente();
     toast(`${_bItems.length} ítems extraídos`, 'success');
   } catch(err) {
     toast('Error: ' + err.message, 'error');
@@ -3552,6 +3588,8 @@ function resetBoleta() {
   document.getElementById('boletaHora').textContent         = '—';
   document.getElementById('boletaImporteTotal').textContent = '—';
   document.getElementById('boletaDetected').style.display   = 'none';
+  const banner = document.getElementById('boletaPedidoPendienteBanner');
+  if (banner) banner.style.display = 'none';
   document.getElementById('boletaPhotoWrap').innerHTML      = '<div class="no-photo">📷<br>Subí la foto de la boleta</div>';
   document.getElementById('boletaItemsWrap').innerHTML      = '<div style="color:var(--ink3);font-size:13px;padding:20px 0">Los ítems extraídos aparecen acá.</div>';
   document.getElementById('btnExtraer').disabled            = true;
