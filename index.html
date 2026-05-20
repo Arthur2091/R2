@@ -1246,17 +1246,18 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
 
     <div class="field" id="fPresUnitWeightWrap" style="display:none">
-      <label>Peso / volumen por unidad <span style="font-weight:400;color:var(--ink3)">(si la unidad es bolsa, bulto, caja, etc.)</span></label>
+      <label>Contenido por unidad <span style="font-weight:400;color:var(--ink3)">(si la unidad es bolsa, bulto, caja, cajón…)</span></label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="fPresUnitWeight" type="number" step="any" min="0" placeholder="ej. 5" style="width:90px" oninput="_updatePresEquiv()">
+        <input id="fPresUnitWeight" type="number" step="any" min="0" placeholder="ej. 360" style="width:90px" oninput="_updatePresEquiv()">
         <select id="fPresUnitWeightUnit" onchange="_updatePresEquiv()" style="width:80px">
+          <option value="un">un</option>
           <option value="g">g</option>
           <option value="kg">kg</option>
           <option value="ml">ml</option>
           <option value="L">L</option>
         </select>
       </div>
-      <span style="font-size:11px;color:var(--ink3)">Cuánto pesa o mide cada unidad (ej. 5g por sachet → así la receta puede usarlo en gramos)</span>
+      <span style="font-size:11px;color:var(--ink3)">Cuánto trae cada unidad (ej. 1 cajón = 360 un, 1 bolsa = 25 kg, 1 sachet = 5g)</span>
     </div>
 
     <div class="field">
@@ -3699,8 +3700,8 @@ Respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con est
       "nombre": "nombre del producto exactamente como aparece en la boleta",
       "cantidad": número de unidades facturadas o null,
       "unidad": "unidad de compra: kg, g, L, ml, un, caja, etc.",
-      "peso_por_unidad": número si cada unidad tiene peso propio (ej: manteca 25kg → 25), si no null,
-      "unidad_peso": "'kg', 'g', 'L' o 'ml'. null si peso_por_unidad es null.",
+      "peso_por_unidad": número si cada unidad de compra tiene un contenido propio. Ejemplos: bolsa de 25kg → 25; cajón de 360 huevos → 360; pack de 6 latas → 6. Null si no aplica.
+      "unidad_peso": "'kg', 'g', 'L', 'ml' o 'un' (cuando el contenido es por unidades/conteo, ej: 360 huevos en un cajón → 'un'). Null si peso_por_unidad es null.",
       "iva": tasa de IVA como número o null,
       "precio_unitario": número sin símbolo o null,
       "precio_total": número sin símbolo o null
@@ -3718,6 +3719,15 @@ CANTIDADES (campo "cantidad" y "peso_por_unidad"):
 - Si la boleta dice "1,00" o "1.00" o "1" en cantidad → es 1 (uno).
 - Si la boleta dice "25" o "25,00" en cantidad o peso → es 25.
 - NO interpretes una cantidad chica como miles. "1" siempre es 1, no 1000.
+
+UNIDAD DE COMPRA vs CONTENIDO (MUY IMPORTANTE):
+- Cuando un producto se vende en pack/bolsa/caja/cajón con N unidades adentro, PREFERÍ siempre la unidad de compra (cajón, bolsa, pack) en "unidad" — NO la unidad individual del contenido.
+- Ejemplos correctos:
+  - "1 cajón de huevos x 360 un — $50.000" → cantidad: 1, unidad: "cajón", peso_por_unidad: 360, unidad_peso: "un", precio_unitario: 50000, precio_total: 50000
+  - "1 bolsa harina 25kg — $30.000" → cantidad: 1, unidad: "bolsa", peso_por_unidad: 25, unidad_peso: "kg", precio_unitario: 30000
+  - "2 packs gaseosa x 6 latas — $9.600" → cantidad: 2, unidad: "pack", peso_por_unidad: 6, unidad_peso: "un", precio_unitario: 4800, precio_total: 9600
+- Aunque la boleta diga "360 huevos x $138,88" — INTERPRETÁ que es 1 cajón de 360, NO 360 unidades sueltas.
+- Heurística: si la cantidad supera 50 y la unidad es genérica ("un", "u", sin unidad), probablemente sea el contenido de UN PACK. Convertí a 1 pack/cajón/bolsa con peso_por_unidad = la cantidad original, y precio_unitario = precio_total.
 
 Si no podés leer algún campo con certeza, ponés null.`;
 
@@ -6831,7 +6841,49 @@ function _ultimoPrecio(provId, insumoId) {
   const lista = precios.filter(p => p.proveedorId === provId && p.insumoId === insumoId && p.precioUnitario != null);
   if (!lista.length) return null;
   lista.sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''));
-  return { precio: Number(lista[0].precioUnitario), fecha: lista[0].fecha, nombreBoleta: lista[0].nombreBoleta };
+  const last = lista[0];
+  const ins = insumos.find(i => i.id === insumoId);
+
+  // Convertir el precio guardado al "precio por presentación" del insumo si está definida
+  let precioPorPres = Number(last.precioUnitario);
+  let unidadDisplay = last.unidad || ins?.unidad || 'u';
+
+  if (ins?.presUnit && ins?.presUnitWeight && ins?.presUnitWeightUnit) {
+    const contenidoPorPres = ins.presUnitWeight;  // ej: 360
+    const unidadContenido  = ins.presUnitWeightUnit;  // ej: 'un'
+    const unidadPres       = ins.presUnit;  // ej: 'cajón'
+    const norm = s => (s || '').toLowerCase();
+
+    // Caso A: el precio guardado YA es por presentación (cantidad facturada = 1 y unidad = presUnit)
+    if (last.cantidad == 1 && norm(last.unidad) === norm(unidadPres)) {
+      precioPorPres = Number(last.precioUnitario);
+    }
+    // Caso B: el precio guardado es por unidad de contenido (unidad coincide con presUnitWeightUnit, ej: 'un')
+    else if (norm(last.unidad) === norm(unidadContenido) || (last.pesoPorUnidad && last.unidadPeso === unidadContenido)) {
+      // Si peso_por_unidad está y cantidad = 1 → precio_unitario ya es por pack
+      if (last.pesoPorUnidad && last.cantidad == 1) {
+        precioPorPres = Number(last.precioUnitario);
+      } else {
+        // Convertir: precio por unidad-de-contenido × contenido-por-presentación
+        precioPorPres = Number(last.precioUnitario) * contenidoPorPres;
+      }
+    }
+    // Caso C: precio_total disponible y la cantidad facturada matchea el contenido por presentación
+    else if (last.precioTotal && last.cantidad && Math.abs(last.cantidad - contenidoPorPres) / contenidoPorPres < 0.1) {
+      precioPorPres = Number(last.precioTotal);
+    }
+    unidadDisplay = unidadPres;
+  }
+
+  return {
+    precio: precioPorPres,
+    precioRaw: Number(last.precioUnitario),
+    fecha: last.fecha,
+    nombreBoleta: last.nombreBoleta,
+    unidad: unidadDisplay,
+    cantidadFacturada: last.cantidad,
+    unidadFacturada: last.unidad
+  };
 }
 
 function _insumosDelProv(provId) {
@@ -6892,7 +6944,12 @@ function renderPedidos() {
           if (!ins) return '';
           const qty = qtyMap[iid] || 0;
           const up = _ultimoPrecio(prov.id, iid);
-          const priceTxt = up ? `Último: ${_fmtMoney(up.precio)}` : '<span style="color:var(--ink3)">Sin boletas previas</span>';
+          const presLabel = ins.presUnit && ins.presUnitWeight && ins.presUnitWeightUnit
+            ? `${ins.presUnit} × ${ins.presUnitWeight} ${ins.presUnitWeightUnit}`
+            : (ins.unidad || up?.unidad || '');
+          const priceTxt = up
+            ? `<strong>${_fmtMoney(up.precio)}</strong> / ${up.unidad}${presLabel && presLabel !== up.unidad ? ` <span style="color:var(--ink3)">· ${presLabel}</span>` : ''}`
+            : `<span style="color:var(--ink3)">Sin boletas previas${presLabel ? ' · ' + presLabel : ''}</span>`;
           return `<div class="ped-row ${qty > 0 ? 'has-qty' : ''}" data-iid="${iid}">
             <div class="ped-row-info">
               <div class="ped-row-name">${ins.nombre}</div>
