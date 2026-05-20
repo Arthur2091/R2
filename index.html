@@ -6894,32 +6894,43 @@ function _ultimoPrecio(provId, insumoId) {
   // Convertir el precio guardado al "precio por presentación" del insumo si está definida
   let precioPorPres = Number(last.precioUnitario);
   let unidadDisplay = last.unidad || ins?.unidad || 'u';
+  let metodoConversion = 'directo';
 
   if (ins?.presUnit && ins?.presUnitWeight && ins?.presUnitWeightUnit) {
     const contenidoPorPres = ins.presUnitWeight;  // ej: 360
-    const unidadContenido  = ins.presUnitWeightUnit;  // ej: 'un'
-    const unidadPres       = ins.presUnit;  // ej: 'cajón'
-    const norm = s => (s || '').toLowerCase();
+    const unidadPres       = ins.presUnit;        // ej: 'cajón'
+    const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+    const cantidad = Number(last.cantidad);
+    const precioUnit = Number(last.precioUnitario);
+    const precioTot = last.precioTotal ? Number(last.precioTotal) : null;
 
-    // Caso A: el precio guardado YA es por presentación (cantidad facturada = 1 y unidad = presUnit)
-    if (last.cantidad == 1 && norm(last.unidad) === norm(unidadPres)) {
-      precioPorPres = Number(last.precioUnitario);
+    // Caso A: el precio guardado YA es por presentación (cantidad = N enteras y unidad ≈ presUnit)
+    if (cantidad >= 1 && norm(last.unidad) === norm(unidadPres)) {
+      precioPorPres = precioUnit;
+      metodoConversion = 'A: cantidad×presUnit, precio_unit = precio por presentación';
     }
-    // Caso B: el precio guardado es por unidad de contenido (unidad coincide con presUnitWeightUnit, ej: 'un')
-    else if (norm(last.unidad) === norm(unidadContenido) || (last.pesoPorUnidad && last.unidadPeso === unidadContenido)) {
-      // Si peso_por_unidad está y cantidad = 1 → precio_unitario ya es por pack
-      if (last.pesoPorUnidad && last.cantidad == 1) {
-        precioPorPres = Number(last.precioUnitario);
-      } else {
-        // Convertir: precio por unidad-de-contenido × contenido-por-presentación
-        precioPorPres = Number(last.precioUnitario) * contenidoPorPres;
+    // Caso B: hay peso_por_unidad almacenado y cantidad = 1 → precio_unit es por pack
+    else if (last.pesoPorUnidad && cantidad == 1) {
+      precioPorPres = precioUnit;
+      metodoConversion = 'B: pesoPorUnidad presente con cantidad=1 → ya es por pack';
+    }
+    // Caso C: heurística — si cantidad es ≈ múltiplo entero del contenido por presentación,
+    // entonces el precio guardado es por unidad-de-contenido (huevo) y hay que multiplicar
+    else if (cantidad > 0 && contenidoPorPres > 0) {
+      const k = cantidad / contenidoPorPres;
+      const kRound = Math.round(k);
+      if (k >= 0.5 && kRound >= 1 && Math.abs(k - kRound) / kRound < 0.15) {
+        precioPorPres = precioUnit * contenidoPorPres;
+        metodoConversion = `C: cantidad ${cantidad} ≈ ${kRound}×${contenidoPorPres}, precio×${contenidoPorPres}`;
+      }
+      // Caso D: precio_total disponible y cantidad matchea contenido (un cajón vendido como 360 huevos)
+      else if (precioTot && Math.abs(cantidad - contenidoPorPres) / contenidoPorPres < 0.15) {
+        precioPorPres = precioTot;
+        metodoConversion = 'D: precio_total / 1 cajón';
       }
     }
-    // Caso C: precio_total disponible y la cantidad facturada matchea el contenido por presentación
-    else if (last.precioTotal && last.cantidad && Math.abs(last.cantidad - contenidoPorPres) / contenidoPorPres < 0.1) {
-      precioPorPres = Number(last.precioTotal);
-    }
     unidadDisplay = unidadPres;
+    console.log('[ultimoPrecio]', ins.nombre, '→', metodoConversion, '| raw:', precioUnit, '→ pres:', precioPorPres);
   }
 
   return {
@@ -6929,7 +6940,8 @@ function _ultimoPrecio(provId, insumoId) {
     nombreBoleta: last.nombreBoleta,
     unidad: unidadDisplay,
     cantidadFacturada: last.cantidad,
-    unidadFacturada: last.unidad
+    unidadFacturada: last.unidad,
+    metodoConversion
   };
 }
 
