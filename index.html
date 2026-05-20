@@ -64,6 +64,11 @@ nav { display: flex; gap: 2px; }
 .nav-btn:hover { background: var(--surface2); color: var(--ink); }
 .nav-btn.active { background: var(--accent-light); color: var(--accent); }
 
+/* DEPÓSITO SUBTABS */
+.dep-subtab { background:none; border:none; padding:10px 14px; color:var(--ink2); font:600 13px var(--font); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.dep-subtab:hover { color:var(--ink); }
+.dep-subtab-active { color:var(--accent); border-bottom-color:var(--accent); }
+
 /* VIEWS */
 .view { display: none; padding: 24px; max-width: 1280px; margin: 0 auto; }
 .view.active { display: block; }
@@ -554,6 +559,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
     <button class="nav-btn" data-view="viewBoletas">Cargar Boletas</button>
+    <button class="nav-btn" data-view="viewDeposito">Depósito <span id="depBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:700"></span></button>
+    <button class="nav-btn" data-view="viewProduccion">Producción</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
 
@@ -1006,6 +1013,113 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div id="productosScreen"></div>
 </div>
 
+<!-- MODAL: Importar Recetas V2 — paso 1: elegir hoja(s) -->
+<div id="modalImpHoja" class="overlay">
+  <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
+    <h2 style="flex-shrink:0">Importar recetas — elegí qué hojas</h2>
+    <p class="modal-sub" style="flex-shrink:0">El Excel tiene muchas hojas. Tildá las que querés procesar ahora.</p>
+    <div id="impHojaLista" style="overflow-y:auto;flex:1;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modalImpHoja')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_impAceptarHojas()">Procesar hojas seleccionadas</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar Recetas V2 — paso 2: revisar recetas + tipo -->
+<div id="modalImpRevisor" class="overlay">
+  <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
+    <h2 style="flex-shrink:0">Revisar recetas detectadas</h2>
+    <p class="modal-sub" style="flex-shrink:0">Las marcadas en <span style="color:var(--accent);font-weight:600">verde</span> matchean con productos vendidos. Elegí el tipo de cada una y desmarcá las que no quieras importar.</p>
+    <div id="impRevisorScreen" style="overflow-y:auto;flex:1;margin-top:10px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modalImpRevisor')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_impConfirmarImport()">Importar seleccionadas</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Producción -->
+<div id="viewProduccion" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <button class="dep-subtab dep-subtab-active" data-prod-sub="stock" onclick="_prodSwitchSub('stock')">Stock de barra</button>
+      <button class="dep-subtab" data-prod-sub="movs" onclick="_prodSwitchSub('movs')">Historial</button>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="_prodAbrirRegistro()">+ Registrar producción</button>
+  </div>
+  <div id="produccionScreen"></div>
+</div>
+
+<!-- MODAL: Registrar producción -->
+<div id="modalProdRegistro" class="overlay">
+  <div class="modal" style="max-width:480px">
+    <h2>Registrar producción</h2>
+    <p class="modal-sub">Cargá lo que se produjo hoy en fábrica/barra. Suma al stock de barra.</p>
+    <div class="field" style="margin-top:10px">
+      <label>Producto</label>
+      <input id="prodRegNombre" list="prodRegLista" type="text" placeholder="ej. Tortilla de wrap" autocomplete="off">
+      <datalist id="prodRegLista"></datalist>
+      <span id="prodRegHint" style="font-size:11px;color:var(--ink3);display:block;margin-top:4px"></span>
+    </div>
+    <div class="field">
+      <label>Cantidad producida</label>
+      <input id="prodRegCantidad" type="number" min="1" step="1" value="1" style="width:100%">
+    </div>
+    <div class="field">
+      <label>Fecha</label>
+      <input id="prodRegFecha" type="date" style="width:100%">
+    </div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modalProdRegistro')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_prodConfirmarRegistro()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- VIEW: Depósito -->
+<div id="viewDeposito" class="view">
+  <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap">
+    <button class="dep-subtab dep-subtab-active" data-dep-sub="stock" onclick="_depSwitchSub('stock')">Stock</button>
+    <button class="dep-subtab" data-dep-sub="pendientes" onclick="_depSwitchSub('pendientes')">Pendientes <span id="depSubBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px"></span></button>
+    <button class="dep-subtab" data-dep-sub="movs" onclick="_depSwitchSub('movs')">Movimientos</button>
+  </div>
+  <div id="depositoScreen"></div>
+</div>
+
+<!-- MODAL: Confirmar ingreso a depósito -->
+<div id="modalDepIngreso" class="overlay">
+  <div class="modal" style="max-width:560px">
+    <h2>Ingreso a depósito</h2>
+    <p class="modal-sub">Confirmá cuántas presentaciones llegaron de cada insumo. Lo que dejes en 0 no entra.</p>
+    <div id="depIngresoScreen" style="margin-top:10px;max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modalDepIngreso')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_depConfirmarIngreso()">Confirmar ingreso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Solicitar salida de depósito -->
+<div id="modalDepSalida" class="overlay">
+  <div class="modal" style="max-width:440px">
+    <h2 id="depSalidaTitulo">Sacar del depósito</h2>
+    <p class="modal-sub" id="depSalidaSub"></p>
+    <div class="field" style="margin-top:10px">
+      <label>Cantidad de presentaciones a sacar</label>
+      <input id="depSalidaCantidad" type="number" min="1" step="1" value="1" style="width:100%">
+    </div>
+    <div class="field">
+      <label>Motivo / destino <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <input id="depSalidaMotivo" type="text" placeholder="ej. cocina, barra, abrió bolsa">
+    </div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-outline" onclick="closeModal('modalDepSalida')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_depConfirmarSolicitudSalida()">Solicitar salida</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Importar Excel -->
 <div id="modalImport" class="overlay">
   <div class="modal">
@@ -1033,12 +1147,16 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- RECETAS -->
 <div id="viewRecetas" class="view">
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
+    <button class="dep-subtab dep-subtab-active" data-receta-tipo="venta" onclick="_setRecetaTipo('venta')">🛒 Recetas de venta</button>
+    <button class="dep-subtab" data-receta-tipo="fabricacion" onclick="_setRecetaTipo('fabricacion')">🏭 Recetas de fabricación</button>
+  </div>
   <div class="toolbar">
     <input id="searchRecetas" class="search-input" type="text" placeholder="Buscar receta…" oninput="renderRecetas()">
     <button class="btn btn-outline" onclick="document.getElementById('inputInsumosXls').click()">Importar insumos del Excel</button>
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
-    <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="importarExcelRecetas(this)">
+    <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="_impArrancar(this)">
     <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
     <button id="btnSeleccionarRecetas" class="btn btn-outline" onclick="_toggleModoSeleccion()">Seleccionar</button>
     <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
@@ -1099,6 +1217,13 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <h2 id="erModalTitle" style="flex-shrink:0">Editar receta</h2>
     <div style="overflow-y:auto;flex:1;padding-right:4px">
       <div class="field">
+        <label>Tipo de receta</label>
+        <div style="display:flex;gap:8px">
+          <label style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px"><input type="radio" name="erTipo" value="venta" checked>🛒 Venta <span style="font-size:11px;color:var(--ink3)">(se vende al cliente)</span></label>
+          <label style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px"><input type="radio" name="erTipo" value="fabricacion">🏭 Fabricación <span style="font-size:11px;color:var(--ink3)">(subproducto in-house)</span></label>
+        </div>
+      </div>
+      <div class="field">
         <label>Nombre</label>
         <input id="erNombre" type="text" placeholder="Ej. Cappuccino">
       </div>
@@ -1116,9 +1241,15 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
           <input id="erRinde" type="number" step="1" min="1" placeholder="1">
         </div>
       </div>
-      <div class="field">
-        <label>Precio de venta ($)</label>
-        <input id="erPrecioVenta" type="number" step="0.01" min="0" placeholder="0.00">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="field">
+          <label>Precio de venta ($)</label>
+          <input id="erPrecioVenta" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label>Margen objetivo (%) <span id="erMargenHint" style="font-weight:400;color:var(--ink3);font-size:11px"></span></label>
+          <input id="erMargenObjetivo" type="number" step="1" min="0" max="99" placeholder="">
+        </div>
       </div>
 
       <!-- Ingredientes -->
@@ -1504,6 +1635,14 @@ let facturas          = [];
 let recetas           = [];
 let listasPrecios     = [];
 let pedidosPendientes = [];
+let deposito          = {};   // { [insumoId]: cantidad } — cantidad en presentaciones
+let depositoMovs      = [];   // [{ id, insumoId, tipo, cantidad, estado, fecha, solicitadoPor, aprobadoPor, motivo, origen }]
+let _depSubtab        = 'stock';
+let _depIngresoCtx    = null;
+let _depSalidaCtx     = null;
+let stockBarra        = {};   // { [productoNombre]: cantidad } — productos terminados en barra
+let produccionMovs    = [];   // [{ id, producto, cantidad, fecha, producidoPor }]
+let _prodSubtab       = 'stock';
 let _lpExtraido       = null;
 let _lpProvIdSel      = null;
 let _currentVerRecetaId = null;
@@ -1522,6 +1661,8 @@ function persist() {
     _fbWrite('facturas',      { items: facturas }),
     _fbWrite('listasPrecios',     { items: listasPrecios }),
     _fbWrite('pedidosPendientes', { items: pedidosPendientes }),
+    _fbWrite('deposito',          { stock: deposito, movs: depositoMovs }),
+    _fbWrite('produccion',        { stock: stockBarra, movs: produccionMovs }),
   ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
@@ -1570,6 +1711,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'viewRecetas')    renderRecetas();
     if (btn.dataset.view === 'viewPrecios')    renderPrecios();
     if (btn.dataset.view === 'viewPedidos')    renderPedidos();
+    if (btn.dataset.view === 'viewDeposito')   renderDeposito();
+    if (btn.dataset.view === 'viewProduccion') renderProduccion();
   });
 });
 
@@ -2847,6 +2990,15 @@ function marcarPedidoRecibido(pedidoId) {
 function _resolverRecepcion(pedidoId, modo) {
   const overlay = document.getElementById('recibidoOptModal');
   if (overlay) overlay.remove();
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+
+  // Antes de cerrar el pedido, abrir modal de ingreso a depósito
+  _depAbrirIngreso(pedidoId, modo);
+}
+
+function _resolverRecepcionFinal(pedidoId, modo) {
+  // Se llama después de confirmar ingreso al depósito (o cancelar)
   const ped = pedidosPendientes.find(p => p.id === pedidoId);
   if (!ped) return;
 
@@ -5173,9 +5325,117 @@ function _finalizarImportRecetas() {
 function _cfgMargen()  { return parseFloat(localStorage.getItem('cons_margen_obj') || '0') || 0; }
 function _cfgExtras()  { return parseFloat(localStorage.getItem('cons_costos_extra') || '0') || 0; }
 function _costoConExtras(c) { return c * (1 + _cfgExtras() / 100); }
-function _precioSugerido(costoUnd) {
+
+// Margen objetivo de mercado por rubro (gastronomía Argentina).
+// % de margen bruto = (precio − costo) / precio × 100. Equivale a food cost = 100 − margen.
+// Fuentes: regla de 3x (food cost 33%), ajustada por categoría según costo de insumos y rotación.
+const MARGEN_OBJ_RUBRO = {
+  'Cafetería':             75,   // food cost ~25% (bebidas alto margen)
+  'Jugos y Licuados':      75,
+  'Desayunos y Meriendas': 70,
+  'Pastelería':            70,
+  'Tartas':                70,
+  'Wraps':                 70,
+  'Sandwich':              70,
+  'Ensaladas':             70,
+  'Pastas':                70,
+  'Cocina':                65,   // food cost ~35% (platos calientes con proteína cara)
+  'Menú del Día':          65,
+  'Panadería':             65,
+};
+const MARGEN_OBJ_DEFAULT = 67;   // fallback general (food cost 33%)
+
+function _margenObjPorReceta(r) {
+  // Prioridad: 1) override por receta, 2) global, 3) sugerido de mercado por rubro
+  if (r?.margenObjetivo > 0) return Number(r.margenObjetivo);
+  const global = _cfgMargen();
+  if (global > 0) return global;
+  return MARGEN_OBJ_RUBRO[r?.rubro] || MARGEN_OBJ_DEFAULT;
+}
+
+function _margenObjRubro(rubro) {
+  return MARGEN_OBJ_RUBRO[rubro] || MARGEN_OBJ_DEFAULT;
+}
+
+function _consumoTeoricoReceta(recetaId, unidadesObjetivo, acc, visitados) {
+  // Acumula en `acc` (Map por insumoId o nombre sin vincular) la cantidad teórica
+  // consumida si se producen `unidadesObjetivo` unidades de la receta `recetaId`.
+  // Recorre sub-recetas recursivamente hasta llegar a insumos.
+  acc = acc || new Map();
+  visitados = visitados || new Set();
+  if (visitados.has(recetaId)) return acc; // ciclo
+  visitados.add(recetaId);
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) { visitados.delete(recetaId); return acc; }
+  const rinde = r.rinde || 1;
+  const factor = unidadesObjetivo / rinde; // cuántos "batches" de la receta hay que hacer
+  (r.ingredientes || []).forEach(ing => {
+    const qty = (Number(ing.cantidad) || 0) * factor;
+    if (qty <= 0) return;
+    if (ing.recetaId) {
+      // sub-receta: necesitamos producir `qty` unidades de esa sub-receta
+      _consumoTeoricoReceta(ing.recetaId, qty, acc, visitados);
+    } else if (ing.insumoId) {
+      const key = 'ins:' + ing.insumoId;
+      const prev = acc.get(key);
+      if (prev) prev.cantidad += qty;
+      else {
+        const ins = insumos.find(i => i.id === ing.insumoId);
+        acc.set(key, { nombre: ins?.nombre || ing.nombreOriginal, unidad: ing.unidad, cantidad: qty, ins, sinVincular: false });
+      }
+    } else {
+      const key = 'sv:' + (ing.nombreOriginal || '').toLowerCase();
+      const prev = acc.get(key);
+      if (prev) prev.cantidad += qty;
+      else acc.set(key, { nombre: ing.nombreOriginal || '?', unidad: ing.unidad, cantidad: qty, sinVincular: true });
+    }
+  });
+  visitados.delete(recetaId);
+  return acc;
+}
+
+function _recetaUsarPrecioReal(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  const real = _precioVentaReal(r);
+  if (!real) { toast('Sin ventas registradas para este producto', 'error'); return; }
+  r.precioVenta = Math.round(real.promedio);
+  persistRecetas();
+  toast(`Precio actualizado a $${r.precioVenta}`, 'success');
+  verReceta(recetaId);
+}
+
+function _precioVentaReal(receta) {
+  // Toma del array `ventas` el precio promedio del producto que matchee con esta receta,
+  // del mes más reciente con ventas. Útil para comparar contra el precio cargado a mano.
+  if (!receta?.nombre || !ventas?.length) return null;
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const target = norm(receta.nombre);
+  if (!target) return null;
+  // Agrupar ventas matcheadas por mes (YYYY-MM)
+  const porMes = {};
+  ventas.forEach(v => {
+    const nom = norm(v.producto);
+    if (!nom) return;
+    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
+    const mes = (v.fecha || '').slice(0, 7);
+    if (!mes) return;
+    if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
+    porMes[mes].unidades += Number(v.unidades) || 0;
+    porMes[mes].total    += Number(v.total) || 0;
+  });
+  const mesesOrdenados = Object.keys(porMes).sort();
+  if (!mesesOrdenados.length) return null;
+  const ultimo = mesesOrdenados[mesesOrdenados.length - 1];
+  const d = porMes[ultimo];
+  if (!d.unidades) return null;
+  const prom = d.total / d.unidades;
+  return { mes: ultimo, unidades: d.unidades, total: d.total, promedio: prom };
+}
+
+function _precioSugerido(costoUnd, receta) {
   const base = _costoConExtras(costoUnd);
-  const m = _cfgMargen();
+  const m = receta ? _margenObjPorReceta(receta) : (_cfgMargen() || MARGEN_OBJ_DEFAULT);
   return m >= 100 ? base : base / (1 - m / 100);
 }
 
@@ -5222,6 +5482,8 @@ function _onErRubroChange() {
   const input = document.getElementById('erRubroNuevo');
   input.style.display = sel.value === '__nuevo__' ? 'block' : 'none';
   if (sel.value === '__nuevo__') { input.value = ''; input.focus(); }
+  const hint = document.getElementById('erMargenHint');
+  if (hint) hint.textContent = `mercado ${_margenObjRubro(sel.value)}%`;
 }
 
 function _migrarRecetasFlat() {
@@ -5377,13 +5639,20 @@ function _erResetSearch() {
   ['erResIns','erResRec'].forEach(id => document.getElementById(id).innerHTML = '');
 }
 
+function _setErTipo(tipo) {
+  document.querySelectorAll('input[name="erTipo"]').forEach(r => { r.checked = r.value === tipo; });
+}
+
 function openNuevaReceta() {
-  document.getElementById('erModalTitle').textContent = 'Nueva receta';
+  document.getElementById('erModalTitle').textContent = _recetaTipo === 'fabricacion' ? 'Nueva receta de fabricación' : 'Nueva receta de venta';
   document.getElementById('erRecetaId').value    = '';
   document.getElementById('erNombre').value      = '';
   document.getElementById('erRinde').value       = '';
   document.getElementById('erPrecioVenta').value = '';
+  document.getElementById('erMargenObjetivo').value = '';
+  document.getElementById('erMargenHint').textContent = `mercado ${MARGEN_OBJ_DEFAULT}%`;
   document.getElementById('erRubroNuevo').style.display = 'none';
+  _setErTipo(_recetaTipo);
   _poblarSelectRubros(document.getElementById('erRubro'), '');
   _erIngs = [];
   _erRenderIngs();
@@ -5397,9 +5666,12 @@ function openEditReceta(recetaId) {
   const rubroActual = r.rubro || _catToRubro(r.categoria) || '';
   document.getElementById('erModalTitle').textContent = 'Editar receta';
   document.getElementById('erRecetaId').value    = recetaId;
+  _setErTipo(r.tipo || 'venta');
   document.getElementById('erNombre').value      = r.nombre || '';
   document.getElementById('erRinde').value       = r.rinde || 1;
   document.getElementById('erPrecioVenta').value = r.precioVenta || '';
+  document.getElementById('erMargenObjetivo').value = r.margenObjetivo || '';
+  document.getElementById('erMargenHint').textContent = `mercado ${_margenObjRubro(rubroActual)}%`;
   document.getElementById('erRubroNuevo').style.display = 'none';
   _poblarSelectRubros(document.getElementById('erRubro'), rubroActual);
   _erIngs = (r.ingredientes || []).map(i => ({ ...i }));
@@ -5420,11 +5692,14 @@ function saveEditReceta() {
   }
 
   const recetaId = document.getElementById('erRecetaId').value;
+  const tipoSel  = document.querySelector('input[name="erTipo"]:checked')?.value || 'venta';
   const data = {
     nombre,
+    tipo:         tipoSel,
     rubro:        rubro || 'Otros',
     rinde:        parseFloat(document.getElementById('erRinde').value) || 1,
     precioVenta:  parseFloat(document.getElementById('erPrecioVenta').value) || null,
+    margenObjetivo: parseFloat(document.getElementById('erMargenObjetivo').value) || null,
     ingredientes: _erIngs,
   };
   if (recetaId) {
@@ -5468,13 +5743,23 @@ function _catToRubro(cat) {
   return CAT_TO_RUBRO[(cat||'').toLowerCase().trim()] || (cat ? cat.charAt(0).toUpperCase()+cat.slice(1) : 'Otros');
 }
 let _rubroFiltro = 'todos';
+let _recetaTipo  = 'venta'; // 'venta' | 'fabricacion'
+
+function _setRecetaTipo(tipo) {
+  _recetaTipo = tipo;
+  document.querySelectorAll('.dep-subtab[data-receta-tipo]').forEach(b => b.classList.toggle('dep-subtab-active', b.dataset.recetaTipo === tipo));
+  _rubroFiltro = 'todos'; // reset filtro al cambiar
+  renderRecetas();
+}
 
 function renderRecetas() {
   _currentVerRecetaId = null;
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
+  // Filtro primario por tipo (venta/fabricacion). Si la receta no tiene tipo, se asume 'venta' (legacy).
   const visible = recetas.filter(r =>
-    !search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search)
+    ((r.tipo || 'venta') === _recetaTipo) &&
+    (!search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search))
   );
 
   const _getRubro = r => RUBRO_ORDER.includes(r.rubro || _catToRubro(r.categoria))
@@ -5767,10 +6052,98 @@ function verReceta(recetaId) {
   });
   const rinde    = r.rinde || 1;
   const costoUnd = costoTotal > 0 ? costoTotal / rinde : 0;
-  const ganancia = (costoUnd > 0 && r.precioVenta)
+  // Markup (sobre costo) — lo que ya estaba como "Ganancia"
+  const markup   = (costoUnd > 0 && r.precioVenta)
     ? Math.round(((r.precioVenta - costoUnd) / costoUnd) * 100) : null;
+  // Margen bruto (sobre precio) — métrica estándar de gastronomía
+  const margen   = (costoUnd > 0 && r.precioVenta)
+    ? Math.round(((r.precioVenta - costoUnd) / r.precioVenta) * 100) : null;
+  const margenObj = _margenObjPorReceta(r);
+  const margenOk = margen != null && margen >= margenObj - 2; // tolerancia 2 puntos
   const sinVincular = ings.filter(i => !i.insumoId && !i.recetaId).length;
   const s = RUBRO_STYLES[r.rubro] || { bg:'#F0EDE8', color:'#6B6760' };
+  // Precio real de venta (último mes con ventas registradas para este producto)
+  const real = _precioVentaReal(r);
+  const MESES_LBL = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const realMesTxt = real ? `${MESES_LBL[parseInt(real.mes.slice(5,7))-1]} ${real.mes.slice(2,4)}` : '';
+  // Diferencia entre precio cargado y precio real (si ambos existen)
+  const desvio = (real && r.precioVenta) ? Math.round(((r.precioVenta - real.promedio) / real.promedio) * 100) : null;
+
+  // Análisis del mes — consumo teórico + económico (solo si hay ventas)
+  let analisisHtml = '';
+  if (real && r.tipo !== 'fabricacion') {
+    const consumoMap = _consumoTeoricoReceta(recetaId, real.unidades);
+    const consumoRows = [...consumoMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const ingresoTotal = real.total;
+    const costoTotal   = costoUnd * real.unidades;
+    const gananciaTotal = ingresoTotal - costoTotal;
+    const margenReal   = ingresoTotal > 0 ? Math.round((gananciaTotal / ingresoTotal) * 100) : null;
+
+    const filaConsumo = (row) => {
+      const stockDispo = row.ins ? (deposito[row.ins.id] || 0) : null;
+      const presLabel = row.ins?.presQty ? `${row.ins.presQty}${row.ins.presUnit||''}${row.ins.presUnitWeight?`=${row.ins.presUnitWeight}${row.ins.presUnitWeightUnit||''}`:''}` : '';
+      // Convertir cantidad teórica en presentaciones aproximadas si tenemos info de presentación
+      let presNecesarias = null;
+      if (row.ins?.presUnitWeight && row.ins?.presUnitWeightUnit) {
+        // Cantidad teórica en kg/lt/un según unidad del ingrediente, comparar con peso por presentación
+        const u = (row.unidad || '').toLowerCase();
+        const upw = (row.ins.presUnitWeightUnit || '').toLowerCase();
+        let qtyEnPresUnit = row.cantidad;
+        // conversiones simples
+        if (u === 'g' && upw === 'kg') qtyEnPresUnit = row.cantidad / 1000;
+        else if (u === 'kg' && upw === 'g') qtyEnPresUnit = row.cantidad * 1000;
+        else if (u === 'ml' && upw === 'l') qtyEnPresUnit = row.cantidad / 1000;
+        else if (u === 'l' && upw === 'ml') qtyEnPresUnit = row.cantidad * 1000;
+        if (row.ins.presUnitWeight > 0) presNecesarias = qtyEnPresUnit / row.ins.presUnitWeight;
+      }
+      return `<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;padding:6px 12px;font-size:12px;align-items:center;border-bottom:1px solid var(--border)">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${row.nombre.replace(/"/g,'&quot;')}">${row.nombre}${row.sinVincular ? ' <span style="font-size:10px;color:var(--warn)">sin vincular</span>' : ''}</div>
+        <div style="text-align:right;font-family:var(--mono);font-weight:600;min-width:80px">${row.cantidad.toFixed(row.cantidad < 1 ? 3 : 2)} ${row.unidad||''}</div>
+        <div style="text-align:right;font-family:var(--mono);font-size:11px;color:var(--ink3);min-width:80px">${presNecesarias != null ? `≈ ${presNecesarias.toFixed(2)} ${row.ins.presUnit||'pres'}` : ''}</div>
+        <div style="text-align:right;font-family:var(--mono);font-size:11px;color:${stockDispo != null && presNecesarias != null && stockDispo < presNecesarias ? '#B91C1C' : 'var(--ink3)'};min-width:70px">${stockDispo != null ? `stock: ${stockDispo}` : ''}</div>
+      </div>`;
+    };
+
+    analisisHtml = `
+      <details style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-top:18px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <summary style="background:var(--surface2);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;list-style:none;user-select:none">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;color:var(--ink3)">▸</span>
+            <div>
+              <div style="font-weight:700;font-size:14px;color:var(--ink)">📊 Análisis del mes — ${realMesTxt}</div>
+              <div style="font-size:11px;color:var(--ink2);margin-top:1px">${real.unidades} unidades · ganancia $${gananciaTotal.toLocaleString('es-AR',{maximumFractionDigits:0})}${margenReal!==null?` · ${margenReal}% margen`:''}</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--info);font-weight:600">click para expandir</div>
+        </summary>
+        <div style="padding:10px 14px;display:flex;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--bg)">
+          <div style="text-align:left">
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em">Precio prom.</div>
+            <div style="font-weight:700;font-size:14px;font-family:var(--mono)">$${real.promedio.toFixed(0)}</div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em">Ingreso</div>
+            <div style="font-weight:700;font-size:14px;color:var(--accent);font-family:var(--mono)">$${ingresoTotal.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em">Costo teórico</div>
+            <div style="font-weight:700;font-size:14px;color:#991B1B;font-family:var(--mono)">$${costoTotal.toLocaleString('es-AR',{maximumFractionDigits:0})}</div>
+          </div>
+          <div style="text-align:left">
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em">Ganancia</div>
+            <div style="font-weight:700;font-size:14px;color:#15803D;font-family:var(--mono)">$${gananciaTotal.toLocaleString('es-AR',{maximumFractionDigits:0})}${margenReal!==null?` <span style="font-size:11px;font-weight:500;color:var(--ink2)">(${margenReal}%)</span>`:''}</div>
+          </div>
+        </div>
+        <div style="padding:8px 14px 4px;font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;font-weight:600">Consumo teórico de insumos (recursivo)</div>
+        <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:10px;padding:5px 12px;background:var(--bg);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:1px solid var(--border)">
+          <div>Insumo</div>
+          <div style="text-align:right;min-width:80px">Cantidad</div>
+          <div style="text-align:right;min-width:80px">Presentaciones</div>
+          <div style="text-align:right;min-width:70px">Stock actual</div>
+        </div>
+        ${consumoRows.length ? consumoRows.map(filaConsumo).join('') : '<div style="padding:14px;text-align:center;color:var(--ink3);font-size:12px">Sin insumos vinculados — vinculá los ingredientes para ver el consumo.</div>'}
+      </details>`;
+  }
 
   document.getElementById('recetasScreen').innerHTML = `
     <button class="btn btn-outline" style="margin-bottom:16px" onclick="renderRecetas()">← Recetas</button>
@@ -5783,9 +6156,11 @@ function verReceta(recetaId) {
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
         ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
-        ${costoUnd>0&&_cfgMargen()>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Sugerido (${_cfgMargen()}%)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd).toFixed(2)}</div></div>`:''}
-        ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
-        ${ganancia!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Ganancia</div><div style="font-weight:700;font-size:1.1rem;color:${ganancia>=0?'var(--info)':'#B91C1C'}">${ganancia}%</div></div>`:''}
+        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Sugerido (${margenObj}% margen)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd, r).toFixed(2)}</div></div>`:''}
+        ${r.precioVenta?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio cargado</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)">$${r.precioVenta}</div></div>`:''}
+        ${real?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Real (${realMesTxt} · ${real.unidades}u)</div><div style="font-weight:700;font-size:1.1rem;color:#1D4ED8">$${real.promedio.toFixed(0)}${desvio!==null?` <span style="font-size:11px;color:${Math.abs(desvio)<=3?'var(--ink3)':desvio>0?'#15803D':'#B91C1C'};font-weight:600">${desvio>=0?'+':''}${desvio}%</span>`:''}</div>${!r.precioVenta?`<button onclick="_recetaUsarPrecioReal('${r.id}')" style="margin-top:4px;font-size:11px;padding:2px 8px;border:1px solid var(--info);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--info)">Usar como precio</button>`:''}</div>`:''}
+        ${margen!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Margen actual</div><div style="font-weight:700;font-size:1.1rem;color:${margenOk?'var(--accent)':'#B91C1C'}">${margen}% <span style="font-size:11px;color:var(--ink3);font-weight:400">vs ${margenObj}% obj.</span></div></div>`:''}
+        ${markup!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Markup</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">${markup}%</div></div>`:''}
         <button class="btn btn-outline btn-sm" onclick="openEditReceta('${r.id}')">Editar</button>
       </div>
     </div>
@@ -5845,6 +6220,7 @@ function verReceta(recetaId) {
         </tr>`;
       }).join('')}</tbody>
     </table></div>
+    ${analisisHtml}
     <div style="margin-top:16px;display:flex;gap:8px">
       <button class="btn btn-danger btn-sm" onclick="eliminarReceta('${r.id}')">Eliminar receta</button>
     </div>`;
@@ -6136,6 +6512,14 @@ async function _fbLoad() {
         case 'recetas':     if (d.items?.length)     recetas      = d.items;           break;
         case 'listasPrecios': if (d.items?.length)   listasPrecios = d.items;           break;
         case 'pedidosPendientes': if (d.items?.length) pedidosPendientes = d.items;     break;
+        case 'deposito':
+          if (d.stock && typeof d.stock === 'object') deposito = d.stock;
+          if (Array.isArray(d.movs)) depositoMovs = d.movs;
+          break;
+        case 'produccion':
+          if (d.stock && typeof d.stock === 'object') stockBarra = d.stock;
+          if (Array.isArray(d.movs)) produccionMovs = d.movs;
+          break;
         case 'contable':
           if (d.ventas?.length)       ventas         = d.ventas;
           if (d.sueldos?.length)      sueldos        = d.sueldos;
@@ -7376,6 +7760,613 @@ function limpiarTodosPedidos() {
   renderPedidos();
 }
 
+/* ── DEPÓSITO ───────────────────────────────────────────────────── */
+
+// Usuario actual (placeholder hasta tener login multi-rol)
+function _depUsuario() {
+  return localStorage.getItem('cons_user') || 'Encargado';
+}
+
+// Formatea ISO/UTC a hora Argentina (America/Argentina/Buenos_Aires)
+function _depFmtFecha(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('es-AR', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      day: '2-digit', month: '2-digit', year: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  } catch(_) { return String(iso).slice(0,16).replace('T',' '); }
+}
+
+function _depPresentacionLabel(ins) {
+  if (!ins) return 'presentación';
+  if (ins.presUnit && ins.presUnitWeight && ins.presUnitWeightUnit) {
+    return `${ins.presUnit} × ${ins.presUnitWeight}${ins.presUnitWeightUnit}`;
+  }
+  return ins.presUnit || ins.unidad || 'presentación';
+}
+
+function _depBadgeUpdate() {
+  const pendCount = depositoMovs.filter(m => m.estado === 'pendiente').length;
+  const badge = document.getElementById('depBadge');
+  const subBadge = document.getElementById('depSubBadge');
+  if (badge) {
+    if (pendCount > 0) { badge.style.display = 'inline-block'; badge.textContent = pendCount; }
+    else badge.style.display = 'none';
+  }
+  if (subBadge) {
+    if (pendCount > 0) { subBadge.style.display = 'inline-block'; subBadge.textContent = pendCount; }
+    else subBadge.style.display = 'none';
+  }
+}
+
+function _depSwitchSub(sub) {
+  _depSubtab = sub;
+  document.querySelectorAll('.dep-subtab').forEach(b => b.classList.toggle('dep-subtab-active', b.dataset.depSub === sub));
+  renderDeposito();
+}
+
+function renderDeposito() {
+  _depBadgeUpdate();
+  const screen = document.getElementById('depositoScreen');
+  if (!screen) return;
+  if (_depSubtab === 'stock') return _depRenderStock(screen);
+  if (_depSubtab === 'pendientes') return _depRenderPendientes(screen);
+  if (_depSubtab === 'movs') return _depRenderMovs(screen);
+}
+
+function _depRenderStock(screen) {
+  const entradas = Object.entries(deposito).filter(([_, qty]) => qty > 0);
+  if (!entradas.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Depósito vacío</h3><p>Cuando marques un pedido como recibido vas a poder dar de alta la mercadería acá.</p></div>`;
+    return;
+  }
+  entradas.sort(([a], [b]) => (insumos.find(i => i.id === a)?.nombre || '').localeCompare(insumos.find(i => i.id === b)?.nombre || '', 'es'));
+
+  screen.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">` +
+    entradas.map(([iid, qty]) => {
+      const ins = insumos.find(i => i.id === iid);
+      const nombre = ins?.nombre || iid.slice(0, 8);
+      const pres = _depPresentacionLabel(ins);
+      const bajo = qty <= 1;
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.04);${bajo ? 'border-color:#FBBF24' : ''}">
+        <div style="font-weight:700;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}</div>
+        <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pres}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px">
+          <div>
+            <div style="font-size:24px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono);line-height:1">${qty}</div>
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">disponibles${bajo ? ' · bajo' : ''}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}')">Sacar</button>
+        </div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+function _depRenderPendientes(screen) {
+  const pend = depositoMovs.filter(m => m.estado === 'pendiente').sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  if (!pend.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin pendientes</h3><p>Las solicitudes de salida sin aprobar aparecen acá.</p></div>`;
+    return;
+  }
+  screen.innerHTML = pend.map(m => {
+    const ins = insumos.find(i => i.id === m.insumoId);
+    const nombre = ins?.nombre || '?';
+    const pres = _depPresentacionLabel(ins);
+    const stockActual = deposito[m.insumoId] || 0;
+    const sinStock = stockActual < m.cantidad;
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid ${sinStock ? '#DC2626' : '#F59E0B'};border-radius:var(--radius);padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="min-width:0;flex:1">
+          <div style="font-weight:700;font-size:14px">${m.tipo === 'salida' ? 'Salida' : 'Ingreso'}: ${nombre}</div>
+          <div style="font-size:12px;color:var(--ink2);margin-top:2px">${m.cantidad} ${pres} · solicita ${m.solicitadoPor || '—'} · ${_depFmtFecha(m.fecha)}</div>
+          ${m.motivo ? `<div style="font-size:12px;color:var(--ink3);margin-top:2px">Motivo: ${m.motivo}</div>` : ''}
+          ${sinStock ? `<div style="font-size:11px;color:#991B1B;margin-top:4px;font-weight:600">⚠ Stock actual: ${stockActual} — insuficiente</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" ${sinStock ? 'disabled' : ''} onclick="_depAprobar('${m.id}')">✓ Aprobar</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_depRechazar('${m.id}')">✗ Rechazar</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _depRenderMovs(screen) {
+  if (!depositoMovs.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin movimientos</h3><p>El historial de ingresos y salidas va a aparecer acá.</p></div>`;
+    return;
+  }
+  const movs = [...depositoMovs].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 200);
+  screen.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <div style="display:grid;grid-template-columns:90px 1fr auto 100px 110px;gap:10px;padding:8px 12px;background:var(--surface2);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:1px solid var(--border)">
+      <div>Tipo</div><div>Insumo</div><div style="text-align:right">Cant.</div><div>Estado</div><div>Fecha</div>
+    </div>` +
+    movs.map((m, i) => {
+      const ins = insumos.find(x => x.id === m.insumoId);
+      const nombre = ins?.nombre || '?';
+      const tipoTxt = m.tipo === 'ingreso'
+        ? `<span style="color:#065F46;font-weight:600">↑ Ingreso</span>`
+        : `<span style="color:#991B1B;font-weight:600">↓ Salida</span>`;
+      const estColor = m.estado === 'confirmado' ? '#065F46' : m.estado === 'pendiente' ? '#92400E' : '#6B6760';
+      const bg = i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
+      return `<div style="display:grid;grid-template-columns:90px 1fr auto 100px 110px;gap:10px;padding:8px 12px;background:${bg};font-size:12px;align-items:center;border-bottom:1px solid var(--border)">
+        <div>${tipoTxt}</div>
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}${m.motivo ? ` <span style="color:var(--ink3);font-size:11px">· ${m.motivo}</span>` : ''}</div>
+        <div style="text-align:right;font-family:var(--mono);font-weight:600">${m.cantidad}</div>
+        <div style="color:${estColor};font-size:11px;font-weight:600;text-transform:capitalize">${m.estado}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--ink3)">${_depFmtFecha(m.fecha)}</div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+function _depAbrirIngreso(pedidoId, modo) {
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped || !ped.items?.length) {
+    // No hay items que registrar → seguir con el flujo normal
+    _resolverRecepcionFinal(pedidoId, modo);
+    return;
+  }
+  _depIngresoCtx = {
+    pedidoId, modo,
+    items: ped.items.map(it => ({
+      insumoId: it.insumoId,
+      nombre: insumos.find(i => i.id === it.insumoId)?.nombre || '?',
+      cantidad: Number(it.cantidad) || 0
+    }))
+  };
+  const screen = document.getElementById('depIngresoScreen');
+  screen.innerHTML = _depIngresoCtx.items.map((it, idx) => {
+    const ins = insumos.find(i => i.id === it.insumoId);
+    const pres = _depPresentacionLabel(ins);
+    return `<div style="display:grid;grid-template-columns:1fr 110px;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px">${it.nombre}</div>
+        <div style="font-size:11px;color:var(--ink3)">${pres}</div>
+      </div>
+      <input type="number" min="0" step="1" value="${it.cantidad}" data-dep-ingreso-idx="${idx}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:13px;text-align:right">
+    </div>`;
+  }).join('');
+  openModal('modalDepIngreso');
+}
+
+function _depConfirmarIngreso() {
+  if (!_depIngresoCtx) return;
+  const inputs = document.querySelectorAll('#depIngresoScreen input[data-dep-ingreso-idx]');
+  const nowIso = new Date().toISOString();
+  const usuario = _depUsuario();
+  let totalIngresado = 0;
+
+  inputs.forEach(inp => {
+    const idx = Number(inp.dataset.depIngresoIdx);
+    const it = _depIngresoCtx.items[idx];
+    const cant = parseInt(inp.value, 10);
+    if (!it?.insumoId || !isFinite(cant) || cant <= 0) return;
+    deposito[it.insumoId] = (deposito[it.insumoId] || 0) + cant;
+    depositoMovs.push({
+      id: crypto.randomUUID(),
+      insumoId: it.insumoId,
+      tipo: 'ingreso',
+      cantidad: cant,
+      estado: 'confirmado',
+      fecha: nowIso,
+      solicitadoPor: usuario,
+      aprobadoPor: usuario,
+      motivo: 'Recepción de pedido',
+      origen: { tipo: 'pedido', id: _depIngresoCtx.pedidoId }
+    });
+    totalIngresado += cant;
+  });
+
+  const ctx = _depIngresoCtx;
+  _depIngresoCtx = null;
+  closeModal('modalDepIngreso');
+  persist();
+  _depBadgeUpdate();
+  if (totalIngresado) toast(`Ingresaron ${totalIngresado} unidades al depósito`, 'success');
+  // Continuar con la lógica original de recepción
+  _resolverRecepcionFinal(ctx.pedidoId, ctx.modo);
+}
+
+function _depAbrirSalida(insumoId) {
+  const ins = insumos.find(i => i.id === insumoId);
+  if (!ins) return;
+  _depSalidaCtx = { insumoId };
+  const pres = _depPresentacionLabel(ins);
+  document.getElementById('depSalidaTitulo').textContent = `Sacar: ${ins.nombre}`;
+  document.getElementById('depSalidaSub').innerHTML = `Stock actual: <strong>${deposito[insumoId] || 0}</strong> ${pres}`;
+  document.getElementById('depSalidaCantidad').value = '1';
+  document.getElementById('depSalidaMotivo').value = '';
+  openModal('modalDepSalida');
+}
+
+function _depConfirmarSolicitudSalida() {
+  if (!_depSalidaCtx) return;
+  const cant = parseInt(document.getElementById('depSalidaCantidad').value, 10);
+  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
+  const motivo = document.getElementById('depSalidaMotivo').value.trim() || null;
+  depositoMovs.push({
+    id: crypto.randomUUID(),
+    insumoId: _depSalidaCtx.insumoId,
+    tipo: 'salida',
+    cantidad: cant,
+    estado: 'pendiente',
+    fecha: new Date().toISOString(),
+    solicitadoPor: _depUsuario(),
+    aprobadoPor: null,
+    motivo,
+    origen: null
+  });
+  _depSalidaCtx = null;
+  closeModal('modalDepSalida');
+  persist();
+  _depBadgeUpdate();
+  toast('Salida solicitada — falta aprobación', 'success');
+  _depSwitchSub('pendientes');
+}
+
+function _depAprobar(movId) {
+  const mov = depositoMovs.find(m => m.id === movId);
+  if (!mov || mov.estado !== 'pendiente') return;
+  const stockActual = deposito[mov.insumoId] || 0;
+  if (mov.tipo === 'salida' && stockActual < mov.cantidad) {
+    toast('Stock insuficiente para aprobar', 'error');
+    return;
+  }
+  if (mov.tipo === 'salida') {
+    deposito[mov.insumoId] = stockActual - mov.cantidad;
+    if (deposito[mov.insumoId] <= 0) delete deposito[mov.insumoId];
+  } else if (mov.tipo === 'ingreso') {
+    deposito[mov.insumoId] = stockActual + mov.cantidad;
+  }
+  mov.estado = 'confirmado';
+  mov.aprobadoPor = _depUsuario();
+  mov.fechaAprobacion = new Date().toISOString();
+  persist();
+  _depBadgeUpdate();
+  renderDeposito();
+  toast('Aprobado', 'success');
+}
+
+function _depRechazar(movId) {
+  const mov = depositoMovs.find(m => m.id === movId);
+  if (!mov || mov.estado !== 'pendiente') return;
+  if (!confirm('¿Rechazar esta solicitud?')) return;
+  mov.estado = 'rechazado';
+  mov.aprobadoPor = _depUsuario();
+  mov.fechaAprobacion = new Date().toISOString();
+  persist();
+  _depBadgeUpdate();
+  renderDeposito();
+  toast('Rechazado', 'success');
+}
+
+/* ── IMPORTADOR RECETAS V2 ──────────────────────────────────────── */
+let _impWb = null;
+let _impParsed = [];   // recetas parseadas con campos extra: _idx, _tipo, _skip
+let _impProductosSet = null; // set normalizado de nombres de productos vendidos
+
+function _impNorm(s) { return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,''); }
+
+function _impProductosVendidosSet() {
+  if (_impProductosSet) return _impProductosSet;
+  const s = new Set();
+  ventas.forEach(v => { if (v.nombre) s.add(_impNorm(v.nombre)); });
+  _impProductosSet = s;
+  return s;
+}
+
+function _impMatchVendido(nombre) {
+  const set = _impProductosVendidosSet();
+  const n = _impNorm(nombre);
+  if (set.has(n)) return true;
+  // match parcial
+  for (const v of set) {
+    if (v.length >= 4 && (n.includes(v) || v.includes(n))) return true;
+  }
+  return false;
+}
+
+async function _impArrancar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    _impWb = XLSX.read(buffer, { type: 'array' });
+    _impProductosSet = null; // reset cache
+    _impAbrirSelectorHoja();
+  } catch(e) {
+    console.error(e);
+    toast('Error al leer el Excel', 'error');
+  }
+  input.value = '';
+}
+
+function _impAbrirSelectorHoja() {
+  const hojas = _impWb.SheetNames.filter(n => !_SKIP_SHEETS.has(n.trim()));
+  document.getElementById('impHojaLista').innerHTML = hojas.map(s => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+      <input type="checkbox" data-imp-sheet="${s.replace(/"/g, '&quot;')}" style="margin:0">
+      <span>${s}</span>
+    </label>`).join('');
+  openModal('modalImpHoja');
+}
+
+function _impAceptarHojas() {
+  const seleccionadas = Array.from(document.querySelectorAll('#impHojaLista input[data-imp-sheet]:checked')).map(c => c.dataset.impSheet);
+  if (!seleccionadas.length) { toast('Tildá al menos una hoja', 'error'); return; }
+  // Crear un wb virtual solo con las hojas elegidas y usar el parser existente
+  const wbFiltrado = { SheetNames: seleccionadas, Sheets: {} };
+  seleccionadas.forEach(n => { wbFiltrado.Sheets[n] = _impWb.Sheets[n]; });
+  const parsed = _parseExcelRecetas(wbFiltrado);
+  if (!parsed.length) { toast('No se detectaron recetas en esas hojas', 'error'); return; }
+
+  // Anotar cada receta con _tipo sugerido + _skip
+  _impParsed = parsed.map((r, idx) => {
+    const matchea = _impMatchVendido(r.nombre);
+    return {
+      ...r,
+      _idx: idx,
+      _matchVendido: matchea,
+      _tipo: matchea ? 'venta' : 'fabricacion',
+      _skip: false
+    };
+  });
+  closeModal('modalImpHoja');
+  _impAbrirRevisor();
+}
+
+function _impAbrirRevisor() {
+  // Agrupar por hoja origen (grupo)
+  const porHoja = {};
+  _impParsed.forEach(r => {
+    const g = r.grupo || r.rubro || 'Sin grupo';
+    if (!porHoja[g]) porHoja[g] = [];
+    porHoja[g].push(r);
+  });
+
+  const filaHtml = (r) => {
+    const bg = r._matchVendido ? '#ECFDF5' : 'var(--surface)';
+    const border = r._matchVendido ? '#10B981' : 'var(--border)';
+    return `<div style="background:${bg};border:1px solid ${border};border-radius:8px;padding:10px 12px;margin-bottom:6px;${r._skip ? 'opacity:0.5' : ''}" data-imp-row="${r._idx}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="min-width:0;flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-weight:600;font-size:13px">${r.nombre}</span>
+            ${r._matchVendido ? '<span style="font-size:10px;padding:2px 6px;background:#D1FAE5;color:#065F46;border-radius:4px;font-weight:600">✓ producto vendido</span>' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:2px">${r.ingredientes?.length || 0} ingredientes${r.precioVenta ? ` · $${r.precioVenta}` : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer">
+            <input type="radio" name="tipo-${r._idx}" value="venta" ${r._tipo === 'venta' ? 'checked' : ''} onchange="_impSetTipo(${r._idx},'venta')">🛒 Venta
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer">
+            <input type="radio" name="tipo-${r._idx}" value="fabricacion" ${r._tipo === 'fabricacion' ? 'checked' : ''} onchange="_impSetTipo(${r._idx},'fabricacion')">🏭 Fabricación
+          </label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border:1px solid var(--danger);border-radius:6px;background:var(--surface);cursor:pointer;color:var(--danger)">
+            <input type="checkbox" ${r._skip ? 'checked' : ''} onchange="_impToggleSkip(${r._idx},this.checked)">No importar
+          </label>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const html = Object.entries(porHoja).map(([hoja, items]) => `
+    <div style="margin-bottom:14px">
+      <div style="font-weight:700;font-size:12px;color:var(--ink2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;padding:4px 8px;background:var(--surface2);border-radius:6px">
+        📄 ${hoja} · ${items.length} receta${items.length === 1 ? '' : 's'}
+      </div>
+      ${items.map(filaHtml).join('')}
+    </div>`).join('');
+
+  document.getElementById('impRevisorScreen').innerHTML = html;
+  openModal('modalImpRevisor');
+}
+
+function _impSetTipo(idx, tipo) {
+  const r = _impParsed.find(x => x._idx === idx);
+  if (r) r._tipo = tipo;
+}
+
+function _impToggleSkip(idx, skip) {
+  const r = _impParsed.find(x => x._idx === idx);
+  if (r) { r._skip = skip; }
+  const row = document.querySelector(`[data-imp-row="${idx}"]`);
+  if (row) row.style.opacity = skip ? '0.5' : '1';
+}
+
+function _impConfirmarImport() {
+  const aImportar = _impParsed.filter(r => !r._skip);
+  if (!aImportar.length) { toast('Marcaste todo como "No importar"', 'error'); return; }
+
+  // ── PASADA 1 ─ Crear/actualizar todas las recetas (con ingredientes vacíos por ahora)
+  // Así cuando resolvamos ingredientes, todas las nuevas ya tienen ID y son matcheables.
+  let created = 0, updated = 0;
+  aImportar.forEach(r => {
+    const existente = recetas.find(rr => _impNorm(rr.nombre) === _impNorm(r.nombre));
+    // Si matchea con producto vendido, usar precio real del último mes
+    let precioFinal = r.precioVenta || null;
+    if (r._tipo === 'venta' && r._matchVendido) {
+      const realPrecio = _precioVentaReal({ nombre: r.nombre });
+      if (realPrecio) precioFinal = Math.round(realPrecio.promedio);
+    }
+
+    if (existente) {
+      Object.assign(existente, {
+        tipo: r._tipo,
+        rubro: r.rubro || existente.rubro || 'Otros',
+        rinde: r.rinde || 1,
+        precioVenta: precioFinal ?? existente.precioVenta ?? null
+      });
+      r._recetaId = existente.id;
+      updated++;
+    } else {
+      const id = crypto.randomUUID();
+      recetas.push({
+        id,
+        nombre: r.nombre,
+        tipo: r._tipo,
+        rubro: r.rubro || 'Otros',
+        rinde: r.rinde || 1,
+        precioVenta: precioFinal,
+        ingredientes: []
+      });
+      r._recetaId = id;
+      created++;
+    }
+  });
+
+  // ── PASADA 2 ─ Resolver ingredientes. Prioridad: receta > insumo > sin vincular.
+  // Buscar receta primero hace que sub-recetas como "FALAFEL" o "TORTILLA WRAPS"
+  // queden linkeadas como sub-componentes en lugar de tratarse como insumos.
+  aImportar.forEach(r => {
+    const ingredientes = (r.ingredientes || []).map(ing => {
+      const out = { nombreOriginal: ing.nombreOriginal, cantidad: ing.cantidad, unidad: ing.unidad, insumoId: null, recetaId: null };
+      // 1) Match contra recetas (incluye las recién creadas en pasada 1)
+      const recMatch = recetas.find(rr => _impNorm(rr.nombre) === _impNorm(ing.nombreOriginal));
+      if (recMatch && recMatch.id !== r._recetaId) { // no auto-referenciarse
+        out.recetaId = recMatch.id;
+        return out;
+      }
+      // 2) Match contra insumos
+      const insId = _matchIngrediente(ing.nombreOriginal);
+      if (insId) { out.insumoId = insId; return out; }
+      // 3) Sin vincular — el usuario lo resolverá manualmente desde el detalle
+      return out;
+    });
+    const rec = recetas.find(rr => rr.id === r._recetaId);
+    if (rec) rec.ingredientes = ingredientes;
+  });
+
+  persistRecetas();
+  closeModal('modalImpRevisor');
+  _impParsed = [];
+  _impProductosSet = null;
+  renderRecetas();
+  toast(`${created} creadas, ${updated} actualizadas`, 'success');
+}
+
+/* ── PRODUCCIÓN ─────────────────────────────────────────────────── */
+
+function _prodUsuario() { return localStorage.getItem('cons_user') || 'Barra'; }
+
+function _prodCatalogo() {
+  // Productos disponibles: nombres únicos de ventas[] + los que ya tienen stock
+  const set = new Set();
+  ventas.forEach(v => { if (v.nombre) set.add(v.nombre); });
+  Object.keys(stockBarra).forEach(n => set.add(n));
+  return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+function _prodSwitchSub(sub) {
+  _prodSubtab = sub;
+  document.querySelectorAll('.dep-subtab[data-prod-sub]').forEach(b => b.classList.toggle('dep-subtab-active', b.dataset.prodSub === sub));
+  renderProduccion();
+}
+
+function renderProduccion() {
+  const screen = document.getElementById('produccionScreen');
+  if (!screen) return;
+  if (_prodSubtab === 'stock') return _prodRenderStock(screen);
+  if (_prodSubtab === 'movs') return _prodRenderMovs(screen);
+}
+
+function _prodRenderStock(screen) {
+  const entradas = Object.entries(stockBarra).filter(([_, qty]) => qty > 0);
+  if (!entradas.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin producción registrada</h3><p>Cargá lo que se produjo con el botón <strong>+ Registrar producción</strong>.</p></div>`;
+    return;
+  }
+  entradas.sort(([a], [b]) => a.localeCompare(b, 'es'));
+  screen.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">` +
+    entradas.map(([nombre, qty]) => {
+      const rubro = productosRubros[nombre];
+      const s = (typeof RUBRO_STYLES_C !== 'undefined' && RUBRO_STYLES_C[rubro]) || null;
+      const bajo = qty <= 5;
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.04);${bajo ? 'border-color:#FBBF24' : ''}">
+        <div style="font-weight:700;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}</div>
+        ${rubro ? `<div style="font-size:10px;color:${s?.fg || 'var(--ink3)'};margin-top:2px;font-weight:600">${rubro}</div>` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:10px">
+          <div>
+            <div style="font-size:24px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono);line-height:1">${qty}</div>
+            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">disponibles${bajo ? ' · bajo' : ''}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+function _prodRenderMovs(screen) {
+  if (!produccionMovs.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin movimientos</h3><p>El historial de producción va a aparecer acá.</p></div>`;
+    return;
+  }
+  const movs = [...produccionMovs].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 200);
+  screen.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <div style="display:grid;grid-template-columns:1fr auto 110px 110px;gap:10px;padding:8px 12px;background:var(--surface2);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:1px solid var(--border)">
+      <div>Producto</div><div style="text-align:right">Cant.</div><div>Quién</div><div>Fecha</div>
+    </div>` +
+    movs.map((m, i) => {
+      const bg = i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
+      return `<div style="display:grid;grid-template-columns:1fr auto 110px 110px;gap:10px;padding:8px 12px;background:${bg};font-size:12px;align-items:center;border-bottom:1px solid var(--border)">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(m.producto||'').replace(/"/g, '&quot;')}">${m.producto || '?'}</div>
+        <div style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--accent)">+${m.cantidad}</div>
+        <div style="font-size:11px;color:var(--ink2)">${m.producidoPor || '—'}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--ink3)">${_depFmtFecha(m.fecha)}</div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+function _prodAbrirRegistro() {
+  // Poblar datalist con catálogo
+  const dl = document.getElementById('prodRegLista');
+  const opts = _prodCatalogo().map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
+  dl.innerHTML = opts;
+  document.getElementById('prodRegNombre').value = '';
+  document.getElementById('prodRegCantidad').value = '1';
+  document.getElementById('prodRegFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('prodRegHint').textContent = '';
+  openModal('modalProdRegistro');
+  // Listener para el hint
+  document.getElementById('prodRegNombre').oninput = e => {
+    const val = e.target.value.trim();
+    const hint = document.getElementById('prodRegHint');
+    if (!val) { hint.textContent = ''; return; }
+    const existe = _prodCatalogo().some(n => n.toLowerCase() === val.toLowerCase());
+    hint.innerHTML = existe ? '<span style="color:var(--accent)">✓ producto existente</span>' : '<span style="color:#92400E">✦ se va a dar de alta como producto nuevo</span>';
+  };
+}
+
+function _prodConfirmarRegistro() {
+  const nombre = document.getElementById('prodRegNombre').value.trim();
+  const cant = parseInt(document.getElementById('prodRegCantidad').value, 10);
+  const fecha = document.getElementById('prodRegFecha').value;
+  if (!nombre) { toast('Falta el producto', 'error'); return; }
+  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
+  if (!fecha) { toast('Falta la fecha', 'error'); return; }
+
+  // Resolver nombre canónico (case-insensitive contra catálogo existente)
+  const catalogo = _prodCatalogo();
+  const existente = catalogo.find(n => n.toLowerCase() === nombre.toLowerCase());
+  const nombreFinal = existente || nombre;
+
+  stockBarra[nombreFinal] = (stockBarra[nombreFinal] || 0) + cant;
+  produccionMovs.push({
+    id: crypto.randomUUID(),
+    producto: nombreFinal,
+    cantidad: cant,
+    fecha: new Date(fecha + 'T' + new Date().toISOString().slice(11,19)).toISOString(),
+    producidoPor: _prodUsuario()
+  });
+
+  closeModal('modalProdRegistro');
+  persist();
+  renderProduccion();
+  toast(`+${cant} ${nombreFinal} al stock de barra`, 'success');
+}
+
 /* ── INIT ───────────────────────────────────────────────────────── */
 hydrate();
 _migrarRecetasFlat();
@@ -7383,7 +8374,7 @@ hydrateContable();
 renderInsumos();
 renderProveedores();
 renderPedidos();
-_fbLoad();
+_fbLoad().then(() => _depBadgeUpdate());
 </script>
 </body>
 </html>
