@@ -630,6 +630,75 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" onclick="detectarDuplicadosProveedores()">Unificar duplicados</button>
   </div>
 
+  <!-- MODAL: Alta insumo manual a proveedor -->
+  <div id="altaInsumoManualModal" class="overlay">
+    <div class="modal" style="max-width:640px">
+      <h2>Agregar insumo a <span id="aimProvNombre"></span></h2>
+      <p class="modal-sub">Cargá manualmente un insumo con su precio para este proveedor. Queda registrado en el historial de precios.</p>
+      <input type="hidden" id="aimProvId">
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Insumo *</label>
+          <select id="aimInsumo" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF"></select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Cantidad *</label>
+            <input id="aimCantidad" type="number" step="any" min="0" placeholder="Ej: 5" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)" oninput="_aimRecalc()">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Unidad</label>
+            <input id="aimUnidad" type="text" placeholder="kg, un, caja, bolsa…" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Peso por unidad</label>
+            <input id="aimPesoUnidad" type="number" step="any" min="0" placeholder="Ej: 25" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Unidad de peso</label>
+            <select id="aimUnidadPeso" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF">
+              <option value="">—</option>
+              <option value="kg">kg</option>
+              <option value="g">g</option>
+              <option value="L">L</option>
+              <option value="ml">ml</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 100px;gap:10px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Precio unitario *</label>
+            <input id="aimPrecioUnit" type="number" step="any" min="0" placeholder="$" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)" oninput="_aimRecalc('unit')">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Precio total</label>
+            <input id="aimPrecioTotal" type="number" step="any" min="0" placeholder="$" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)" oninput="_aimRecalc('total')">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">IVA %</label>
+            <input id="aimIVA" type="number" step="any" min="0" placeholder="21" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Fecha</label>
+            <input id="aimFecha" type="date" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">N° boleta (opcional)</label>
+            <input id="aimNroBoleta" type="text" placeholder="manual-001" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:18px">
+        <button class="btn btn-outline" onclick="closeAltaInsumoManualModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarAltaInsumoManual()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Nuevo proveedor -->
   <div id="nuevoProvModal" class="overlay">
     <div class="modal" style="max-width:460px">
@@ -2330,6 +2399,117 @@ function renderProveedores() {
     </div>`;
 }
 
+function openAltaInsumoManualModal(provId) {
+  const prov = proveedores.find(p => p.id === provId);
+  if (!prov) return;
+  document.getElementById('aimProvId').value = provId;
+  document.getElementById('aimProvNombre').textContent = prov.nombre;
+
+  // Llenar select de insumos
+  const sel = document.getElementById('aimInsumo');
+  const opts = ['<option value="">— Elegí un insumo —</option>'];
+  [...insumos].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .forEach(i => opts.push(`<option value="${i.id}">${i.nombre}</option>`));
+  sel.innerHTML = opts.join('');
+
+  // Reset campos
+  ['aimCantidad','aimUnidad','aimPesoUnidad','aimPrecioUnit','aimPrecioTotal','aimIVA','aimNroBoleta'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('aimUnidadPeso').value = '';
+  document.getElementById('aimFecha').value = new Date().toISOString().slice(0,10);
+
+  document.getElementById('altaInsumoManualModal').classList.add('open');
+  setTimeout(() => sel.focus(), 50);
+}
+
+function closeAltaInsumoManualModal() {
+  document.getElementById('altaInsumoManualModal').classList.remove('open');
+}
+
+function _aimRecalc(fuente) {
+  const cant  = parseFloat(document.getElementById('aimCantidad').value);
+  const unit  = parseFloat(document.getElementById('aimPrecioUnit').value);
+  const total = parseFloat(document.getElementById('aimPrecioTotal').value);
+  if (fuente === 'unit' && isFinite(cant) && isFinite(unit)) {
+    document.getElementById('aimPrecioTotal').value = (cant * unit).toFixed(2);
+  } else if (fuente === 'total' && isFinite(cant) && cant > 0 && isFinite(total)) {
+    document.getElementById('aimPrecioUnit').value = (total / cant).toFixed(2);
+  } else if (!fuente && isFinite(cant) && isFinite(unit)) {
+    document.getElementById('aimPrecioTotal').value = (cant * unit).toFixed(2);
+  }
+}
+
+function guardarAltaInsumoManual() {
+  const provId   = document.getElementById('aimProvId').value;
+  const insumoId = document.getElementById('aimInsumo').value;
+  if (!provId || !insumoId) { toast('Elegí un insumo', 'error'); return; }
+
+  const cantidad   = parseFloat(document.getElementById('aimCantidad').value);
+  const unidad     = document.getElementById('aimUnidad').value.trim() || null;
+  const pesoUnidad = parseFloat(document.getElementById('aimPesoUnidad').value);
+  const unidadPeso = document.getElementById('aimUnidadPeso').value || null;
+  const precioUnit = parseFloat(document.getElementById('aimPrecioUnit').value);
+  const precioTot  = parseFloat(document.getElementById('aimPrecioTotal').value);
+  const iva        = parseFloat(document.getElementById('aimIVA').value);
+  const fecha      = document.getElementById('aimFecha').value || new Date().toISOString().slice(0,10);
+  const nroBoleta  = document.getElementById('aimNroBoleta').value.trim() || null;
+
+  if (!isFinite(cantidad) || cantidad <= 0) { toast('Ingresá una cantidad válida', 'error'); return; }
+  if (!isFinite(precioUnit) || precioUnit <= 0) { toast('Ingresá un precio unitario válido', 'error'); return; }
+
+  const prov = proveedores.find(p => p.id === provId);
+  const ins  = insumos.find(i => i.id === insumoId);
+  if (!prov || !ins) return;
+
+  // 1. Vincular insumo a prov.items si no está
+  if (!prov.items) prov.items = [];
+  const yaVinculado = prov.items.find(it => it.insumoId === insumoId);
+  if (!yaVinculado) {
+    prov.items.push({
+      id: crypto.randomUUID(),
+      nombreBoleta: ins.nombre,
+      nombreOriginal: ins.nombre,
+      insumoId,
+      unidad: unidad || ''
+    });
+  }
+
+  // 2. Agregar entrada a precios[]
+  precios.push({
+    id: crypto.randomUUID(),
+    insumoId,
+    proveedorId: provId,
+    fecha,
+    nroBoleta,
+    nombreBoleta: ins.nombre,
+    cantidad,
+    unidad,
+    pesoPorUnidad: isFinite(pesoUnidad) ? pesoUnidad : null,
+    unidadPeso,
+    precioUnitario: precioUnit,
+    precioTotal: isFinite(precioTot) ? precioTot : null,
+    iva: isFinite(iva) ? iva : null,
+    fuente: 'manual'
+  });
+
+  // 3. Propagar al insumo (precio actual y presentación)
+  ins.precioConIVA = precioUnit;
+  ins.precioSinIVA = null;
+  if (isFinite(pesoUnidad) && unidadPeso && !ins.presUnitWeight) {
+    ins.presQty = 1; ins.presUnit = unidad || 'u';
+    ins.presUnitWeight = pesoUnidad; ins.presUnitWeightUnit = unidadPeso;
+    ins.unidad = unidadPeso;
+  }
+
+  persist();
+  closeAltaInsumoManualModal();
+  renderProveedorFacturas(provId);
+  renderInsumos();
+  renderPedidos();
+  toast(`Insumo agregado a ${prov.nombre}`, 'success');
+}
+
 function openNuevoProvModal() {
   document.getElementById('nuevoProvNombre').value = '';
   document.getElementById('nuevoProvTel').value = '';
@@ -2564,8 +2744,9 @@ function renderProveedorFacturas(provId, subtab) {
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
       <div style="font-size:1.1rem;font-weight:700">${prov?.nombre}</div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-outline" onclick="openItemsModal('${provId}')">Editar insumos</button>
+        <button class="btn btn-outline" onclick="openAltaInsumoManualModal('${provId}')">+ Agregar insumo manual</button>
         <button class="btn btn-primary" onclick="altaInsumosDesdeFacturas('${provId}')">+ Dar de alta en Insumos</button>
       </div>
     </div>
