@@ -568,17 +568,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <span id="pedidosResumen" style="margin-left:auto;font-size:13px;color:var(--ink2)"></span>
   </div>
   <div id="pedidosScreen"></div>
-  <div id="addProdModal" class="overlay">
-    <div class="modal" style="max-width:520px">
-      <h2>Agregar producto al pedido</h2>
-      <p class="modal-sub">Elegí un insumo para agregar al card de este proveedor.</p>
-      <input id="addProdSearch" type="text" placeholder="Buscar insumo…" oninput="renderAddProdList()" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin:8px 0 12px;font:14px var(--font)">
-      <div id="addProdList" style="max-height:50vh;overflow-y:auto"></div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeAddProdModal()">Cerrar</button>
-      </div>
-    </div>
-  </div>
   <div id="provTelModal" class="overlay">
     <div class="modal" style="max-width:420px">
       <h2>Datos del proveedor</h2>
@@ -6141,16 +6130,11 @@ function renderPrecComp() {
 
 /* ── PEDIDOS ────────────────────────────────────────────────────── */
 
-let _pedQty       = JSON.parse(localStorage.getItem('pedidoQty')      || '{}');
-let _pedExtra     = JSON.parse(localStorage.getItem('pedidoExtraIds') || '{}'); // provId → [insumoIds agregados manualmente]
-let _pedRemoved   = JSON.parse(localStorage.getItem('pedidoRemovedIds')|| '{}'); // provId → [insumoIds escondidos]
-let _pedProvForAdd = null;
+let _pedQty       = JSON.parse(localStorage.getItem('pedidoQty') || '{}');
 let _pedProvForTel = null;
 
 function _persistPed() {
-  localStorage.setItem('pedidoQty',         JSON.stringify(_pedQty));
-  localStorage.setItem('pedidoExtraIds',    JSON.stringify(_pedExtra));
-  localStorage.setItem('pedidoRemovedIds',  JSON.stringify(_pedRemoved));
+  localStorage.setItem('pedidoQty', JSON.stringify(_pedQty));
 }
 
 function _ultimoPrecio(provId, insumoId) {
@@ -6161,13 +6145,9 @@ function _ultimoPrecio(provId, insumoId) {
 }
 
 function _insumosDelProv(provId) {
-  // Items vinculados via boletas (proveedores[].items) + extras manuales − removidos
+  // Items vinculados via boletas (proveedores[].items)
   const prov = proveedores.find(p => p.id === provId);
-  const fromBoletas = (prov?.items || []).map(it => it.insumoId).filter(Boolean);
-  const extras = _pedExtra[provId] || [];
-  const removed = new Set(_pedRemoved[provId] || []);
-  const all = [...new Set([...fromBoletas, ...extras])].filter(id => !removed.has(id));
-  return all;
+  return [...new Set((prov?.items || []).map(it => it.insumoId).filter(Boolean))];
 }
 
 function renderPedidos() {
@@ -6228,17 +6208,14 @@ function renderPedidos() {
               <div class="ped-row-name">${ins.nombre}</div>
               <div class="ped-row-price">${priceTxt}</div>
             </div>
-            <div style="display:flex;align-items:center;gap:4px">
-              <div class="ped-stepper">
-                <button onclick="pedDec('${prov.id}','${iid}')" ${qty === 0 ? 'disabled' : ''}>−</button>
-                <span class="qty">${qty || '—'}</span>
-                <button onclick="pedInc('${prov.id}','${iid}')">+</button>
-              </div>
-              <button class="ped-row-remove" title="Quitar de la lista" onclick="pedRemoveProd('${prov.id}','${iid}')">✕</button>
+            <div class="ped-stepper">
+              <button onclick="pedDec('${prov.id}','${iid}')" ${qty === 0 ? 'disabled' : ''}>−</button>
+              <span class="qty">${qty || '—'}</span>
+              <button onclick="pedInc('${prov.id}','${iid}')">+</button>
             </div>
           </div>`;
         }).join('')
-      : `<div style="padding:20px 6px;color:var(--ink3);font-size:13px;text-align:center">Sin productos aún. Agregá uno con el botón "+"</div>`;
+      : `<div style="padding:20px 6px;color:var(--ink3);font-size:13px;text-align:center">Sin productos cargados. Vinculá insumos a este proveedor desde una boleta.</div>`;
 
     cardsHtml += `<div class="ped-card ${itemsConQty > 0 ? 'has-qty' : ''}">
       <div class="ped-card-head">
@@ -6253,7 +6230,6 @@ function renderPedidos() {
         <button class="btn-wa" onclick="enviarPedidoWA('${prov.id}')" ${itemsConQty === 0 ? 'disabled' : ''}>
           📱 Pedir por WhatsApp
         </button>
-        <button class="btn-add-prod" onclick="openAddProdModal('${prov.id}')" title="Agregar producto">+</button>
       </div>
     </div>`;
   });
@@ -6285,62 +6261,6 @@ function pedDec(provId, insumoId) {
   if (cur <= 1) delete _pedQty[provId][insumoId];
   else _pedQty[provId][insumoId] = cur - 1;
   _persistPed();
-  renderPedidos();
-}
-
-function pedRemoveProd(provId, insumoId) {
-  if (!confirm('¿Quitar este producto del card?')) return;
-  _pedRemoved[provId] = _pedRemoved[provId] || [];
-  if (!_pedRemoved[provId].includes(insumoId)) _pedRemoved[provId].push(insumoId);
-  // También sacar de extras si estaba ahí
-  if (_pedExtra[provId]) _pedExtra[provId] = _pedExtra[provId].filter(id => id !== insumoId);
-  // Y limpiar cantidad
-  if (_pedQty[provId]) delete _pedQty[provId][insumoId];
-  _persistPed();
-  renderPedidos();
-}
-
-function openAddProdModal(provId) {
-  _pedProvForAdd = provId;
-  document.getElementById('addProdSearch').value = '';
-  renderAddProdList();
-  document.getElementById('addProdModal').classList.add('open');
-}
-
-function closeAddProdModal() {
-  _pedProvForAdd = null;
-  document.getElementById('addProdModal').classList.remove('open');
-}
-
-function renderAddProdList() {
-  if (!_pedProvForAdd) return;
-  const q = (document.getElementById('addProdSearch')?.value || '').toLowerCase().trim();
-  const yaEnCard = new Set(_insumosDelProv(_pedProvForAdd));
-  const disponibles = insumos.filter(i => !yaEnCard.has(i.id) && (!q || i.nombre.toLowerCase().includes(q)));
-  disponibles.sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
-
-  const list = document.getElementById('addProdList');
-  if (!disponibles.length) {
-    list.innerHTML = `<div style="padding:20px;color:var(--ink3);text-align:center;font-size:13px">${q ? 'Sin coincidencias' : 'Todos los insumos ya están en el card'}</div>`;
-    return;
-  }
-  list.innerHTML = disponibles.map(ins => `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="pedAddProd('${ins.id}')" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-    <div>
-      <div style="font-weight:600;font-size:13px">${ins.nombre}</div>
-      <div style="font-size:11px;color:var(--ink2)">${ins.unidad || ''}</div>
-    </div>
-    <span style="font-size:13px;color:var(--accent);font-weight:600">+ Agregar</span>
-  </div>`).join('');
-}
-
-function pedAddProd(insumoId) {
-  if (!_pedProvForAdd) return;
-  _pedExtra[_pedProvForAdd] = _pedExtra[_pedProvForAdd] || [];
-  if (!_pedExtra[_pedProvForAdd].includes(insumoId)) _pedExtra[_pedProvForAdd].push(insumoId);
-  // Sacar de removed si estaba ahí
-  if (_pedRemoved[_pedProvForAdd]) _pedRemoved[_pedProvForAdd] = _pedRemoved[_pedProvForAdd].filter(id => id !== insumoId);
-  _persistPed();
-  closeAddProdModal();
   renderPedidos();
 }
 
