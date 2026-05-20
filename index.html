@@ -639,7 +639,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <div style="display:flex;flex-direction:column;gap:14px;margin-top:14px">
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Insumo *</label>
-          <select id="aimInsumo" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF"></select>
+          <input id="aimInsumo" type="text" list="aimInsumoDatalist" autocomplete="off" placeholder="Escribí el nombre — si no existe se da de alta" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF" oninput="_aimCheckInsumo()">
+          <datalist id="aimInsumoDatalist"></datalist>
+          <div id="aimInsumoStatus" style="font-size:12px;margin-top:4px;min-height:16px"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
@@ -2405,22 +2407,34 @@ function openAltaInsumoManualModal(provId) {
   document.getElementById('aimProvId').value = provId;
   document.getElementById('aimProvNombre').textContent = prov.nombre;
 
-  // Llenar select de insumos
-  const sel = document.getElementById('aimInsumo');
-  const opts = ['<option value="">— Elegí un insumo —</option>'];
-  [...insumos].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
-    .forEach(i => opts.push(`<option value="${i.id}">${i.nombre}</option>`));
-  sel.innerHTML = opts.join('');
+  // Llenar datalist de insumos
+  const dl = document.getElementById('aimInsumoDatalist');
+  dl.innerHTML = [...insumos].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'))
+    .map(i => `<option value="${i.nombre.replace(/"/g,'&quot;')}">`).join('');
 
   // Reset campos
-  ['aimCantidad','aimUnidad','aimPesoUnidad','aimPrecioUnit','aimPrecioTotal','aimIVA','aimNroBoleta'].forEach(id => {
+  ['aimInsumo','aimCantidad','aimUnidad','aimPesoUnidad','aimPrecioUnit','aimPrecioTotal','aimIVA','aimNroBoleta'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('aimUnidadPeso').value = '';
   document.getElementById('aimFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('aimInsumoStatus').textContent = '';
 
   document.getElementById('altaInsumoManualModal').classList.add('open');
-  setTimeout(() => sel.focus(), 50);
+  setTimeout(() => document.getElementById('aimInsumo').focus(), 50);
+}
+
+function _aimCheckInsumo() {
+  const val = document.getElementById('aimInsumo').value.trim();
+  const status = document.getElementById('aimInsumoStatus');
+  if (!val) { status.textContent = ''; return; }
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const found = insumos.find(i => norm(i.nombre) === norm(val));
+  if (found) {
+    status.innerHTML = `<span style="color:#065F46">✓ Insumo existente: <strong>${found.nombre}</strong></span>`;
+  } else {
+    status.innerHTML = `<span style="color:#1D4ED8">✦ Se va a dar de alta como nuevo insumo</span>`;
+  }
 }
 
 function closeAltaInsumoManualModal() {
@@ -2441,9 +2455,9 @@ function _aimRecalc(fuente) {
 }
 
 function guardarAltaInsumoManual() {
-  const provId   = document.getElementById('aimProvId').value;
-  const insumoId = document.getElementById('aimInsumo').value;
-  if (!provId || !insumoId) { toast('Elegí un insumo', 'error'); return; }
+  const provId    = document.getElementById('aimProvId').value;
+  const insNombre = document.getElementById('aimInsumo').value.trim();
+  if (!provId || !insNombre) { toast('Ingresá el nombre del insumo', 'error'); return; }
 
   const cantidad   = parseFloat(document.getElementById('aimCantidad').value);
   const unidad     = document.getElementById('aimUnidad').value.trim() || null;
@@ -2459,8 +2473,31 @@ function guardarAltaInsumoManual() {
   if (!isFinite(precioUnit) || precioUnit <= 0) { toast('Ingresá un precio unitario válido', 'error'); return; }
 
   const prov = proveedores.find(p => p.id === provId);
-  const ins  = insumos.find(i => i.id === insumoId);
-  if (!prov || !ins) return;
+  if (!prov) return;
+
+  // Buscar insumo existente o crear nuevo
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  let ins = insumos.find(i => norm(i.nombre) === norm(insNombre));
+  let insumoNuevo = false;
+  if (!ins) {
+    ins = {
+      id: crypto.randomUUID(),
+      nombre: insNombre,
+      unidad: unidadPeso || unidad || '',
+      categoria: categorizarInsumo(insNombre),
+      precioConIVA: precioUnit,
+      precioSinIVA: null,
+      observaciones: '',
+      aliases: []
+    };
+    if (isFinite(pesoUnidad) && unidadPeso) {
+      ins.presQty = 1; ins.presUnit = unidad || 'u';
+      ins.presUnitWeight = pesoUnidad; ins.presUnitWeightUnit = unidadPeso;
+    }
+    insumos.push(ins);
+    insumoNuevo = true;
+  }
+  const insumoId = ins.id;
 
   // 1. Vincular insumo a prov.items si no está
   if (!prov.items) prov.items = [];
@@ -2507,7 +2544,7 @@ function guardarAltaInsumoManual() {
   renderProveedorFacturas(provId);
   renderInsumos();
   renderPedidos();
-  toast(`Insumo agregado a ${prov.nombre}`, 'success');
+  toast(`${insumoNuevo ? `Insumo "${ins.nombre}" creado y agregado` : `Insumo agregado`} a ${prov.nombre}`, 'success');
 }
 
 function openNuevoProvModal() {
