@@ -1730,7 +1730,12 @@ function _updatePresEquiv() {
     const wt    = parseFloat(document.getElementById('fPresUnitWeight').value);
     const wUnit = document.getElementById('fPresUnitWeightUnit').value;
     const _N    = { kg: 1, g: 0.001, L: 1, ml: 0.001 };
-    if (wt && wUnit && _N[wUnit] !== undefined) {
+    if (wt && wUnit === 'un') {
+      // Unidad de conteo: precio por unidad individual
+      const totalUnidades = qty * wt;
+      costo = precio / totalUnidades;
+      label = '/un';
+    } else if (wt && wUnit && _N[wUnit] !== undefined) {
       const total = qty * wt * _N[wUnit];
       const isVol = ['L','ml'].includes(wUnit);
       costo = precio / total;
