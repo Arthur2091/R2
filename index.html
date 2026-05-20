@@ -4379,16 +4379,17 @@ function renderContable() {
       <tr style="font-weight:600;background:var(--surface2)"><td>Total</td><td></td><td style="text-align:right;font-family:var(--mono)">${pesos(totalIngresos)}</td></tr>
     </tbody></table>`;
 
-  // ── COMPRAS (solo de boletas reales subidas con IA — excluye manuales y pedidos) ──
-  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal && p.fuente !== 'manual');
-  const totalCompras = comprasPeriod.reduce((s,p) => s + (p.precioTotal || 0), 0);
+  // ── COMPRAS (suma el importeTotal de cada factura — no líneas) ──
+  // Excluye facturas manuales (sin boleta real) para no contaminar el cierre
+  const comprasPeriod = facturas.filter(f => inPeriod(f.fecha) && f.importeTotal && f.fuente !== 'manual');
+  const totalCompras = comprasPeriod.reduce((s,f) => s + (f.importeTotal || 0), 0);
 
   const byProv = {};
-  comprasPeriod.forEach(p => {
-    const prov = proveedores.find(pr => pr.id === p.proveedorId);
-    const k = prov?.nombre || p.proveedorId || 'Sin proveedor';
+  comprasPeriod.forEach(f => {
+    const prov = proveedores.find(pr => pr.id === f.proveedorId);
+    const k = prov?.nombre || f.proveedorId || 'Sin proveedor';
     if (!byProv[k]) byProv[k] = 0;
-    byProv[k] += p.precioTotal || 0;
+    byProv[k] += f.importeTotal || 0;
   });
   document.getElementById('totalCompras').textContent = pesos(totalCompras);
   document.getElementById('secComprasBody').innerHTML = comprasPeriod.length === 0
@@ -5926,13 +5927,13 @@ function verConsolidado() {
     byRubro[k].total += v.total||0; byRubro[k].count += v.unidades||1;
   });
 
-  // EGRESOS (solo boletas reales subidas con IA — excluye manuales y pedidos)
-  const comprasPeriod = precios.filter(p => inPeriod(p.fecha) && p.precioTotal && p.fuente !== 'manual');
-  const totalCompras  = comprasPeriod.reduce((s,p) => s+(p.precioTotal||0), 0);
+  // EGRESOS (suma importeTotal de cada factura, no líneas — excluye manuales)
+  const comprasPeriod = facturas.filter(f => inPeriod(f.fecha) && f.importeTotal && f.fuente !== 'manual');
+  const totalCompras  = comprasPeriod.reduce((s,f) => s+(f.importeTotal||0), 0);
   const byProv = {};
-  comprasPeriod.forEach(p => {
-    const k = proveedores.find(pr=>pr.id===p.proveedorId)?.nombre || 'Sin proveedor';
-    if (!byProv[k]) byProv[k] = 0; byProv[k] += p.precioTotal||0;
+  comprasPeriod.forEach(f => {
+    const k = proveedores.find(pr=>pr.id===f.proveedorId)?.nombre || 'Sin proveedor';
+    if (!byProv[k]) byProv[k] = 0; byProv[k] += f.importeTotal||0;
   });
 
   const sueldosPeriod = sueldos.filter(s => { if(!s.mes) return false; const [y,m]=s.mes.split('-').map(Number); return y===anio&&(m-1)===mes; });
