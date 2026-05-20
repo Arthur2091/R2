@@ -5667,10 +5667,35 @@ async function extraerListaPrecios() {
   try {
     let content;
     if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
-      // Excel/CSV → texto plano via SheetJS
+      // Excel/CSV → parseo local sin IA
+      document.getElementById('lpStatus').textContent = 'Leyendo Excel…';
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const parsedLocal = _lpParseExcel(rows);
+      if (parsedLocal.items.length) {
+        const items = parsedLocal.items.filter(it => it.nombre && it.precio_unitario != null);
+        if (!items.length) throw new Error('No se reconocieron ítems con precio en el Excel.');
+        const auto = items.map(it => _lpAutoMatch(it.nombre, provId));
+        const matchedFromBoletas = auto.filter(a => a.fuente === 'prov').length;
+        const matchedFromInsumos = auto.filter(a => a.fuente === 'ins').length;
+        const sinMatch = auto.filter(a => !a.insumoId).length;
+        _lpExtraido = { proveedorId: provId, items, autoMatch: auto };
+        document.getElementById('lpStatus').innerHTML = `
+          <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;line-height:1.6">
+            <div style="font-weight:600;color:var(--ink)">✓ ${items.length} ítems leídos del Excel (sin usar IA)</div>
+            <div style="font-size:12px;color:var(--ink2)">
+              ${matchedFromBoletas ? `<span style="color:#065F46">●</span> ${matchedFromBoletas} matcheados desde boletas previas<br>` : ''}
+              ${matchedFromInsumos ? `<span style="color:#1D4ED8">●</span> ${matchedFromInsumos} matcheados por nombre con insumos<br>` : ''}
+              ${sinMatch ? `<span style="color:#92400E">●</span> ${sinMatch} sin match — los confirmás vos` : ''}
+            </div>
+          </div>`;
+        setTimeout(() => { closeListaPreciosModal(); abrirMatchListaModal(); }, 1200);
+        return;
+      }
+      // Fallback: si no pudimos parsear localmente, mandamos a IA como texto
+      document.getElementById('lpStatus').textContent = 'Headers no reconocidos. Pidiendo a la IA…';
       const csv = XLSX.utils.sheet_to_csv(sheet);
       content = [{ type: 'text', text: csv + '\n\n' + _LP_PROMPT }];
     } else if (file && /\.pdf$/i.test(file.name)) {
@@ -5730,6 +5755,75 @@ async function extraerListaPrecios() {
     document.getElementById('lpBtnExtraer').disabled = false;
     toast('Error: ' + e.message, 'error');
   }
+}
+
+function _lpParseExcel(rows) {
+  // Detecta header row + columnas de nombre/precio/unidad/peso por keywords
+  const norm = s => _lpNormStr(String(s || ''));
+  const KW = {
+    nombre:  ['producto','articulo','artículo','descripcion','descripción','detalle','item','ítem','insumo','nombre'],
+    precio:  ['precio','importe','valor','costo','$','pcio','unitario','p u','p.u'],
+    unidad:  ['unidad','um','u m','u/m','presentacion','presentación','envase'],
+    peso:    ['peso','kg','contenido','contiene','gramaje','tamaño','tamano']
+  };
+
+  const score = (cellNorm, keys) => keys.some(k => cellNorm.includes(k));
+
+  // Buscar fila de headers: la primera con al menos 2 celdas que matcheen keywords
+  let headerIdx = -1;
+  let cols = { nombre: -1, precio: -1, unidad: -1, peso: -1 };
+  for (let r = 0; r < Math.min(rows.length, 30); r++) {
+    const row = rows[r] || [];
+    const tentative = { nombre: -1, precio: -1, unidad: -1, peso: -1 };
+    row.forEach((cell, c) => {
+      const n = norm(cell);
+      if (!n) return;
+      if (tentative.nombre === -1 && score(n, KW.nombre)) tentative.nombre = c;
+      if (tentative.precio === -1 && score(n, KW.precio)) tentative.precio = c;
+      if (tentative.unidad === -1 && score(n, KW.unidad)) tentative.unidad = c;
+      if (tentative.peso   === -1 && score(n, KW.peso))   tentative.peso   = c;
+    });
+    if (tentative.nombre !== -1 && tentative.precio !== -1) {
+      headerIdx = r;
+      cols = tentative;
+      break;
+    }
+  }
+  if (headerIdx === -1) return { items: [] };
+
+  // Parsear filas debajo del header
+  const items = [];
+  for (let r = headerIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const nombre = String(row[cols.nombre] || '').trim();
+    let precio = row[cols.precio];
+    if (!nombre || precio == null || precio === '') continue;
+    if (typeof precio === 'string') {
+      // Notación argentina: punto = miles, coma = decimales
+      precio = precio.replace(/[^\d.,-]/g,'').trim();
+      if (precio.includes(',')) precio = precio.replace(/\./g,'').replace(',', '.');
+      else if ((precio.match(/\./g) || []).length > 1) precio = precio.replace(/\./g,'');
+      precio = parseFloat(precio);
+    }
+    if (!isFinite(precio)) continue;
+
+    const unidadRaw = cols.unidad !== -1 ? String(row[cols.unidad] || '').trim() : '';
+    const pesoRaw   = cols.peso   !== -1 ? String(row[cols.peso]   || '').trim() : '';
+
+    // Detectar peso embebido en nombre (ej: "Aceite 5L", "Harina 25kg")
+    let peso_por_unidad = null, unidad_peso = null, unidad = unidadRaw || null;
+    const matchPesoEnNombre = nombre.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|gr|l|lt|ml)\b/i);
+    const matchPesoEnPeso   = pesoRaw.match(/(\d+(?:[.,]\d+)?)\s*(kg|g|gr|l|lt|ml)\b/i);
+    const matchPeso = matchPesoEnPeso || matchPesoEnNombre;
+    if (matchPeso) {
+      peso_por_unidad = parseFloat(matchPeso[1].replace(',', '.'));
+      const u = matchPeso[2].toLowerCase();
+      unidad_peso = (u === 'gr') ? 'g' : (u === 'lt') ? 'L' : u;
+    }
+
+    items.push({ nombre, unidad, peso_por_unidad, unidad_peso, precio_unitario: precio });
+  }
+  return { items };
 }
 
 function _lpNormStr(s) {
