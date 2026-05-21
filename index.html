@@ -544,6 +544,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </head>
 <body>
 
+<div id="bannerVencimientos" style="display:none;position:sticky;top:0;z-index:600;padding:10px 18px;align-items:center;gap:12px;font:14px var(--font);border-bottom:1px solid rgba(0,0,0,.1)"></div>
 <header class="app-header">
   <div class="app-logo">Consolidado <span>Arthur</span></div>
   <div id="syncChip" style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--ink3);display:none"></div>
@@ -576,13 +577,31 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
   <div id="pedidosScreen"></div>
   <div id="provTelModal" class="overlay">
-    <div class="modal" style="max-width:420px">
+    <div class="modal" style="max-width:460px">
       <h2>Datos del proveedor</h2>
-      <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <p class="modal-sub" id="provTelNombre" style="margin-bottom:14px"></p>
+      <div style="display:flex;flex-direction:column;gap:12px">
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Teléfono (con código de área)</label>
           <input id="provTelInput" type="tel" placeholder="11 1234 5678" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          <div style="font-size:11px;color:var(--ink3);margin-top:4px">Dejá vacío si los pedidos son presenciales.</div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 130px;gap:10px">
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Condición de pago</label>
+            <select id="provCondPagoInput" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF">
+              <option value="">— Sin definir —</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="ambos">Efectivo o transferencia</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Días para pagar</label>
+            <input id="provDiasPagoInput" type="number" min="0" step="1" placeholder="0" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:-4px">Vencimiento = fecha de la boleta + días. Dejá 0 (o vacío) para pago contra entrega.</div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeProvTelModal()">Cancelar</button>
@@ -648,6 +667,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <div id="viewProveedores" class="view">
   <div id="provListTop" style="margin-bottom:20px;display:flex;gap:10px;align-items:center">
     <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="flex:1;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
+    <button id="btnPendientesGlobal" class="btn btn-outline" style="padding:14px 18px;white-space:nowrap" onclick="renderPendientesGlobal()">Pedidos pendientes</button>
+    <button id="btnVencimientosGlobal" class="btn btn-outline" style="padding:14px 18px;white-space:nowrap" onclick="renderVencimientosGlobal()">Vencimientos</button>
     <button class="btn btn-primary" style="padding:14px 20px;white-space:nowrap" onclick="openNuevoProvModal()">+ Nuevo proveedor</button>
   </div>
   <div id="proveedoresScreen"></div>
@@ -1617,8 +1638,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         <input id="efHora" type="time">
       </div>
       <div class="field">
-        <label>Total</label>
-        <input id="efTotal" type="number" step="0.01" min="0" placeholder="0.00">
+        <label>Total (con IVA — lo que se transfiere)</label>
+        <input id="efTotal" type="number" step="0.01" min="0" placeholder="0.00" oninput="_efCheckTotal()">
+        <div id="efTotalHelper" style="font-size:11px;color:var(--ink3);margin-top:4px;line-height:1.4"></div>
       </div>
     </div>
     <div class="field">
@@ -2546,11 +2568,13 @@ function savePeriod() {
 }
 
 function renderProveedores() {
+  _pendViewMode = null;
   const screen = document.getElementById('proveedoresScreen');
   const top    = document.getElementById('provListTop');
   const bot    = document.getElementById('provListBottom');
   if (top) top.style.display = '';
   if (bot) bot.style.display = '';
+  _actualizarBadgePendientes();
   const q      = (document.getElementById('searchProveedores')?.value || '').toLowerCase().trim();
   let   lista  = [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -2587,6 +2611,7 @@ function renderProveedores() {
               ${ultima ? ' · Última: ' + ultima.fecha : ''}
             </div>
           </button>
+          <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Tel · Condición de pago · Vencimiento">⚙ Datos</button>
           <button class="btn btn-outline btn-sm" onclick="renombrarProveedor('${p.id}')">Renombrar</button>
           <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}','${p.nombre}')">Eliminar</button>
         </div>`;
@@ -2888,19 +2913,33 @@ function renderProveedorFacturas(provId, subtab) {
   const facturasHtml = !lista.length
     ? '<p style="color:var(--ink2)">Sin facturas cargadas.</p>'
     : `<div style="display:flex;flex-direction:column;gap:.6rem">
-        ${lista.map(f => `
-          <div style="display:flex;gap:8px;align-items:stretch">
+        ${lista.map(f => {
+          const estado = _estadoPagoFactura(f, prov);
+          const badge = _badgePagoFactura(f, prov);
+          const opacity = f.pagado ? '0.65' : '1';
+          const btnPagar = (estado.estado && estado.estado !== 'sin_venc')
+            ? (f.pagado
+                ? `<button class="btn btn-outline" onclick="desmarcarFacturaPagada('${f.id}')" style="white-space:nowrap;align-self:center;font-size:12px">Desmarcar</button>`
+                : `<button class="btn btn-primary" onclick="marcarFacturaPagada('${f.id}')" style="white-space:nowrap;align-self:center;background:#10B981;border-color:#10B981">✓ Pagar</button>`)
+            : '';
+          return `
+          <div style="display:flex;gap:8px;align-items:stretch;opacity:${opacity}">
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer;flex:1" onclick="renderFacturaDetalle('${f.id}','${provId}')">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.25rem">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:.25rem;flex-wrap:wrap">
                 <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
-                <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  ${badge}
+                  <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+                </div>
               </div>
               <div style="font-size:.82rem;color:var(--ink2)">
-                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems
+                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems${estado.venc && !f.pagado ? ` · vence ${estado.venc}` : ''}${f.pagado && f.fechaPago ? ` · pagada el ${f.fechaPago}` : ''}
               </div>
             </div>
+            ${btnPagar}
             <button class="btn btn-outline" onclick="openEditFactura('${f.id}','${provId}')" style="white-space:nowrap;align-self:center">Editar</button>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>`;
 
   const pendientesHtml = !pendientes.length
@@ -2975,6 +3014,7 @@ function renderProveedorFacturas(provId, subtab) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
       <div style="font-size:1.1rem;font-weight:700">${prov?.nombre}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="openProvTelModal('${provId}')">⚙ Datos / Pago</button>
         <button class="btn btn-outline" onclick="openItemsModal('${provId}')">Editar insumos</button>
         <button class="btn btn-outline" onclick="openAltaInsumoManualModal('${provId}')">+ Agregar insumo manual</button>
         <button class="btn btn-primary" onclick="altaInsumosDesdeFacturas('${provId}')">+ Dar de alta en Insumos</button>
@@ -2984,6 +3024,303 @@ function renderProveedorFacturas(provId, subtab) {
     ${tab === 'pend' ? pendientesHtml : facturasHtml}`;
 }
 
+let _pendViewMode = null;
+
+function _hoyISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function _diasEntre(fechaA, fechaB) {
+  // fechaA, fechaB en formato 'YYYY-MM-DD'. Devuelve días enteros (B - A).
+  const a = new Date(fechaA + 'T00:00:00');
+  const b = new Date(fechaB + 'T00:00:00');
+  return Math.round((b - a) / 86400000);
+}
+
+function _vencimientoFactura(f, prov) {
+  if (!f || !f.fecha) return null;
+  if (f.vencimientoPago) return f.vencimientoPago; // override manual
+  if (!prov || prov.diasPago == null) return null;
+  const base = new Date(f.fecha + 'T00:00:00');
+  base.setDate(base.getDate() + (prov.diasPago || 0));
+  return base.getFullYear() + '-' + String(base.getMonth()+1).padStart(2,'0') + '-' + String(base.getDate()).padStart(2,'0');
+}
+
+function _estadoPagoFactura(f, prov) {
+  if (!f) return { estado: null };
+  if (f.pagado) return { estado: 'pagado', fechaPago: f.fechaPago };
+  const venc = _vencimientoFactura(f, prov);
+  if (!venc) return { estado: 'sin_venc' };
+  const diff = _diasEntre(_hoyISO(), venc);
+  if (diff < 0)       return { estado: 'vencido',     dias: -diff, venc };
+  if (diff === 0)     return { estado: 'vence_hoy',   dias: 0,     venc };
+  if (diff === 1)     return { estado: 'vence_manana',dias: 1,     venc };
+  return { estado: 'pendiente', dias: diff, venc };
+}
+
+function _badgePagoFactura(f, prov) {
+  const e = _estadoPagoFactura(f, prov);
+  if (!e.estado || e.estado === 'sin_venc') return '';
+  const map = {
+    pagado:       { bg:'#D1FAE5', fg:'#065F46', txt:'✓ Pagado' },
+    vencido:      { bg:'#FEE2E2', fg:'#991B1B', txt:`⚠ Vencido hace ${e.dias} día${e.dias === 1 ? '' : 's'}` },
+    vence_hoy:    { bg:'#FED7AA', fg:'#9A3412', txt:'⏰ Vence HOY' },
+    vence_manana: { bg:'#FEF3C7', fg:'#92400E', txt:'⏰ Vence mañana' },
+    pendiente:    { bg:'var(--surface2)', fg:'var(--ink2)', txt:`Vence en ${e.dias} días` }
+  };
+  const m = map[e.estado];
+  return `<span style="background:${m.bg};color:${m.fg};font-size:11px;padding:3px 9px;border-radius:999px;font-weight:700;white-space:nowrap">${m.txt}</span>`;
+}
+
+function marcarFacturaPagada(facturaId) {
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  f.pagado = true;
+  f.fechaPago = _hoyISO();
+  persist();
+  renderProveedorFacturas(f.proveedorId, 'fact');
+  _actualizarBannerVencimientos();
+  toast('Factura marcada como pagada', 'success');
+}
+
+function desmarcarFacturaPagada(facturaId) {
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  f.pagado = false;
+  delete f.fechaPago;
+  persist();
+  renderProveedorFacturas(f.proveedorId, 'fact');
+  _actualizarBannerVencimientos();
+  toast('Pago anulado', 'info');
+}
+
+function _actualizarBannerVencimientos() {
+  const el = document.getElementById('bannerVencimientos');
+  if (!el) return;
+  const hoy = _hoyISO();
+  const alertas = facturas.map(f => {
+    if (f.pagado) return null;
+    const prov = proveedores.find(p => p.id === f.proveedorId);
+    const venc = _vencimientoFactura(f, prov);
+    if (!venc) return null;
+    const diff = _diasEntre(hoy, venc);
+    if (diff > 1) return null;
+    return { f, prov, diff, venc };
+  }).filter(Boolean);
+
+  if (!alertas.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  const vencidas = alertas.filter(a => a.diff < 0).length;
+  const hoyN     = alertas.filter(a => a.diff === 0).length;
+  const mananaN  = alertas.filter(a => a.diff === 1).length;
+  const partes = [];
+  if (vencidas) partes.push(`<strong>${vencidas}</strong> vencida${vencidas === 1 ? '' : 's'}`);
+  if (hoyN)     partes.push(`<strong>${hoyN}</strong> vence${hoyN === 1 ? '' : 'n'} hoy`);
+  if (mananaN)  partes.push(`<strong>${mananaN}</strong> vence${mananaN === 1 ? '' : 'n'} mañana`);
+
+  const bgColor = vencidas ? '#FEE2E2' : (hoyN ? '#FED7AA' : '#FEF3C7');
+  const fgColor = vencidas ? '#991B1B' : (hoyN ? '#9A3412' : '#92400E');
+
+  el.style.display = 'flex';
+  el.style.background = bgColor;
+  el.style.color = fgColor;
+  el.innerHTML = `<span style="font-size:18px">⏰</span>
+    <span style="flex:1;font-size:13px;font-weight:600">Pagos: ${partes.join(' · ')}</span>
+    <button onclick="_irAVencimientos()" style="background:${fgColor};color:#fff;border:none;padding:6px 14px;border-radius:6px;font:600 12px var(--font);cursor:pointer">Ver</button>
+    <button onclick="document.getElementById('bannerVencimientos').style.display='none'" title="Ocultar" style="background:transparent;border:none;color:${fgColor};font-size:16px;cursor:pointer;padding:0 4px">✕</button>`;
+}
+
+function _irAVencimientos() {
+  // Navegar a Proveedores y abrir vista de vencimientos
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const navBtn = document.querySelector('[data-view="viewProveedores"]');
+  if (navBtn) navBtn.classList.add('active');
+  document.getElementById('viewProveedores').classList.add('active');
+  renderVencimientosGlobal();
+}
+
+function renderVencimientosGlobal() {
+  _pendViewMode = 'vencimientos';
+  const screen = document.getElementById('proveedoresScreen');
+  const top    = document.getElementById('provListTop');
+  const bot    = document.getElementById('provListBottom');
+  if (top) top.style.display = 'none';
+  if (bot) bot.style.display = 'none';
+
+  const items = facturas.map(f => {
+    const prov = proveedores.find(p => p.id === f.proveedorId);
+    const e = _estadoPagoFactura(f, prov);
+    return { f, prov, e };
+  }).filter(it => it.e.estado && it.e.estado !== 'sin_venc' && it.e.estado !== 'pagado');
+
+  // Ordenar: vencidas primero, después hoy, después por fecha de venc
+  const orden = { vencido:0, vence_hoy:1, vence_manana:2, pendiente:3 };
+  items.sort((a,b) => {
+    const da = orden[a.e.estado], db = orden[b.e.estado];
+    if (da !== db) return da - db;
+    return (a.e.venc || '').localeCompare(b.e.venc || '');
+  });
+
+  const cardsHtml = !items.length
+    ? `<div class="empty-state"><h3>Sin vencimientos pendientes</h3><p>Todas las facturas con condición de pago están pagadas o aún no vencen.</p></div>`
+    : items.map(({f, prov, e}) => {
+        const total = f.importeTotal ? pesos(f.importeTotal) : '—';
+        const cond = prov?.condicionPago ? ({efectivo:'💵 Efectivo', transferencia:'🏦 Transferencia', ambos:'💵🏦 Ambos'})[prov.condicionPago] : '';
+        const borderColor = e.estado === 'vencido' ? '#DC2626' : (e.estado === 'vence_hoy' ? '#EA580C' : (e.estado === 'vence_manana' ? '#F59E0B' : 'var(--border)'));
+        return `<div style="background:var(--surface);border:1.5px solid ${borderColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="min-width:0;flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+              <span style="font-weight:700;font-size:15px">${prov?.nombre || '?'}</span>
+              ${_badgePagoFactura(f, prov)}
+              ${cond ? `<span style="font-size:11px;color:var(--ink2)">${cond}</span>` : ''}
+            </div>
+            <div style="font-size:12px;color:var(--ink2)">Boleta ${f.nroBoleta ? 'N° ' + f.nroBoleta : 'sin número'} · del ${f.fecha} · vence ${e.venc}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;font-size:16px;color:var(--accent);margin-bottom:6px">${total}</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm" onclick="renderProveedorFacturas('${f.proveedorId}','fact')">Ver</button>
+              <button class="btn btn-primary btn-sm" onclick="marcarFacturaPagada('${f.id}')">✓ Pagar</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+  screen.innerHTML = `
+    <div onclick="_volverDePendientesGlobal()" style="position:sticky;top:56px;background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;z-index:50;display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <span style="font-size:18px;line-height:1">←</span>
+      <span>Volver a proveedores</span>
+    </div>
+    <h2 style="margin-bottom:6px">Vencimientos de pago <span style="color:var(--ink3);font-weight:500">· ${items.length}</span></h2>
+    <p class="modal-sub" style="margin-bottom:14px">Facturas con condición de pago, ordenadas por urgencia.</p>
+    ${cardsHtml}`;
+}
+
+window.addEventListener('focus', () => _actualizarBannerVencimientos());
+setInterval(() => _actualizarBannerVencimientos(), 5 * 60 * 1000);
+
+// Mover modales que viven adentro de viewPedidos al <body> para que sean accesibles desde cualquier vista
+['provTelModal','pedidoModal'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el && el.parentNode !== document.body) document.body.appendChild(el);
+});
+
+function _actualizarBadgePendientes() {
+  const btn = document.getElementById('btnPendientesGlobal');
+  if (!btn) return;
+  const n = pedidosPendientes.filter(p => p.estado === 'pendiente' || p.estado === 'esperando_boleta' || p.estado === 'vinculado').length;
+  btn.innerHTML = `Pedidos pendientes${n ? ` <span style="background:var(--accent);color:#fff;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:4px;font-weight:700">${n}</span>` : ''}`;
+}
+
+function renderPendientesGlobal() {
+  _pendViewMode = 'global';
+  const screen = document.getElementById('proveedoresScreen');
+  const top    = document.getElementById('provListTop');
+  const bot    = document.getElementById('provListBottom');
+  if (top) top.style.display = 'none';
+  if (bot) bot.style.display = 'none';
+
+  const pendientes = pedidosPendientes
+    .filter(p => p.estado === 'pendiente' || p.estado === 'esperando_boleta' || p.estado === 'vinculado')
+    .sort((a,b) => (b.fechaPedido || '').localeCompare(a.fechaPedido || ''));
+
+  const nEnviado    = pendientes.filter(p => p.estado === 'pendiente').length;
+  const nEsperando  = pendientes.filter(p => p.estado === 'esperando_boleta').length;
+  const nVinculado  = pendientes.filter(p => p.estado === 'vinculado').length;
+
+  const cardsHtml = !pendientes.length
+    ? `<div class="empty-state"><h3>No hay pedidos pendientes</h3><p>Cuando mandes un pedido por WhatsApp (o registres uno presencial) aparece acá hasta que cargues la boleta.</p></div>`
+    : pendientes.map(ped => {
+        const prov = proveedores.find(p => p.id === ped.proveedorId);
+        const provNombre = prov?.nombre || 'Proveedor desconocido';
+        const fechaPedido = new Date(ped.fechaPedido).toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' });
+        const totalItems = ped.items.reduce((s, it) => s + it.cantidad, 0);
+        const esperando = ped.estado === 'esperando_boleta';
+        const vinculado = ped.estado === 'vinculado';
+        const fechaRecib = esperando && ped.fechaRecibido ? new Date(ped.fechaRecibido).toLocaleDateString('es-AR', { day:'numeric', month:'long' }) : null;
+        let badge, borderColor;
+        if (vinculado) {
+          badge = `<span style="background:#D1FAE5;color:#065F46;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">✓ VINCULADO A BOLETA${ped.nroBoleta ? ' N° ' + ped.nroBoleta : ''}</span>`;
+          borderColor = '#10B981';
+        } else if (esperando) {
+          badge = `<span style="background:#FEF3C7;color:#92400E;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">⏳ ESPERANDO BOLETA</span>`;
+          borderColor = '#FCD34D';
+        } else {
+          badge = `<span style="background:var(--accent-light);color:var(--accent);font-size:11px;padding:3px 10px;border-radius:999px;font-weight:700">📤 PEDIDO ENVIADO</span>`;
+          borderColor = 'var(--border)';
+        }
+        return `<div style="background:var(--surface);border:1.5px solid ${borderColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+            <div style="min-width:0;flex:1">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+                <span style="font-weight:700;font-size:15px;color:var(--ink)">${provNombre}</span>
+                ${badge}
+              </div>
+              <div style="font-size:12px;color:var(--ink2)">Pedido del ${fechaPedido} · ${ped.items.length} insumos · ${totalItems} unidades${fechaRecib ? ` · Recibido el ${fechaRecib}` : ''}${vinculado && ped.fechaBoleta ? ` · Boleta del ${ped.fechaBoleta}` : ''}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--ink2)">Total estimado</div>
+              <div style="font-weight:700;font-size:16px;color:var(--accent)">${ped.totalEstimado ? pesos(ped.totalEstimado) : '—'}</div>
+            </div>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px">
+            <thead><tr style="color:var(--ink2);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:6px 0">Insumo</th>
+              <th style="text-align:center;padding:6px 0">Cant.</th>
+              <th style="text-align:right;padding:6px 0">Precio ref.</th>
+              <th style="text-align:right;padding:6px 0">Subtotal est.</th>
+            </tr></thead>
+            <tbody>
+              ${ped.items.map(it => {
+                const ins = insumos.find(i => i.id === it.insumoId);
+                const subtotal = it.precioRefAlPedir ? it.precioRefAlPedir * it.cantidad : null;
+                return `<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:8px 0">${ins?.nombre || '?'}</td>
+                  <td style="text-align:center;padding:8px 0;font-weight:600">${it.cantidad}</td>
+                  <td style="text-align:right;padding:8px 0;color:var(--ink2)">${it.precioRefAlPedir ? _fmtMoney(it.precioRefAlPedir) : '—'}</td>
+                  <td style="text-align:right;padding:8px 0;font-weight:600">${subtotal ? _fmtMoney(subtotal) : '—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="renderProveedorFacturas('${ped.proveedorId}','pend')">Ver en proveedor</button>
+            ${vinculado
+              ? `<button class="btn btn-primary btn-sm" style="background:#10B981" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
+              : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
+                 ${esperando
+                   ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
+                   : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
+          </div>
+        </div>`;
+      }).join('');
+
+  const resumenHtml = pendientes.length
+    ? `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-bottom:14px">
+        ${nEnviado    ? `<span><strong style="color:var(--accent)">${nEnviado}</strong> enviados</span>` : ''}
+        ${nEsperando  ? `<span><strong style="color:#92400E">${nEsperando}</strong> esperando boleta</span>` : ''}
+        ${nVinculado  ? `<span><strong style="color:#065F46">${nVinculado}</strong> vinculados</span>` : ''}
+      </div>`
+    : '';
+
+  screen.innerHTML = `
+    <div onclick="_volverDePendientesGlobal()" style="position:sticky;top:56px;background:#FFF;border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:16px;z-index:50;display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <span style="font-size:18px;line-height:1">←</span>
+      <span>Volver a proveedores</span>
+    </div>
+    <h2 style="margin-bottom:6px">Pedidos pendientes <span style="color:var(--ink3);font-weight:500">· ${pendientes.length}</span></h2>
+    <p class="modal-sub" style="margin-bottom:14px">Todos los pedidos en curso, ordenados por fecha (más recientes primero).</p>
+    ${resumenHtml}
+    ${cardsHtml}`;
+}
+
+function _volverDePendientesGlobal() {
+  _pendViewMode = null;
+  renderProveedores();
+}
+
 function cancelarPedidoPendiente(pedidoId) {
   if (!confirm('¿Cancelar este pedido pendiente? Esta acción no se puede deshacer.')) return;
   const ped = pedidosPendientes.find(p => p.id === pedidoId);
@@ -2991,7 +3328,8 @@ function cancelarPedidoPendiente(pedidoId) {
   const provId = ped.proveedorId;
   pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
   persist();
-  renderProveedorFacturas(provId, 'pend');
+  if (_pendViewMode === 'global') renderPendientesGlobal();
+  else renderProveedorFacturas(provId, 'pend');
   toast('Pedido cancelado', 'info');
 }
 
@@ -3001,7 +3339,8 @@ function cerrarPedidoVinculado(pedidoId) {
   const provId = ped.proveedorId;
   pedidosPendientes = pedidosPendientes.filter(p => p.id !== pedidoId);
   persist();
-  renderProveedorFacturas(provId, 'pend');
+  if (_pendViewMode === 'global') renderPendientesGlobal();
+  else renderProveedorFacturas(provId, 'pend');
   toast('Pedido cerrado', 'success');
 }
 
@@ -3052,7 +3391,8 @@ function _resolverRecepcionFinal(pedidoId, modo) {
     ped.estado = 'esperando_boleta';
     ped.fechaRecibido = new Date().toISOString();
     persist();
-    renderProveedorFacturas(ped.proveedorId, 'pend');
+    if (_pendViewMode === 'global') renderPendientesGlobal();
+    else renderProveedorFacturas(ped.proveedorId, 'pend');
     toast('Mercadería recibida. Cargá la boleta para cerrar el pedido.', 'success');
     return;
   }
@@ -3585,6 +3925,7 @@ function openEditFactura(facturaId, provId) {
   document.getElementById('efProvId').value     = provId;
   _efItems = (f.items || []).map(it => ({ ...it }));
   _efRefreshItems();
+  _efCheckTotal();
   openModal('modalEditFactura');
 }
 
@@ -3611,6 +3952,43 @@ function _efAddItem() {
   _efItems.push({ nombre: '', cantidad: null, unidad: '', precio_total: null, precio_unitario: null, peso_por_unidad: null, unidad_peso: null, iva: null });
   _efRefreshItems();
   document.getElementById('efItemsList').querySelectorAll('input[data-field="nombre"]')[_efItems.length - 1]?.focus();
+}
+
+function _efSumaItems() {
+  // Devuelve { subtotal: sin IVA, ivaTotal, totalConIva }. Si un item no tiene iva, asume 0%.
+  let subtotal = 0, ivaTotal = 0;
+  _efItems.forEach(it => {
+    const pt = Number(it.precio_total);
+    if (!isFinite(pt) || pt <= 0) return;
+    const ivaPct = isFinite(Number(it.iva)) ? Number(it.iva) : 0;
+    // precio_total en boletas suele venir SIN IVA (neto). Calculamos IVA aparte.
+    subtotal += pt;
+    ivaTotal += pt * (ivaPct / 100);
+  });
+  return { subtotal, ivaTotal, totalConIva: subtotal + ivaTotal };
+}
+
+function _efCheckTotal() {
+  const helper = document.getElementById('efTotalHelper');
+  if (!helper) return;
+  const s = _efSumaItems();
+  const declarado = parseFloat(document.getElementById('efTotal').value);
+  if (!s.subtotal) { helper.innerHTML = ''; return; }
+  const pesos = n => '$' + Math.round(n).toLocaleString('es-AR');
+  const conIvaTxt  = pesos(s.totalConIva);
+  const sinIvaTxt  = pesos(s.subtotal);
+  const btn = `<button type="button" onclick="document.getElementById('efTotal').value=${s.totalConIva.toFixed(2)};_efCheckTotal()" style="background:var(--accent);color:#fff;border:none;padding:3px 10px;border-radius:6px;font:600 11px var(--font);cursor:pointer;margin-left:6px">Usar ${conIvaTxt}</button>`;
+  let warn = '';
+  if (isFinite(declarado) && declarado > 0) {
+    const diff = Math.abs(declarado - s.totalConIva);
+    const diffSinIva = Math.abs(declarado - s.subtotal);
+    if (diffSinIva < diff && diffSinIva / s.subtotal < 0.02) {
+      warn = `<div style="color:#92400E;margin-top:3px">⚠ El total declarado parece estar <strong>SIN IVA</strong>. Con IVA sería <strong>${conIvaTxt}</strong>.</div>`;
+    } else if (diff / s.totalConIva > 0.05) {
+      warn = `<div style="color:#9A3412;margin-top:3px">⚠ El total declarado (${pesos(declarado)}) no coincide con la suma de ítems con IVA (${conIvaTxt}).</div>`;
+    }
+  }
+  helper.innerHTML = `Suma de ítems: <strong>${sinIvaTxt}</strong> s/IVA · IVA: <strong>${pesos(s.ivaTotal)}</strong> · Total con IVA: <strong style="color:var(--accent)">${conIvaTxt}</strong> ${btn}${warn}`;
 }
 
 function _efRefreshItems() {
@@ -3669,6 +4047,7 @@ function _efRefreshItems() {
         </div>
       </div>
     </div>`).join('');
+  _efCheckTotal();
 }
 
 function saveEditFactura() {
@@ -3939,7 +4318,7 @@ Respondé ÚNICAMENTE con JSON válido, sin texto adicional ni markdown, con est
   "fecha": "fecha de la boleta en formato YYYY-MM-DD, o null si no se ve",
   "hora": "hora de la boleta en formato HH:MM, o null si no se ve",
   "nro_boleta": "número de comprobante/boleta/factura tal como aparece, o null si no se ve",
-  "importe_total": número total de la boleta sin símbolo de moneda, o null si no se ve,
+  "importe_total": número TOTAL FINAL CON IVA INCLUIDO (lo que efectivamente se paga) sin símbolo de moneda. Si la boleta muestra subtotal/neto/sin-IVA y un total con IVA por separado, usar SIEMPRE el TOTAL CON IVA. Null si no se ve.
   "items": [
     {
       "nombre": "nombre del producto exactamente como aparece en la boleta",
@@ -4757,11 +5136,13 @@ function importVentas(e) {
           added++;
         });
 
-      // Formato 2: nombre / unidades / importe (ventas por artículo)
-      } else if (header.includes('NOMBRE') && header.includes('IMPORTE')) {
+      // Formato 2: nombre / unidades / importe (o VENTA) — ventas por artículo
+      } else if (header.includes('NOMBRE') && (header.includes('IMPORTE') || header.includes('VENTA') || header.includes('TOTAL'))) {
         const iNombre   = header.indexOf('NOMBRE');
         const iUnidades = header.indexOf('UNIDADES');
-        const iImporte  = header.indexOf('IMPORTE');
+        const iImporte  = header.indexOf('IMPORTE') !== -1
+          ? header.indexOf('IMPORTE')
+          : (header.indexOf('VENTA') !== -1 ? header.indexOf('VENTA') : header.indexOf('TOTAL'));
         const iFecha    = header.indexOf('FECHA');
 
         const serialToISO = s => {
@@ -4776,18 +5157,64 @@ function importVentas(e) {
           return null;
         };
 
-        // Detect period: 1) from data, 2) from filename (DD-MM-YYYY)
-        const primeraFecha = serialToISO(dataRows.find(r => r[iFecha])?.[iFecha]);
+        // Detect period: 1) data FECHA, 2) filename DD-MM-YYYY, 3) sheet name, 4) filename con nombre de mes en español, 5) primeras filas antes del header (título)
+        const MESES_ES = { enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, setiembre:9, octubre:10, noviembre:11, diciembre:12 };
+        const _detectarMesAnio = (texto) => {
+          if (!texto) return null;
+          const t = String(texto).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+          // Patrón "MES YYYY" o "MES de YYYY" o "MES-YYYY"
+          for (const [nombre, num] of Object.entries(MESES_ES)) {
+            const re = new RegExp(`${nombre}[\\s_\\-\\.de]*?(20\\d{2})`, 'i');
+            const m = t.match(re);
+            if (m) return { mes: num, anio: parseInt(m[1], 10) };
+          }
+          // MM-YYYY o MM/YYYY o YYYY-MM
+          const m1 = t.match(/\b(0?[1-9]|1[0-2])[-\/](20\d{2})\b/);
+          if (m1) return { mes: parseInt(m1[1], 10), anio: parseInt(m1[2], 10) };
+          const m2 = t.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);
+          if (m2) return { mes: parseInt(m2[2], 10), anio: parseInt(m2[1], 10) };
+          return null;
+        };
+
+        const primeraFecha = iFecha !== -1 ? serialToISO(dataRows.find(r => r[iFecha])?.[iFecha]) : null;
         const nameMatch = file.name.match(/(\d{2})-(\d{2})-(\d{4})/);
         const fechaFromName = nameMatch ? `${nameMatch[3]}-${nameMatch[2]}-${nameMatch[1]}` : null;
-        let fechaRef = primeraFecha || fechaFromName;
+
+        // 3) Nombre de la hoja
+        const sheetName = wb.SheetNames[0];
+        const detSheet = _detectarMesAnio(sheetName);
+        // 4) Nombre del archivo (con nombre de mes en español o MM-YYYY)
+        const detFile  = _detectarMesAnio(file.name);
+        // 5) Primeras filas antes del header (puede haber un título)
+        let detTitulo = null;
+        for (let i = 0; i < headerIdx; i++) {
+          const texto = (rows[i] || []).filter(c => c != null).join(' ');
+          const d = _detectarMesAnio(texto);
+          if (d) { detTitulo = d; break; }
+        }
+
+        const detectado = detSheet || detFile || detTitulo;
+        // 6) lastModified del archivo (cuando se descargó/exportó del sistema)
+        let fechaFromMtime = null;
+        if (file.lastModified) {
+          const d = new Date(file.lastModified);
+          fechaFromMtime = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+        }
+        let fechaRef = primeraFecha
+          || fechaFromName
+          || (detectado ? `${detectado.anio}-${String(detectado.mes).padStart(2,'0')}-01` : null)
+          || fechaFromMtime;
+
+        const fuenteFecha = primeraFecha ? 'columna fecha'
+          : fechaFromName ? 'nombre del archivo'
+          : detSheet ? 'nombre de la hoja'
+          : detFile ? 'nombre del archivo'
+          : detTitulo ? 'título del archivo'
+          : 'fecha de descarga del archivo';
 
         if (!fechaRef) {
-          const input = prompt('¿A qué mes/año corresponde este archivo? (formato MM/YYYY, ej: 03/2026)');
-          if (!input) return;
-          const [mm, yyyy] = input.split('/');
-          if (!mm || !yyyy) { toast('Formato inválido, usá MM/YYYY', 'error'); return; }
-          fechaRef = `${yyyy}-${mm.padStart(2,'0')}-01`;
+          toast('No pude detectar ninguna fecha del archivo.', 'error');
+          return;
         }
 
         const batchId = `batch-${fechaRef.slice(0,7)}`; // YYYY-MM
@@ -4814,7 +5241,7 @@ function importVentas(e) {
         localStorage.setItem('cons_mes',  _m - 1);
         localStorage.setItem('cons_anio', _y);
         renderContable();
-        toast(`${added} registros importados — ${_m}/${_y}`, 'success');
+        toast(`${added} registros importados — ${_m}/${_y} (mes detectado de: ${fuenteFecha})`, 'success');
         return; // skip the generic persist/init/toast below
 
       } else {
@@ -6728,7 +7155,7 @@ async function _borrarTodo() {
   insumos = []; proveedores = []; precios = []; facturas = []; recetas = []; listasPrecios = []; pedidosPendientes = [];
   ventas = []; sueldos = []; otrosEgresos = [];
   localStorage.removeItem('boletaArchivos');
-  renderInsumos(); renderProveedores(); renderRecetas(); initContableView();
+  renderInsumos(); renderProveedores(); renderRecetas(); initContableView(); _actualizarBannerVencimientos();
   toast('Todo borrado. Base limpia.', 'success');
   console.log('✓ Firebase data cleared');
 }
@@ -6770,7 +7197,7 @@ function importarDatos(input) {
       if (d.rubros)          { _customRubros = d.rubros;          localStorage.setItem('cons_rubros',      JSON.stringify(_customRubros)); }
       if (d.margen_obj)      { localStorage.setItem('cons_margen_obj',   d.margen_obj); }
       if (d.costos_extra)    { localStorage.setItem('cons_costos_extra', d.costos_extra); }
-      renderInsumos(); renderProveedores(); renderRecetas(); renderContable();
+      renderInsumos(); renderProveedores(); renderRecetas(); renderContable(); _actualizarBannerVencimientos();
       toast('Backup restaurado', 'success');
     } catch { toast('Error al leer el archivo', 'error'); }
   };
@@ -7896,7 +8323,10 @@ function pedDec(provId, insumoId) {
 function openProvTelModal(provId) {
   _pedProvForTel = provId;
   const prov = proveedores.find(p => p.id === provId);
+  document.getElementById('provTelNombre').textContent = prov?.nombre || '';
   document.getElementById('provTelInput').value = prov?.telefono || '';
+  document.getElementById('provCondPagoInput').value = prov?.condicionPago || '';
+  document.getElementById('provDiasPagoInput').value = (prov?.diasPago != null) ? prov.diasPago : '';
   document.getElementById('provTelModal').classList.add('open');
   setTimeout(() => document.getElementById('provTelInput').focus(), 50);
 }
@@ -7911,9 +8341,14 @@ function guardarTelProv() {
   const prov = proveedores.find(p => p.id === _pedProvForTel);
   if (!prov) return;
   prov.telefono = document.getElementById('provTelInput').value.trim();
+  prov.condicionPago = document.getElementById('provCondPagoInput').value || null;
+  const dias = parseInt(document.getElementById('provDiasPagoInput').value, 10);
+  prov.diasPago = isFinite(dias) && dias >= 0 ? dias : null;
   persist();
   closeProvTelModal();
   renderPedidos();
+  if (_pendViewMode === 'global') renderPendientesGlobal();
+  _actualizarBannerVencimientos();
 }
 
 function enviarPedidoWA(provId) {
