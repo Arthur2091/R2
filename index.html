@@ -590,6 +590,25 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       </div>
     </div>
   </div>
+
+  <!-- MODAL: Pedido a proveedor -->
+  <div id="pedidoModal" class="overlay">
+    <div class="modal" style="max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">
+        <div style="min-width:0;flex:1">
+          <h2 id="pedidoModalTitle" style="margin-bottom:4px">Proveedor</h2>
+          <p class="modal-sub" id="pedidoModalSub" style="margin-bottom:0">Sumá insumos al pedido</p>
+        </div>
+        <button class="btn btn-outline" onclick="closePedidoModal()" style="padding:4px 12px;font-size:16px;line-height:1">✕</button>
+      </div>
+      <input id="searchInsumosPedido" type="text" placeholder="Buscar insumo…" oninput="renderPedidoModalContent()" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:12px">
+      <div id="pedidoModalBody" style="overflow-y:auto;flex:1;min-height:200px;display:flex;flex-direction:column;gap:4px"></div>
+      <div class="modal-actions" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+        <button class="btn btn-outline" onclick="closePedidoModal()">Cerrar</button>
+        <button id="pedidoModalSendBtn" class="btn-wa" style="flex:0;padding:10px 18px" onclick="enviarPedidoWA(_pedModalProvId)" disabled>Pedir</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- INSUMOS -->
@@ -7733,54 +7752,35 @@ function renderPedidos() {
 
     if (itemsConQty > 0) { totalCardsConPedido++; totalItemsPedido += itemsConQty; }
 
-    const telNorm = (prov.telefono || '').replace(/\D/g,'');
     const telDisplay = prov.telefono || '+ Agregar teléfono';
+    const nPend = pedidosPendientes.filter(pp => pp.proveedorId === prov.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta' || pp.estado === 'vinculado')).length;
+    const nInsumosVisibles = insumosOrdenados.length;
+    const insumosLabel = nInsumosVisibles === 0
+      ? `<span style="color:var(--ink3)">Sin insumos cargados</span>`
+      : (q && !provMatch
+          ? `<strong style="color:var(--accent)">${nInsumosVisibles}</strong> coincidencia${nInsumosVisibles === 1 ? '' : 's'}`
+          : `<strong>${nInsumosVisibles}</strong> insumo${nInsumosVisibles === 1 ? '' : 's'} disponibles`);
 
-    const filasHtml = insumosOrdenados.length
-      ? insumosOrdenados.map(iid => {
-          const ins = insumos.find(i => i.id === iid);
-          if (!ins) return '';
-          const qty = qtyMap[iid] || 0;
-          const up = _ultimoPrecio(prov.id, iid);
-          const presLabel = ins.presUnit && ins.presUnitWeight && ins.presUnitWeightUnit
-            ? `${ins.presUnit} × ${ins.presUnitWeight} ${ins.presUnitWeightUnit}`
-            : (ins.unidad || up?.unidad || '');
-          const priceTxt = up
-            ? `<strong>${_fmtMoney(up.precio)}</strong> / ${up.unidad}${presLabel && presLabel !== up.unidad ? ` <span style="color:var(--ink3)">· ${presLabel}</span>` : ''}`
-            : `<span style="color:var(--ink3)">Sin boletas previas${presLabel ? ' · ' + presLabel : ''}</span>`;
-          return `<div class="ped-row ${qty > 0 ? 'has-qty' : ''}" data-iid="${iid}">
-            <div class="ped-row-info">
-              <div class="ped-row-name">${ins.nombre}</div>
-              <div class="ped-row-price">${priceTxt}</div>
-            </div>
-            <div class="ped-stepper">
-              <button onclick="pedDec('${prov.id}','${iid}')" ${qty === 0 ? 'disabled' : ''}>−</button>
-              <span class="qty">${qty || '—'}</span>
-              <button onclick="pedInc('${prov.id}','${iid}')">+</button>
-            </div>
-          </div>`;
-        }).join('')
-      : `<div style="padding:20px 6px;color:var(--ink3);font-size:13px;text-align:center">Sin productos cargados. Vinculá insumos a este proveedor desde una boleta.</div>`;
-
-    cardsHtml += `<div class="ped-card ${itemsConQty > 0 ? 'has-qty' : ''}">
+    cardsHtml += `<div class="ped-card ${itemsConQty > 0 ? 'has-qty' : ''}" onclick="openPedidoModal('${prov.id}')" style="cursor:pointer">
       <div class="ped-card-head">
-        <div>
+        <div style="min-width:0;flex:1">
           <div class="ped-prov-name">${prov.nombre}</div>
-          <div class="ped-prov-tel" onclick="openProvTelModal('${prov.id}')">📞 ${telDisplay}</div>
+          <div class="ped-prov-tel" onclick="event.stopPropagation();openProvTelModal('${prov.id}')">📞 ${telDisplay}</div>
         </div>
-        ${itemsConQty > 0 ? `<span style="font-size:11px;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:999px;font-weight:700">${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'}</span>` : ''}
+        ${itemsConQty > 0 ? `<span style="font-size:11px;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:999px;font-weight:700;white-space:nowrap">${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'}</span>` : ''}
       </div>
-      <div class="ped-prods">${filasHtml}</div>
+      <div style="font-size:12px;color:var(--ink2);padding:6px 2px">${insumosLabel}</div>
       <div class="ped-card-actions">
         ${(() => {
-          const nPend = pedidosPendientes.filter(pp => pp.proveedorId === prov.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta' || pp.estado === 'vinculado')).length;
+          const hasTel = !!(prov.telefono || '').replace(/\D/g,'');
           if (itemsConQty > 0) {
-            return `<button class="btn-wa" onclick="enviarPedidoWA('${prov.id}')">📱 Pedir por WhatsApp</button>`;
+            const lbl = hasTel ? '📱 Pedir por WhatsApp' : '✓ Registrar pedido (presencial)';
+            return `<button class="btn-wa" onclick="event.stopPropagation();enviarPedidoWA('${prov.id}')">${lbl}</button>`;
           }
           if (nPend > 0) {
-            return `<button class="btn-wa" onclick="_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}</button>`;
+            return `<button class="btn-wa" onclick="event.stopPropagation();_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}</button>`;
           }
-          return `<button class="btn-wa" disabled>📱 Pedir por WhatsApp</button>`;
+          return `<button class="btn-wa" onclick="event.stopPropagation();openPedidoModal('${prov.id}')">+ Hacer pedido</button>`;
         })()}
       </div>
     </div>`;
@@ -7800,11 +7800,87 @@ function renderPedidos() {
   }
 }
 
+let _pedModalProvId = null;
+
+function openPedidoModal(provId) {
+  const prov = proveedores.find(p => p.id === provId);
+  if (!prov) return;
+  _pedModalProvId = provId;
+  document.getElementById('pedidoModalTitle').textContent = prov.nombre;
+  document.getElementById('searchInsumosPedido').value = '';
+  renderPedidoModalContent();
+  document.getElementById('pedidoModal').classList.add('open');
+  setTimeout(() => document.getElementById('searchInsumosPedido').focus(), 60);
+}
+
+function closePedidoModal() {
+  _pedModalProvId = null;
+  document.getElementById('pedidoModal').classList.remove('open');
+}
+
+function renderPedidoModalContent() {
+  if (!_pedModalProvId) return;
+  const prov = proveedores.find(p => p.id === _pedModalProvId);
+  if (!prov) return;
+  const q = (document.getElementById('searchInsumosPedido')?.value || '').toLowerCase().trim();
+  const insIds = _insumosDelProv(prov.id);
+  const qtyMap = _pedQty[prov.id] || {};
+  const itemsConQty = Object.values(qtyMap).filter(v => v > 0).length;
+
+  let filtered = insIds.map(iid => insumos.find(i => i.id === iid)).filter(Boolean);
+  if (q) filtered = filtered.filter(ins => ins.nombre.toLowerCase().includes(q));
+  filtered.sort((a, b) => {
+    const qa = qtyMap[a.id] || 0, qb = qtyMap[b.id] || 0;
+    if ((qa > 0) !== (qb > 0)) return qb - qa;
+    return a.nombre.localeCompare(b.nombre, 'es');
+  });
+
+  document.getElementById('pedidoModalSub').textContent = itemsConQty > 0
+    ? `📞 ${prov.telefono || 'sin teléfono'} · ${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'} en el pedido`
+    : `📞 ${prov.telefono || 'sin teléfono'} · sumá insumos al pedido`;
+
+  const hasTel = !!(prov.telefono || '').replace(/\D/g,'');
+  const sendBtn = document.getElementById('pedidoModalSendBtn');
+  sendBtn.disabled = itemsConQty === 0;
+  sendBtn.innerHTML = hasTel ? '📱 Pedir por WhatsApp' : '✓ Registrar pedido (presencial)';
+
+  const body = document.getElementById('pedidoModalBody');
+  if (!filtered.length) {
+    body.innerHTML = q
+      ? `<div style="padding:40px 12px;text-align:center;color:var(--ink3);font-size:13px">Ningún insumo coincide con "${q}"</div>`
+      : `<div style="padding:40px 12px;text-align:center;color:var(--ink3);font-size:13px">Sin insumos cargados para este proveedor.<br>Vinculá insumos cargando una boleta suya.</div>`;
+    return;
+  }
+
+  body.innerHTML = filtered.map(ins => {
+    const qty = qtyMap[ins.id] || 0;
+    const up = _ultimoPrecio(prov.id, ins.id);
+    const presLabel = ins.presUnit && ins.presUnitWeight && ins.presUnitWeightUnit
+      ? `${ins.presUnit} × ${ins.presUnitWeight} ${ins.presUnitWeightUnit}`
+      : (ins.unidad || up?.unidad || '');
+    const priceTxt = up
+      ? `<strong>${_fmtMoney(up.precio)}</strong> / ${up.unidad}${presLabel && presLabel !== up.unidad ? ` <span style="color:var(--ink3)">· ${presLabel}</span>` : ''}`
+      : `<span style="color:var(--ink3)">Sin boletas previas${presLabel ? ' · ' + presLabel : ''}</span>`;
+    return `<div class="ped-row ${qty > 0 ? 'has-qty' : ''}">
+      <div class="ped-row-info">
+        <div class="ped-row-name">${ins.nombre}</div>
+        <div class="ped-row-price">${priceTxt}</div>
+      </div>
+      <div class="ped-stepper">
+        <button onclick="pedDec('${prov.id}','${ins.id}')" ${qty === 0 ? 'disabled' : ''}>−</button>
+        <span class="qty">${qty || '—'}</span>
+        <button onclick="pedInc('${prov.id}','${ins.id}')">+</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function pedInc(provId, insumoId) {
   _pedQty[provId] = _pedQty[provId] || {};
   _pedQty[provId][insumoId] = (_pedQty[provId][insumoId] || 0) + 1;
   _persistPed();
   renderPedidos();
+  if (_pedModalProvId === provId) renderPedidoModalContent();
 }
 
 function pedDec(provId, insumoId) {
@@ -7814,6 +7890,7 @@ function pedDec(provId, insumoId) {
   else _pedQty[provId][insumoId] = cur - 1;
   _persistPed();
   renderPedidos();
+  if (_pedModalProvId === provId) renderPedidoModalContent();
 }
 
 function openProvTelModal(provId) {
@@ -7874,21 +7951,22 @@ function enviarPedidoWA(provId) {
   });
   persist();
 
+  const telNorm = (prov.telefono || '').replace(/\D/g,'');
+
   // RESET cantidades antes de abrir WA (por si el popup bloquea código posterior)
   delete _pedQty[provId];
   _persistPed();
+  if (_pedModalProvId === provId) closePedidoModal();
   renderPedidos();
-  toast(`Pedido enviado a ${prov.nombre}. Quedó en "Pedidos por Ingresar".`, 'success');
 
-  // Abrir WhatsApp al final
-  const telNorm = (prov.telefono || '').replace(/\D/g,'');
-  let url;
-  if (telNorm) {
-    const telFinal = telNorm.startsWith('54') ? telNorm : '54' + telNorm;
-    url = `https://wa.me/${telFinal}?text=${encodeURIComponent(msg)}`;
-  } else {
-    url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  if (!telNorm) {
+    toast(`Pedido presencial registrado para ${prov.nombre}. Quedó en "Pedidos por Ingresar".`, 'success');
+    return;
   }
+
+  toast(`Pedido enviado a ${prov.nombre}. Quedó en "Pedidos por Ingresar".`, 'success');
+  const telFinal = telNorm.startsWith('54') ? telNorm : '54' + telNorm;
+  const url = `https://wa.me/${telFinal}?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
 }
 
