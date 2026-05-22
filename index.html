@@ -565,21 +565,21 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;font-weight:700">v2.1</span>
   <button onclick="exportarDatos()" style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↓ Backup</button>
   <label style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↑ Restaurar<input type="file" accept=".json" onchange="importarDatos(this)" style="display:none"></label>
-  <button id="logoutBtn" onclick="_doLogout()" style="display:none;font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">⎋ Salir</button>
   <nav>
     <button class="nav-btn active" data-view="viewPedidos">Pedidos</button>
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewProveedores">Proveedores</button>
     <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
     <button class="nav-btn" data-view="viewPrecios">Precios</button>
-    <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
+    <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
     <button class="nav-btn" data-view="viewBoletas">Cargar Boletas</button>
     <button class="nav-btn" data-view="viewDeposito">Depósito <span id="depBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:700"></span></button>
     <button class="nav-btn" data-view="viewProduccion">Producción</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-
+    <span id="userEmail" style="display:none;font-size:11px;color:var(--ink2);padding:2px 10px;border-radius:999px;background:var(--surface2);font-weight:600"></span>
+    <button id="logoutBtn" onclick="_doLogout()" style="display:none;font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">⎋ Salir</button>
   </div>
 </header>
 
@@ -2648,8 +2648,8 @@ function renderProveedores() {
         const pagoMap = {
           vencido:     { bg:'#DC2626', fg:'#fff',     border:'#DC2626', txt:`⚠ ${vencidas} vencida${vencidas===1?'':'s'}${proximas?` · ${proximas} por vencer`:''}` },
           proximo:     { bg:'#EA580C', fg:'#fff',     border:'#EA580C', txt:`⏰ ${proximas} vence${proximas===1?'':'n'} en ≤ 3 días` },
-          pendiente:   { bg:'#25D366', fg:'#fff',     border:'var(--border)', txt:`✓ ${pendientes} pendiente${pendientes===1?'':'s'} (con tiempo)` },
-          todo_pagado: { bg:'var(--accent)', fg:'#fff', border:'var(--border)', txt:'✓ Todo pagado' },
+          pendiente:   { bg:'#F59E0B', fg:'#fff',     border:'var(--border)', txt:`${pendientes} pendiente${pendientes===1?'':'s'} de pago` },
+          todo_pagado: { bg:'#25D366', fg:'#fff', border:'var(--border)', txt:'✓ Todo pagado' },
           sin_venc:    { bg:'var(--surface2)', fg:'var(--ink2)', border:'var(--border)', txt:'Sin vencimientos definidos' },
           sin_facturas:{ bg:'var(--surface2)', fg:'var(--ink3)', border:'var(--border)', txt:'Sin boletas cargadas' }
         };
@@ -9295,16 +9295,43 @@ function _bootApp() {
   _fbLoad().then(() => _depBadgeUpdate());
 }
 
+const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
+function _isAdmin(user) {
+  return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+}
+function _aplicarPermisosAdmin(user) {
+  const admin = _isAdmin(user);
+  const btnContable  = document.querySelector('.nav-btn[data-view="viewContable"]');
+  const btnProductos = document.querySelector('.nav-btn[data-view="viewProductos"]');
+  if (btnContable)  btnContable.style.display  = admin ? '' : 'none';
+  if (btnProductos) btnProductos.style.display = admin ? '' : 'none';
+  if (!admin) {
+    ['viewContable','viewProductos'].forEach(id => {
+      const v = document.getElementById(id);
+      if (v && v.classList.contains('active')) {
+        v.classList.remove('active');
+        document.getElementById('viewPedidos')?.classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.nav-btn[data-view="viewPedidos"]')?.classList.add('active');
+      }
+    });
+  }
+}
+
 _auth.onAuthStateChanged(user => {
   const gate   = document.getElementById('loginGate');
   const logout = document.getElementById('logoutBtn');
+  const emailLbl = document.getElementById('userEmail');
+  _aplicarPermisosAdmin(user);
   if (user) {
     if (gate) gate.remove();
     if (logout) logout.style.display = '';
+    if (emailLbl) { emailLbl.textContent = '👤 ' + (user.email || ''); emailLbl.style.display = ''; }
     _bootApp();
   } else {
     if (gate) gate.style.display = 'flex';
     if (logout) logout.style.display = 'none';
+    if (emailLbl) { emailLbl.textContent = ''; emailLbl.style.display = 'none'; }
   }
 });
 </script>
