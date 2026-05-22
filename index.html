@@ -2613,26 +2613,72 @@ function renderProveedores() {
     }
   }
 
+  const hoy = _hoyISO();
   screen.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:.6rem">
+    <div class="ped-grid">
       ${lista.map(p => {
-        const nFacturas = facturas.filter(f => f.proveedorId === p.id).length;
-        const ultima    = facturas.filter(f => f.proveedorId === p.id).sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
+        const facturasProv = facturas.filter(f => f.proveedorId === p.id);
+        const nFacturas = facturasProv.length;
+        const ultima    = facturasProv.slice().sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
         const nPend     = pedidosPendientes.filter(pp => pp.proveedorId === p.id && (pp.estado === 'pendiente' || pp.estado === 'esperando_boleta' || pp.estado === 'vinculado')).length;
-        return `<div style="display:flex;align-items:center;gap:8px">
-          <button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;flex:1" onclick="renderProveedorFacturas('${p.id}')">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-              <span style="font-size:1rem;font-weight:700">${p.nombre}</span>
-              ${nPend ? `<span style="background:var(--accent);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700">${nPend} pendiente${nPend === 1 ? '' : 's'}</span>` : ''}
+        const telDisplay = p.telefono || '+ Agregar teléfono';
+
+        // Estado de pagos
+        let pagoEstado = 'sin_facturas'; // sin_facturas | sin_venc | todo_pagado | pendiente | proximo | vencido
+        let vencidas = 0, proximas = 0, pendientes = 0, pagadas = 0, sinVenc = 0;
+        let peorDiff = null;
+        facturasProv.forEach(f => {
+          if (f.pagado) { pagadas++; return; }
+          const venc = _vencimientoFactura(f, p);
+          if (!venc) { sinVenc++; return; }
+          const diff = _diasEntre(hoy, venc);
+          if (diff < 0) vencidas++;
+          else if (diff <= 3) proximas++;
+          else pendientes++;
+          if (peorDiff === null || diff < peorDiff) peorDiff = diff;
+        });
+
+        if (!nFacturas) pagoEstado = 'sin_facturas';
+        else if (vencidas)      pagoEstado = 'vencido';
+        else if (proximas)      pagoEstado = 'proximo';
+        else if (pendientes)    pagoEstado = 'pendiente';
+        else if (pagadas)       pagoEstado = 'todo_pagado';
+        else                    pagoEstado = 'sin_venc';
+
+        const pagoMap = {
+          vencido:     { bg:'#DC2626', fg:'#fff',     border:'#DC2626', txt:`⚠ ${vencidas} vencida${vencidas===1?'':'s'}${proximas?` · ${proximas} por vencer`:''}` },
+          proximo:     { bg:'#EA580C', fg:'#fff',     border:'#EA580C', txt:`⏰ ${proximas} vence${proximas===1?'':'n'} en ≤ 3 días` },
+          pendiente:   { bg:'#25D366', fg:'#fff',     border:'var(--border)', txt:`✓ ${pendientes} pendiente${pendientes===1?'':'s'} (con tiempo)` },
+          todo_pagado: { bg:'var(--accent)', fg:'#fff', border:'var(--border)', txt:'✓ Todo pagado' },
+          sin_venc:    { bg:'var(--surface2)', fg:'var(--ink2)', border:'var(--border)', txt:'Sin vencimientos definidos' },
+          sin_facturas:{ bg:'var(--surface2)', fg:'var(--ink3)', border:'var(--border)', txt:'Sin boletas cargadas' }
+        };
+        const pm = pagoMap[pagoEstado];
+
+        const borderHighlight = pagoEstado === 'vencido' ? 'border-color:#DC2626;box-shadow:0 0 0 1px #DC2626'
+                              : pagoEstado === 'proximo' ? 'border-color:#EA580C;box-shadow:0 0 0 1px #EA580C'
+                              : '';
+
+        return `<div class="ped-card" onclick="renderProveedorFacturas('${p.id}')" style="cursor:pointer;${borderHighlight}">
+          <div class="ped-card-head">
+            <div style="min-width:0;flex:1">
+              <div class="ped-prov-name">${p.nombre}${nPend ? ` <span style="background:var(--accent);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;vertical-align:middle;margin-left:4px">${nPend} pedido${nPend===1?'':'s'}</span>` : ''}</div>
+              <div class="ped-prov-tel" onclick="event.stopPropagation();openProvTelModal('${p.id}')">📞 ${telDisplay}</div>
             </div>
-            <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">
-              ${nFacturas} factura${nFacturas !== 1 ? 's' : ''}
-              ${ultima ? ' · Última: ' + ultima.fecha : ''}
+            <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+              <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Datos del proveedor">⚙</button>
+              <button class="btn btn-outline btn-sm" onclick="renombrarProveedor('${p.id}')" title="Renombrar">✎</button>
+              <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}','${(p.nombre||'').replace(/'/g, "\\'")}')" title="Eliminar">✕</button>
             </div>
-          </button>
-          <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Tel · Condición de pago · Vencimiento">⚙ Datos</button>
-          <button class="btn btn-outline btn-sm" onclick="renombrarProveedor('${p.id}')">Renombrar</button>
-          <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}','${p.nombre}')">Eliminar</button>
+          </div>
+          <div style="font-size:12px;color:var(--ink2);padding:6px 2px">
+            ${nFacturas
+              ? `<strong>${nFacturas}</strong> factura${nFacturas !== 1 ? 's' : ''}${ultima ? ` · Última: ${ultima.fecha}` : ''}`
+              : `<span style="color:var(--ink3)">Sin facturas cargadas</span>`}
+          </div>
+          <div class="ped-card-actions">
+            <button class="btn-wa" style="background:${pm.bg};color:${pm.fg}" onclick="event.stopPropagation();renderProveedorFacturas('${p.id}','fact')">${pm.txt}</button>
+          </div>
         </div>`;
       }).join('')}
     </div>`;
