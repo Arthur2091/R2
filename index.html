@@ -586,7 +586,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <!-- PEDIDOS -->
 <div id="viewPedidos" class="view active">
   <div class="toolbar" style="margin-bottom:18px;gap:12px;align-items:center">
-    <input id="searchPedidos" type="text" placeholder="Buscar proveedor o producto…" oninput="renderPedidos()" style="flex:1;max-width:380px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#FFF;font:14px var(--font)">
+    <input id="searchPedidos" type="text" autocomplete="off" placeholder="Buscar proveedor o producto…" oninput="renderPedidos()" style="flex:1;max-width:380px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#FFF;font:14px var(--font)">
     <button id="btnLimpiarPedidos" class="btn btn-outline" onclick="limpiarTodosPedidos()" style="color:var(--danger);border-color:var(--danger)">Limpiar todo</button>
     <span id="pedidosResumen" style="margin-left:auto;font-size:13px;color:var(--ink2)"></span>
   </div>
@@ -9253,12 +9253,12 @@ _auth.onAuthStateChanged(user => {
   const gate   = document.getElementById('loginGate');
   const logout = document.getElementById('logoutBtn');
   if (user) {
-    gate.style.display   = 'none';
-    logout.style.display = '';
+    if (gate) gate.remove();
+    if (logout) logout.style.display = '';
     _bootApp();
   } else {
-    gate.style.display   = 'flex';
-    logout.style.display = 'none';
+    if (gate) gate.style.display = 'flex';
+    if (logout) logout.style.display = 'none';
   }
 });
 </script>
