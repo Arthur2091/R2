@@ -555,7 +555,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn active" data-view="viewPedidos">Pedidos</button>
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewProveedores">Proveedores</button>
-    <button class="nav-btn" data-view="viewContable">Contable</button>
+    <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
     <button class="nav-btn" data-view="viewPrecios">Precios</button>
     <button class="nav-btn" data-view="viewProductos">Productos Vendidos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
@@ -1087,7 +1087,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <button class="dep-subtab" data-prod-sub="barra" onclick="_prodSwitchSub('barra')">🥤 Barra</button>
       <button class="dep-subtab" data-prod-sub="movs" onclick="_prodSwitchSub('movs')">Historial</button>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="_prodAbrirRegistro()">+ Registrar producción</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-primary btn-sm" onclick="_prodAbrirRegistro()">+ Registrar producción</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_prodBorrarTodo()">Borrar todo</button>
+    </div>
   </div>
   <div id="produccionScreen"></div>
 </div>
@@ -8705,6 +8708,16 @@ function _depRechazar(movId) {
   _depBadgeUpdate();
   renderDeposito();
   toast('Rechazado', 'success');
+}
+
+async function _prodBorrarTodo() {
+  if (!confirm('¿Borrar TODA la producción? Esto elimina el stock de cocina/barra y el historial de movimientos. No se puede deshacer.')) return;
+  if (!confirm('Última confirmación: ¿borrar stock + historial de producción?')) return;
+  stockBarra = {};
+  produccionMovs = [];
+  await persist();
+  renderProduccion();
+  toast('Producción borrada', 'success');
 }
 
 async function _depBorrarTodo() {
