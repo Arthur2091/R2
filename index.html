@@ -554,7 +554,9 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Contraseña</label>
     <input id="loginPass" type="password" required autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:20px;background:var(--surface);box-sizing:border-box">
     <div id="loginErr" style="display:none;padding:8px 12px;background:#FEE2E2;color:#991B1B;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
-    <button id="loginBtn" type="submit" style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font:600 14px var(--font);cursor:pointer">Ingresar</button>
+    <div id="loginOk" style="display:none;padding:8px 12px;background:#D1FAE5;color:#065F46;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
+    <button id="loginBtn" type="submit" style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font:600 14px var(--font);cursor:pointer;margin-bottom:10px">Ingresar</button>
+    <button id="signupBtn" type="button" onclick="_doSignup()" style="width:100%;padding:11px;background:transparent;color:var(--ink2);border:1px solid var(--border);border-radius:8px;font:600 13px var(--font);cursor:pointer">Crear cuenta nueva</button>
   </form>
 </div>
 
@@ -579,6 +581,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
     <span id="userEmail" style="display:none;font-size:11px;color:var(--ink2);padding:2px 10px;border-radius:999px;background:var(--surface2);font-weight:600"></span>
+    <style>#userEmail.is-admin{cursor:pointer;transition:background .12s}#userEmail.is-admin:hover{background:var(--accent-light)}</style>
     <button id="logoutBtn" onclick="_doLogout()" style="display:none;font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">⎋ Salir</button>
   </div>
 </header>
@@ -1095,6 +1098,60 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </div>
 
 <!-- VIEW: Producción -->
+<!-- USUARIOS (solo super-admin) -->
+<div id="viewUsuarios" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="margin:0 0 4px 0">Usuarios y permisos</h2>
+      <p style="margin:0;font-size:13px;color:var(--ink2)">Controlá qué páginas puede ver cada usuario.</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="_usrAbrirModalNuevo()">+ Nuevo usuario</button>
+      <button class="btn btn-outline" onclick="_usrCargar()">↻ Refrescar</button>
+    </div>
+  </div>
+
+  <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:12px;color:#92400E">
+    💡 <strong>Dos formas de sumar usuarios:</strong> (1) le das alta vos desde "+ Nuevo usuario" con email y contraseña — listo, ya entra. (2) la persona se registra sola con "Crear cuenta nueva" en el login y aparece acá con los permisos por defecto.
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:24px">
+    <h3 style="margin:0 0 4px 0;font-size:15px">Permisos por defecto para usuarios nuevos</h3>
+    <p style="margin:0 0 12px 0;font-size:12px;color:var(--ink2)">Cuando alguien crea una cuenta nueva, arranca con estas vistas habilitadas.</p>
+    <div id="usrDefaultPerms" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px"></div>
+    <button class="btn btn-primary btn-sm" onclick="_usrGuardarDefault()">Guardar permisos por defecto</button>
+  </div>
+
+  <div id="usrListaScreen"></div>
+
+  <!-- MODAL: Nuevo usuario -->
+  <div id="usrNuevoModal" class="overlay">
+    <div class="modal" style="max-width:480px">
+      <h2>Nuevo usuario</h2>
+      <p class="modal-sub">Crealo con email y contraseña inicial. Después le pasás los datos y puede cambiar la clave entrando a su cuenta.</p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Email *</label>
+          <input id="usrNuevoEmail" type="email" placeholder="ejemplo@gmail.com" autocomplete="off" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Contraseña inicial * <span style="color:var(--ink3);font-weight:400">(mínimo 6 caracteres)</span></label>
+          <input id="usrNuevoPass" type="text" placeholder="contraseña" autocomplete="off" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);font-family:var(--font-mono,monospace)">
+        </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Permisos iniciales</label>
+          <div id="usrNuevoPerms" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+        <div id="usrNuevoErr" style="display:none;padding:8px 12px;background:#FEE2E2;color:#991B1B;border-radius:8px;font-size:13px"></div>
+      </div>
+      <div class="modal-actions" style="margin-top:18px">
+        <button class="btn btn-outline" onclick="_usrCerrarModalNuevo()">Cancelar</button>
+        <button id="usrNuevoSubmit" class="btn btn-primary" onclick="_usrCrearNuevo()">Crear usuario</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="viewProduccion" class="view">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
     <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);flex-wrap:wrap">
@@ -1799,6 +1856,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'viewPedidos')    renderPedidos();
     if (btn.dataset.view === 'viewDeposito')   renderDeposito();
     if (btn.dataset.view === 'viewProduccion') renderProduccion();
+    if (btn.dataset.view === 'viewUsuarios')   _usrCargar();
   });
 });
 
@@ -9296,42 +9354,370 @@ function _bootApp() {
 }
 
 const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
+const ADMIN_ONLY_VIEWS = ['viewContable','viewProductos','viewUsuarios'];
+const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
+let _userPermisos = null; // cache de permisos del usuario actual
+let _permsDefault = null; // cache de permisos por defecto (de Firestore)
+
 function _isAdmin(user) {
   return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
 }
-function _aplicarPermisosAdmin(user) {
+
+function _todasLasViews() {
+  return Array.from(document.querySelectorAll('.nav-btn'))
+    .map(b => b.dataset.view)
+    .filter(v => v && !ADMIN_ONLY_VIEWS.includes(v));
+}
+
+async function _cargarPermsDefault() {
+  try {
+    const snap = await _db.collection('config').doc('permisos_default').get();
+    if (snap.exists && Array.isArray(snap.data().permisos)) {
+      _permsDefault = snap.data().permisos;
+    } else {
+      _permsDefault = [...PERMS_DEFAULT_INICIAL];
+    }
+  } catch(e) {
+    console.warn('No se pudo cargar permisos default', e);
+    _permsDefault = [...PERMS_DEFAULT_INICIAL];
+  }
+  return _permsDefault;
+}
+
+async function _cargarPermisosUsuario(user) {
+  if (_isAdmin(user)) { _userPermisos = null; return null; }
+  if (!user) { _userPermisos = []; return []; }
+  try {
+    const ref = _db.collection('usuarios').doc(user.uid);
+    const snap = await ref.get();
+    if (snap.exists && Array.isArray(snap.data().permisos)) {
+      _userPermisos = snap.data().permisos;
+    } else {
+      // Primera vez: crear doc con permisos por defecto
+      await _cargarPermsDefault();
+      _userPermisos = [..._permsDefault];
+      await ref.set({
+        email: user.email || '',
+        permisos: _userPermisos,
+        creado: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+  } catch(e) {
+    console.warn('Error cargando permisos', e);
+    _userPermisos = [];
+  }
+  return _userPermisos;
+}
+
+function _aplicarPermisosUI(user) {
   const admin = _isAdmin(user);
-  const btnContable  = document.querySelector('.nav-btn[data-view="viewContable"]');
-  const btnProductos = document.querySelector('.nav-btn[data-view="viewProductos"]');
-  if (btnContable)  btnContable.style.display  = admin ? '' : 'none';
-  if (btnProductos) btnProductos.style.display = admin ? '' : 'none';
-  if (!admin) {
-    ['viewContable','viewProductos'].forEach(id => {
-      const v = document.getElementById(id);
-      if (v && v.classList.contains('active')) {
-        v.classList.remove('active');
-        document.getElementById('viewPedidos')?.classList.add('active');
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.nav-btn[data-view="viewPedidos"]')?.classList.add('active');
-      }
-    });
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const v = btn.dataset.view;
+    if (!v) return;
+    let visible;
+    if (admin) visible = true;
+    else if (ADMIN_ONLY_VIEWS.includes(v)) visible = false;
+    else visible = Array.isArray(_userPermisos) && _userPermisos.includes(v);
+    btn.style.display = visible ? '' : 'none';
+  });
+
+  // Si no hay usuario, el login gate se encarga — no tocar las vistas
+  if (!user) return;
+
+  // Ocultar la pantalla huérfana "sin permisos" si existía de una corrida anterior
+  const sinPerm = document.getElementById('viewSinPermisos');
+  if (sinPerm) sinPerm.classList.remove('active');
+
+  // Determinar si la vista activa sigue siendo válida (tiene nav-btn visible)
+  const activa = document.querySelector('.view.active');
+  const activaId = activa?.id;
+  const btnActivo = activaId ? document.querySelector(`.nav-btn[data-view="${activaId}"]`) : null;
+  const activaInvalida = !activaId || activaId === 'viewSinPermisos' || !btnActivo || btnActivo.style.display === 'none';
+
+  if (activaInvalida) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    const primera = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.style.display !== 'none');
+    if (primera) {
+      document.getElementById(primera.dataset.view)?.classList.add('active');
+      primera.classList.add('active');
+    } else if (!admin) {
+      _mostrarPantallaSinPermisos();
+    }
   }
 }
 
-_auth.onAuthStateChanged(user => {
+function _mostrarPantallaSinPermisos() {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  let el = document.getElementById('viewSinPermisos');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'viewSinPermisos';
+    el.className = 'view';
+    el.innerHTML = `<div class="empty-state" style="margin-top:80px"><h3>Cuenta sin permisos</h3><p>Pedile al administrador (hernan.layno@gmail.com) que te habilite las páginas que necesitás.</p></div>`;
+    document.querySelector('main, body').appendChild(el);
+  }
+  el.classList.add('active');
+}
+
+/* ── PANEL USUARIOS (solo admin) ───────────────────────────────── */
+
+const VIEWS_LABELS = {
+  viewPedidos: 'Pedidos',
+  viewInsumos: 'Insumos',
+  viewProveedores: 'Proveedores',
+  viewPrecios: 'Precios',
+  viewRecetas: 'Recetas',
+  viewBoletas: 'Cargar Boletas',
+  viewDeposito: 'Depósito',
+  viewProduccion: 'Producción'
+};
+
+async function _usrCargar() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  await _cargarPermsDefault();
+
+  // Render checkboxes de permisos por defecto
+  const wrapDef = document.getElementById('usrDefaultPerms');
+  if (wrapDef) {
+    wrapDef.innerHTML = Object.entries(VIEWS_LABELS).map(([v, lbl]) => {
+      const checked = _permsDefault.includes(v) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-radius:8px;font-size:13px;cursor:pointer">
+        <input type="checkbox" data-default-view="${v}" ${checked}> ${lbl}
+      </label>`;
+    }).join('');
+  }
+
+  // Cargar lista de usuarios
+  const screen = document.getElementById('usrListaScreen');
+  screen.innerHTML = '<p style="color:var(--ink2)">Cargando usuarios…</p>';
+  try {
+    const snap = await _db.collection('usuarios').get();
+    const usuarios = [];
+    snap.forEach(doc => usuarios.push({ uid: doc.id, ...doc.data() }));
+    usuarios.sort((a,b) => (a.email||'').localeCompare(b.email||''));
+
+    if (!usuarios.length) {
+      screen.innerHTML = '<div class="empty-state"><h3>Sin usuarios registrados</h3><p>Cuando alguien cree una cuenta, aparece acá.</p></div>';
+      return;
+    }
+
+    screen.innerHTML = usuarios.map(u => {
+      const isAdminUser = ADMIN_EMAILS.includes((u.email||'').toLowerCase());
+      const perms = u.permisos || [];
+      const checks = Object.entries(VIEWS_LABELS).map(([v, lbl]) => {
+        const checked = isAdminUser || perms.includes(v) ? 'checked' : '';
+        const disabled = isAdminUser ? 'disabled' : '';
+        return `<label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface2);border-radius:8px;font-size:12px;cursor:${isAdminUser?'not-allowed':'pointer'}">
+          <input type="checkbox" data-perm-uid="${u.uid}" data-perm-view="${v}" ${checked} ${disabled}> ${lbl}
+        </label>`;
+      }).join('');
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <div>
+            <div style="font-weight:700;font-size:14px">${u.email || '(sin email)'}${isAdminUser ? ' <span style="background:var(--accent);color:#fff;font-size:10px;padding:2px 8px;border-radius:999px;margin-left:6px">SUPER USUARIO</span>' : ''}</div>
+            <div style="font-size:11px;color:var(--ink3);font-family:var(--font-mono,monospace)">${u.uid}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            ${isAdminUser ? '' : `<button class="btn btn-primary btn-sm" onclick="_usrGuardar('${u.uid}')">Guardar</button>`}
+            ${isAdminUser ? '' : `<button class="btn btn-danger btn-sm" onclick="_usrEliminar('${u.uid}','${(u.email||'').replace(/'/g,"\\'")}')">Eliminar</button>`}
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">${checks}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    screen.innerHTML = `<p style="color:var(--danger)">Error cargando usuarios: ${e.message}</p>`;
+  }
+}
+
+async function _usrGuardarDefault() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  const checks = document.querySelectorAll('#usrDefaultPerms input[data-default-view]');
+  const perms = Array.from(checks).filter(c => c.checked).map(c => c.dataset.defaultView);
+  try {
+    await _db.collection('config').doc('permisos_default').set({ permisos: perms });
+    _permsDefault = perms;
+    toast('Permisos por defecto guardados', 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function _usrGuardar(uid) {
+  if (!_isAdmin(_auth.currentUser)) return;
+  const checks = document.querySelectorAll(`input[data-perm-uid="${uid}"]`);
+  const perms = Array.from(checks).filter(c => c.checked).map(c => c.dataset.permView);
+  try {
+    await _db.collection('usuarios').doc(uid).set({ permisos: perms }, { merge: true });
+    toast('Permisos actualizados', 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function _usrEliminar(uid, email) {
+  if (!_isAdmin(_auth.currentUser)) return;
+  if (!confirm(`¿Eliminar el registro de permisos de ${email}?\n\n(Nota: esto solo borra los permisos. El usuario en Firebase Auth sigue existiendo y al volver a entrar se le crearán permisos por defecto.)`)) return;
+  try {
+    await _db.collection('usuarios').doc(uid).delete();
+    toast('Usuario eliminado', 'success');
+    _usrCargar();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+function _abrirUsuarios() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('viewUsuarios').classList.add('active');
+  _usrCargar();
+}
+
+// App secundaria para crear usuarios desde el panel sin deslogear al admin
+let _fbAppSecundaria = null;
+function _getFbAppSecundaria() {
+  if (_fbAppSecundaria) return _fbAppSecundaria;
+  _fbAppSecundaria = firebase.initializeApp({
+    apiKey: "AIzaSyC8isESO5gop5LQxdnO-f25UsMtHRIiN78",
+    authDomain: "arthur-consolidado.firebaseapp.com",
+    projectId: "arthur-consolidado",
+    storageBucket: "arthur-consolidado.firebasestorage.app",
+    messagingSenderId: "610315407018",
+    appId: "1:610315407018:web:c768103db4cab8fee3cad3"
+  }, 'crearUsuario');
+  return _fbAppSecundaria;
+}
+
+function _usrAbrirModalNuevo() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  document.getElementById('usrNuevoEmail').value = '';
+  document.getElementById('usrNuevoPass').value  = '';
+  document.getElementById('usrNuevoErr').style.display = 'none';
+
+  // Render checkboxes con permisos por defecto preseleccionados
+  const wrap = document.getElementById('usrNuevoPerms');
+  const defaults = _permsDefault || PERMS_DEFAULT_INICIAL;
+  wrap.innerHTML = Object.entries(VIEWS_LABELS).map(([v, lbl]) => {
+    const checked = defaults.includes(v) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-radius:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox" data-new-perm="${v}" ${checked}> ${lbl}
+    </label>`;
+  }).join('');
+
+  document.getElementById('usrNuevoModal').classList.add('open');
+  setTimeout(() => document.getElementById('usrNuevoEmail').focus(), 50);
+}
+
+function _usrCerrarModalNuevo() {
+  document.getElementById('usrNuevoModal').classList.remove('open');
+}
+
+async function _usrCrearNuevo() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  const email = document.getElementById('usrNuevoEmail').value.trim();
+  const pass  = document.getElementById('usrNuevoPass').value;
+  const errEl = document.getElementById('usrNuevoErr');
+  const btn   = document.getElementById('usrNuevoSubmit');
+  errEl.style.display = 'none';
+
+  if (!email || !pass) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = ''; return; }
+  if (pass.length < 6)  { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = ''; return; }
+
+  const perms = Array.from(document.querySelectorAll('#usrNuevoPerms input[data-new-perm]'))
+    .filter(c => c.checked).map(c => c.dataset.newPerm);
+
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    // Crear usuario en una instancia secundaria de Firebase Auth para no afectar la sesión del admin
+    const secApp  = _getFbAppSecundaria();
+    const secAuth = firebase.auth(secApp);
+    const cred = await secAuth.createUserWithEmailAndPassword(email, pass);
+    const uid  = cred.user.uid;
+
+    // Crear el doc de permisos en Firestore (la app principal sigue autenticada como admin)
+    await _db.collection('usuarios').doc(uid).set({
+      email,
+      permisos: perms,
+      creado: firebase.firestore.FieldValue.serverTimestamp(),
+      creadoPor: _auth.currentUser?.email || 'admin'
+    });
+
+    // Cerrar la sesión de la app secundaria
+    await secAuth.signOut();
+
+    toast(`Usuario ${email} creado`, 'success');
+    _usrCerrarModalNuevo();
+    _usrCargar();
+  } catch(err) {
+    const map = {
+      'auth/email-already-in-use': 'Ese email ya tiene cuenta. Buscalo en la lista para editar permisos.',
+      'auth/invalid-email': 'Email inválido.',
+      'auth/weak-password': 'La contraseña es muy débil.',
+      'auth/network-request-failed': 'Sin conexión.'
+    };
+    errEl.textContent = map[err.code] || ('Error: ' + (err.message || err.code));
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear usuario';
+  }
+}
+
+async function _doSignup() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginErr');
+  const okEl  = document.getElementById('loginOk');
+  const btn   = document.getElementById('signupBtn');
+  errEl.style.display = 'none';
+  okEl.style.display = 'none';
+  if (!email || !pass) { errEl.textContent = 'Completá email y contraseña.'; errEl.style.display = ''; return; }
+  if (pass.length < 6)  { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.'; errEl.style.display = ''; return; }
+  btn.disabled = true; btn.textContent = 'Creando cuenta…';
+  try {
+    await _auth.createUserWithEmailAndPassword(email, pass);
+    // El onAuthStateChanged se encarga de crear el doc en Firestore con permisos por defecto.
+  } catch(err) {
+    const map = {
+      'auth/email-already-in-use': 'Ese email ya tiene cuenta. Probá ingresar.',
+      'auth/invalid-email': 'Email inválido.',
+      'auth/weak-password': 'La contraseña es muy débil.',
+      'auth/network-request-failed': 'Sin conexión.'
+    };
+    errEl.textContent = map[err.code] || ('Error: ' + (err.message || err.code));
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Crear cuenta nueva';
+  }
+}
+
+_auth.onAuthStateChanged(async user => {
   const gate   = document.getElementById('loginGate');
   const logout = document.getElementById('logoutBtn');
   const emailLbl = document.getElementById('userEmail');
-  _aplicarPermisosAdmin(user);
   if (user) {
-    if (gate) gate.remove();
+    await _cargarPermisosUsuario(user);
+    _aplicarPermisosUI(user);
+    if (gate) gate.style.display = 'none';
     if (logout) logout.style.display = '';
-    if (emailLbl) { emailLbl.textContent = '👤 ' + (user.email || ''); emailLbl.style.display = ''; }
+    if (emailLbl) {
+      const admin = _isAdmin(user);
+      const tag = admin ? ` <span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:999px;font-size:9px;margin-left:4px;font-weight:700">⚙ ADMIN</span>` : '';
+      emailLbl.innerHTML = '👤 ' + (user.email || '') + tag;
+      emailLbl.classList.toggle('is-admin', admin);
+      emailLbl.title = admin ? 'Gestionar usuarios' : '';
+      emailLbl.onclick = admin ? _abrirUsuarios : null;
+      emailLbl.style.display = '';
+    }
     _bootApp();
   } else {
+    _userPermisos = null;
+    _aplicarPermisosUI(null);
     if (gate) gate.style.display = 'flex';
     if (logout) logout.style.display = 'none';
-    if (emailLbl) { emailLbl.textContent = ''; emailLbl.style.display = 'none'; }
+    if (emailLbl) { emailLbl.innerHTML = ''; emailLbl.style.display = 'none'; }
   }
 });
 </script>
