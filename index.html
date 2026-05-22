@@ -648,7 +648,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <!-- INSUMOS -->
 <div id="viewInsumos" class="view">
   <div class="toolbar">
-    <input id="searchInsumos" class="search-input" type="text" placeholder="Buscar insumo…" oninput="renderInsumos()">
+    <input id="searchInsumos" class="search-input" type="search" autocomplete="off" name="busqueda-insumos" placeholder="Buscar insumo…" oninput="renderInsumos()">
     <select id="filterCat" onchange="renderInsumos()">
       <option value="">Todas las categorías</option>
     </select>
@@ -681,7 +681,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 <!-- PROVEEDORES -->
 <div id="viewProveedores" class="view">
   <div id="provListTop" style="margin-bottom:20px;display:flex;gap:10px;align-items:center">
-    <input id="searchProveedores" class="search-input" type="text" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="flex:1;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
+    <input id="searchProveedores" class="search-input" type="search" autocomplete="off" name="busqueda-proveedores" placeholder="Buscar proveedor…" oninput="renderProveedores()" style="flex:1;padding:14px 18px;font-size:15px;background:#FFF;border-radius:10px">
     <button id="btnPendientesGlobal" class="btn btn-outline" style="padding:14px 18px;white-space:nowrap" onclick="renderPendientesGlobal()">Pedidos pendientes</button>
     <button id="btnVencimientosGlobal" class="btn btn-outline" style="padding:14px 18px;white-space:nowrap" onclick="renderVencimientosGlobal()">Vencimientos</button>
     <button class="btn btn-primary" style="padding:14px 20px;white-space:nowrap" onclick="openNuevoProvModal()">+ Nuevo proveedor</button>
