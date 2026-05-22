@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
 :root {
   --bg: #F7F5F0;
@@ -544,6 +545,19 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </head>
 <body>
 
+<div id="loginGate" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg);align-items:center;justify-content:center;padding:20px;font-family:var(--font)">
+  <form id="loginForm" onsubmit="_doLogin(event)" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px;width:100%;max-width:360px;box-shadow:0 4px 24px rgba(0,0,0,.06)">
+    <div style="font-size:20px;font-weight:700;margin-bottom:4px;color:var(--ink)">Consolidado <span style="color:var(--accent)">Arthur</span></div>
+    <div style="font-size:13px;color:var(--ink2);margin-bottom:24px">Ingresá para continuar</div>
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Email</label>
+    <input id="loginEmail" type="email" required autocomplete="email" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:16px;background:var(--surface);box-sizing:border-box">
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Contraseña</label>
+    <input id="loginPass" type="password" required autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:20px;background:var(--surface);box-sizing:border-box">
+    <div id="loginErr" style="display:none;padding:8px 12px;background:#FEE2E2;color:#991B1B;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
+    <button id="loginBtn" type="submit" style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font:600 14px var(--font);cursor:pointer">Ingresar</button>
+  </form>
+</div>
+
 <div id="bannerVencimientos" style="display:none;position:sticky;top:0;z-index:600;padding:10px 18px;align-items:center;gap:12px;font:14px var(--font);border-bottom:1px solid rgba(0,0,0,.1)"></div>
 <header class="app-header">
   <div class="app-logo">Consolidado <span>Arthur</span></div>
@@ -551,6 +565,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;font-weight:700">v2.1</span>
   <button onclick="exportarDatos()" style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↓ Backup</button>
   <label style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↑ Restaurar<input type="file" accept=".json" onchange="importarDatos(this)" style="display:none"></label>
+  <button id="logoutBtn" onclick="_doLogout()" style="display:none;font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">⎋ Salir</button>
   <nav>
     <button class="nav-btn active" data-view="viewPedidos">Pedidos</button>
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
@@ -7078,6 +7093,38 @@ const _fbApp = firebase.initializeApp({
   appId: "1:610315407018:web:c768103db4cab8fee3cad3"
 });
 const _db = firebase.firestore(_fbApp);
+const _auth = firebase.auth(_fbApp);
+
+async function _doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginErr');
+  const btn   = document.getElementById('loginBtn');
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Ingresando…';
+  try {
+    await _auth.signInWithEmailAndPassword(email, pass);
+  } catch (err) {
+    const map = {
+      'auth/invalid-credential': 'Email o contraseña incorrectos.',
+      'auth/wrong-password':     'Email o contraseña incorrectos.',
+      'auth/user-not-found':     'Email o contraseña incorrectos.',
+      'auth/invalid-email':      'Email inválido.',
+      'auth/too-many-requests':  'Demasiados intentos. Probá en unos minutos.',
+      'auth/network-request-failed': 'Sin conexión.'
+    };
+    errEl.textContent = map[err.code] || ('Error: ' + (err.message || err.code));
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+}
+
+function _doLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  _auth.signOut().then(() => location.reload());
+}
 
 function _syncChip(state) {
   const el = document.getElementById('syncChip');
@@ -9189,13 +9236,31 @@ function _prodConfirmarRegistro() {
 }
 
 /* ── INIT ───────────────────────────────────────────────────────── */
-hydrate();
-_migrarRecetasFlat();
-hydrateContable();
-renderInsumos();
-renderProveedores();
-renderPedidos();
-_fbLoad().then(() => _depBadgeUpdate());
+let _bootedOnce = false;
+function _bootApp() {
+  if (_bootedOnce) return;
+  _bootedOnce = true;
+  hydrate();
+  _migrarRecetasFlat();
+  hydrateContable();
+  renderInsumos();
+  renderProveedores();
+  renderPedidos();
+  _fbLoad().then(() => _depBadgeUpdate());
+}
+
+_auth.onAuthStateChanged(user => {
+  const gate   = document.getElementById('loginGate');
+  const logout = document.getElementById('logoutBtn');
+  if (user) {
+    gate.style.display   = 'none';
+    logout.style.display = '';
+    _bootApp();
+  } else {
+    gate.style.display   = 'flex';
+    logout.style.display = 'none';
+  }
+});
 </script>
 </body>
 </html>
