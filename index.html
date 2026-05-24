@@ -4652,12 +4652,15 @@ async function extraerBoleta() {
           );
           if (!mapping) return;
 
-          // 2) Si el usuario renombró antes, aplicar el nombre editado
-          if (mapping.nombreBoleta && norm(mapping.nombreBoleta) !== norm(item.nombre))
-            item.nombre = mapping.nombreBoleta;
+          // 2) Aplicar el nombre canónico: si hay insumo vinculado usar su nombre (refleja renombres),
+          //    si no, usar el nombreBoleta guardado del mapping
+          const insRef = mapping.insumoId ? insumos.find(i => i.id === mapping.insumoId) : null;
+          const nombreCanonico = insRef?.nombre || mapping.nombreBoleta;
+          if (nombreCanonico && norm(nombreCanonico) !== norm(item.nombre))
+            item.nombre = nombreCanonico;
 
           // 3) Autocompletar peso/unidad desde el insumo vinculado
-          const ins = mapping.insumoId ? insumos.find(i => i.id === mapping.insumoId) : null;
+          const ins = insRef;
           if (!ins) return;
           if ((item.peso_por_unidad == null || item.unidad_peso == null) && ins.presUnitWeight && ins.presUnitWeightUnit) {
             item.peso_por_unidad = ins.presUnitWeight;
