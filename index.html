@@ -4180,9 +4180,9 @@ function _recalcPrecios(item, changed) {
   const u = Number(item.precio_unitario);
   const t = Number(item.precio_total);
   if (changed === 'cantidad' || changed === 'precio_total') {
-    if (q > 0 && !isNaN(t) && t > 0) item.precio_unitario = Math.round((t / q) * 100) / 100;
+    if (q > 0 && !isNaN(t) && t > 0) item.precio_unitario = t / q;
   } else if (changed === 'precio_unitario') {
-    if (q > 0 && !isNaN(u) && u > 0) item.precio_total = Math.round((u * q) * 100) / 100;
+    if (q > 0 && !isNaN(u) && u > 0) item.precio_total = u * q;
   }
 }
 function _efRemove(i) { _efItems.splice(i, 1); _efRefreshItems(); }
@@ -4212,7 +4212,7 @@ function _efCheckTotal() {
   const s = _efSumaItems();
   const declarado = parseFloat(document.getElementById('efTotal').value);
   if (!s.subtotal) { helper.innerHTML = ''; return; }
-  const pesos = n => '$' + Math.round(n).toLocaleString('es-AR');
+  const pesos = n => _fmtMoney(n);
   const conIvaTxt  = pesos(s.totalConIva);
   const sinIvaTxt  = pesos(s.subtotal);
   const btn = `<button type="button" onclick="document.getElementById('efTotal').value=${s.totalConIva.toFixed(2)};_efCheckTotal()" style="background:var(--accent);color:#fff;border:none;padding:3px 10px;border-radius:6px;font:600 11px var(--font);cursor:pointer;margin-left:6px">Usar ${conIvaTxt}</button>`;
@@ -4740,7 +4740,13 @@ function confirmarBoleta() {
   const nroBoleta = document.getElementById('boletaNumero').value.trim();
   const hora      = document.getElementById('boletaHora').textContent.replace('—','').trim() || null;
   const importeEl = document.getElementById('boletaImporteTotal').textContent;
-  const importeTotal = importeEl && importeEl !== '—' ? Number(importeEl.replace(/[^0-9]/g,'')) || null : null;
+  const importeTotal = importeEl && importeEl !== '—'
+    ? (() => {
+        const limpio = importeEl.replace(/[^\d.,-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+        const n = parseFloat(limpio);
+        return isFinite(n) ? n : null;
+      })()
+    : null;
 
   if (!fecha)          { toast('Ingresá la fecha', 'error'); return; }
   if (!_bItems.length) { toast('No hay ítems para guardar', 'error'); return; }
@@ -7536,7 +7542,12 @@ function _lastNWeeks(n) {
 
 function _fmtMoney(n) {
   if (n == null || isNaN(n)) return '—';
-  return '$' + Math.round(n).toLocaleString('es-AR');
+  const rounded2 = Math.round(n * 100) / 100;
+  const hasDec = rounded2 !== Math.trunc(rounded2);
+  return '$' + rounded2.toLocaleString('es-AR', {
+    minimumFractionDigits: hasDec ? 2 : 0,
+    maximumFractionDigits: 2
+  });
 }
 
 function _humanFecha(dateStr) {
