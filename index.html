@@ -541,6 +541,104 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 }
 .item-form .row { margin-bottom: 0; }
 
+/* ───────────────── MOBILE RESPONSIVE ───────────────── */
+@media (max-width: 900px) {
+  .app-header {
+    padding: 0 12px;
+    gap: 12px;
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .app-logo { font-size: 14px; flex-shrink: 0; }
+  #hamburgerBtn { display: block !important; }
+  nav {
+    display: none;
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    z-index: 99;
+    max-height: calc(100vh - 56px);
+    overflow-y: auto;
+  }
+  nav.is-open { display: flex; }
+  .nav-btn {
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+  .nav-btn.active { background: var(--accent-light); color: var(--accent); }
+  .view { padding: 14px 12px; }
+  .ped-grid { grid-template-columns: 1fr; gap: 12px; }
+  .ped-card { padding: 14px; }
+  .ped-prov-name { font-size: 15px; }
+  /* Toolbars: stack en mobile */
+  .toolbar { flex-direction: column; align-items: stretch !important; gap: 8px !important; }
+  .toolbar > * { width: 100%; max-width: none !important; }
+  .toolbar input, .toolbar select, .toolbar button { width: 100% !important; max-width: none !important; box-sizing: border-box; }
+  /* Tablas: scroll horizontal */
+  .table-wrap, .prec-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 600px; }
+  /* Modals: full width con margen */
+  .overlay .modal {
+    max-width: calc(100vw - 24px) !important;
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 32px) !important;
+    padding: 18px !important;
+  }
+  /* Header user info: que entre bien */
+  #userEmail { font-size: 10px; padding: 2px 8px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Botones de acción más cómodos al tap */
+  .btn { min-height: 38px; }
+  .btn-sm { min-height: 32px; }
+  /* Search inputs full width */
+  #provListTop, #pedidosScreen .toolbar { flex-wrap: wrap; }
+  #provListTop > * { flex: 1 1 100%; }
+  /* Banner de vencimientos */
+  #bannerVencimientos { padding: 8px 12px; font-size: 12px; flex-wrap: wrap; gap: 6px !important; }
+  /* Stats bar */
+  .stats-bar { flex-wrap: wrap; gap: 8px !important; }
+  /* Sticky headers */
+  .prec-grid thead th { top: 0; }
+  /* Login form */
+  #loginGate form { padding: 24px !important; }
+}
+
+@media (max-width: 480px) {
+  .view { padding: 12px 10px; }
+  .app-logo { font-size: 13px; }
+  .nav-btn { padding: 7px 10px; font-size: 12px; }
+  .ped-card { padding: 12px; gap: 8px; }
+  .ped-card-actions { padding-top: 8px; }
+  .btn-wa { font-size: 12px; padding: 9px 10px; }
+  .ped-prov-name { font-size: 14px; }
+  /* Modal sin margen extra */
+  .overlay .modal { padding: 14px !important; border-radius: 10px !important; }
+  /* Backup / restore buttons en header */
+  .app-header button, .app-header label { font-size: 10px !important; }
+  #syncChip { display: none !important; }
+  table { min-width: 480px; font-size: 12px; }
+  .empty-state h3 { font-size: 16px; }
+  .empty-state p { font-size: 13px; }
+}
+
+/* Tap targets: en pantallas táctiles, agrandar botones chicos */
+@media (hover: none) and (pointer: coarse) {
+  .ped-stepper button { width: 34px; height: 34px; font-size: 18px; }
+  .nav-btn { padding: 10px 14px; }
+}
+
 </style>
 </head>
 <body>
@@ -562,6 +660,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <div id="bannerVencimientos" style="display:none;position:sticky;top:0;z-index:600;padding:10px 18px;align-items:center;gap:12px;font:14px var(--font);border-bottom:1px solid rgba(0,0,0,.1)"></div>
 <header class="app-header">
+  <button id="hamburgerBtn" onclick="_toggleMobileNav()" aria-label="Menú" style="display:none;background:none;border:none;padding:6px 8px;cursor:pointer;font-size:20px;color:var(--ink);line-height:1">☰</button>
   <div class="app-logo">Consolidado <span>Arthur</span></div>
   <div id="syncChip" style="font-size:11px;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--ink3);display:none"></div>
   <span style="font-size:10px;padding:2px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;font-weight:700">v2.1</span>
@@ -1857,7 +1956,23 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'viewDeposito')   renderDeposito();
     if (btn.dataset.view === 'viewProduccion') renderProduccion();
     if (btn.dataset.view === 'viewUsuarios')   _usrCargar();
+    // Cerrar menú mobile después de seleccionar
+    document.querySelector('nav')?.classList.remove('is-open');
   });
+});
+
+function _toggleMobileNav() {
+  const nav = document.querySelector('nav');
+  if (nav) nav.classList.toggle('is-open');
+}
+
+// Cerrar el menú mobile si se clickea afuera
+document.addEventListener('click', e => {
+  const nav = document.querySelector('nav');
+  const ham = document.getElementById('hamburgerBtn');
+  if (!nav || !nav.classList.contains('is-open')) return;
+  if (nav.contains(e.target) || ham?.contains(e.target)) return;
+  nav.classList.remove('is-open');
 });
 
 /* ── MODALS ─────────────────────────────────────────────────────── */
@@ -8411,11 +8526,7 @@ function renderPedidoModalContent() {
 
   let filtered = insIds.map(iid => insumos.find(i => i.id === iid)).filter(Boolean);
   if (q) filtered = filtered.filter(ins => ins.nombre.toLowerCase().includes(q));
-  filtered.sort((a, b) => {
-    const qa = qtyMap[a.id] || 0, qb = qtyMap[b.id] || 0;
-    if ((qa > 0) !== (qb > 0)) return qb - qa;
-    return a.nombre.localeCompare(b.nombre, 'es');
-  });
+  filtered.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   document.getElementById('pedidoModalSub').textContent = itemsConQty > 0
     ? `📞 ${prov.telefono || 'sin teléfono'} · ${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'} en el pedido`
