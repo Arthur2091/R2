@@ -8582,7 +8582,21 @@ function renderPedidos() {
     return;
   }
 
-  const provsOrdenados = [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
+  const _ultimaActividad = prov => {
+    const fFact = facturas.filter(f => f.proveedorId === prov.id).map(f => f.fecha || '').sort().pop() || '';
+    const fPend = pedidosPendientes.filter(pp => pp.proveedorId === prov.id).map(pp => pp.fechaPedido || '').sort().pop() || '';
+    return fPend > fFact ? fPend : fFact;
+  };
+  const TOP_N = 10;
+  const conQty = prov => Object.values(_pedQty[prov.id] || {}).some(v => v > 0);
+  const _provsActivosFirst = [...proveedores].sort((a,b) => {
+    const ca = conQty(a), cb = conQty(b);
+    if (ca !== cb) return cb - ca;
+    return (_ultimaActividad(b) || '').localeCompare(_ultimaActividad(a) || '');
+  });
+  const _verTodos = !!window._pedVerTodos || !!q;
+  const provsOrdenados = _verTodos ? _provsActivosFirst : _provsActivosFirst.slice(0, TOP_N);
+  const _hayMas = _provsActivosFirst.length - provsOrdenados.length;
 
   let cardsHtml = '';
   let totalCardsConPedido = 0;
@@ -8652,7 +8666,13 @@ function renderPedidos() {
   if (!cardsHtml) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin coincidencias</h3><p>Ningún proveedor o insumo coincide con la búsqueda.</p></div>`;
   } else {
-    screen.innerHTML = `<div class="ped-grid">${cardsHtml}</div>`;
+    const toggleBtn = !q && (_hayMas > 0 || _verTodos)
+      ? `<div style="display:flex;justify-content:center;margin-top:18px">
+          <button class="btn btn-outline" onclick="window._pedVerTodos=${!_verTodos};renderPedidos()" style="padding:10px 22px;font-weight:600">
+            ${_verTodos ? '▲ Mostrar solo los últimos 10' : `▼ Ver todos los proveedores (${_hayMas} más)`}
+          </button>
+        </div>` : '';
+    screen.innerHTML = `<div class="ped-grid">${cardsHtml}</div>${toggleBtn}`;
   }
 
   const resumen = document.getElementById('pedidosResumen');
