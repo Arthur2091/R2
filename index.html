@@ -7358,6 +7358,30 @@ function _doLogout() {
   _auth.signOut().then(() => location.reload());
 }
 
+/* ── IDLE AUTO-LOGOUT (40 min sin actividad) ────────────────────── */
+const _IDLE_MS = 40 * 60 * 1000;
+let _idleTimer = null;
+function _idleLogout() {
+  try { toast('Sesión cerrada por inactividad (40 min)', 'info'); } catch {}
+  _auth.signOut().then(() => location.reload()).catch(() => location.reload());
+}
+function _resetIdleTimer() {
+  if (_idleTimer) clearTimeout(_idleTimer);
+  _idleTimer = setTimeout(_idleLogout, _IDLE_MS);
+}
+function _startIdleWatcher() {
+  if (window._idleWatcherOn) { _resetIdleTimer(); return; }
+  window._idleWatcherOn = true;
+  ['mousemove','mousedown','keydown','touchstart','scroll','click'].forEach(ev =>
+    window.addEventListener(ev, _resetIdleTimer, { passive: true })
+  );
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) _resetIdleTimer(); });
+  _resetIdleTimer();
+}
+function _stopIdleWatcher() {
+  if (_idleTimer) { clearTimeout(_idleTimer); _idleTimer = null; }
+}
+
 function _syncChip(state) {
   const el = document.getElementById('syncChip');
   if (!el) return;
@@ -9842,7 +9866,9 @@ _auth.onAuthStateChanged(async user => {
       emailLbl.style.display = '';
     }
     _bootApp();
+    _startIdleWatcher();
   } else {
+    _stopIdleWatcher();
     _userPermisos = null;
     _aplicarPermisosUI(null);
     if (gate) gate.style.display = 'flex';
