@@ -5921,21 +5921,41 @@ function renderContable() {
   document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos);
 
   // ── MERCADO PAGO RETIROS ──
-  const mpPeriod = mpMovs.filter(m => inPeriod(m.fecha));
-  const totalMP  = mpPeriod.reduce((s, m) => s + (m.monto || 0), 0);
+  const mpPeriod   = mpMovs.filter(m => inPeriod(m.fecha));
+  const totalMP    = mpPeriod.filter(m => !m.facturaId).reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalMP').textContent = pesos(totalMP);
   document.getElementById('secMPBody').innerHTML = !mpPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin retiros de MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel de retiros.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
-        ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
-          <tr>
+        ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
+          const facMatch = !m.facturaId
+            ? facturas.find(f => Math.abs((f.importeTotal||0) - m.monto) < 1)
+            : facturas.find(f => f.id === m.facturaId);
+          const prov = facMatch ? (proveedores.find(p => p.id === facMatch.proveedorId)?.nombre || '') : '';
+          const vinculado = !!m.facturaId;
+          const rowBg = vinculado ? 'background:#F0FDF4' : facMatch ? 'background:#FEF9C3' : '';
+          const badge = vinculado
+            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${prov}</span>`
+            : facMatch
+              ? `<span style="font-size:11px;background:#FEF08A;color:#854D0E;padding:2px 8px;border-radius:999px;font-weight:700">⚠ Coincide con boleta de ${prov}</span>`
+              : '';
+          const accion = vinculado
+            ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
+            : facMatch
+              ? `<button class="btn btn-primary btn-sm" onclick="_vincularMP('${m.id}','${facMatch.id}')" style="font-size:11px">Vincular</button>`
+              : '';
+          return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px">${m.destino}</td>
-            <td style="text-align:right;font-family:var(--mono)">${pesos(m.monto)}</td>
-            <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
-          </tr>
-        `).join('')}
-        <tr style="font-weight:600;background:var(--surface2)"><td colspan="2">${mpPeriod.length} retiro${mpPeriod.length!==1?'s':''}</td><td style="text-align:right;font-family:var(--mono)">${pesos(totalMP)}</td><td></td></tr>
+            <td style="font-size:13px">${m.destino} ${badge}</td>
+            <td style="text-align:right;font-family:var(--mono);${vinculado?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
+            <td style="display:flex;gap:4px;align-items:center">${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
+          </tr>`;
+        }).join('')}
+        <tr style="font-weight:600;background:var(--surface2)">
+          <td colspan="2">${mpPeriod.length} retiro${mpPeriod.length!==1?'s':('')}${mpPeriod.some(m=>m.facturaId)?' · '+mpPeriod.filter(m=>m.facturaId).length+' vinculados':''}</td>
+          <td style="text-align:right;font-family:var(--mono)">${pesos(totalMP)}</td>
+          <td></td>
+        </tr>
       </tbody></table>`;
 
   // ── BALANCE CARDS ──
@@ -5982,6 +6002,22 @@ function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
   persistContable();
   renderContable();
+}
+function _vincularMP(mpId, facturaId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  m.facturaId = facturaId;
+  persistContable();
+  renderContable();
+  toast('Retiro vinculado — no se suma a egresos MP', 'success');
+}
+function _desvincularMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  delete m.facturaId;
+  persistContable();
+  renderContable();
+  toast('Retiro desvinculado', 'info');
 }
 
 // ── IMPORT MP RETIROS ──
