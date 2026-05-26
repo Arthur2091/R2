@@ -749,35 +749,16 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 
 <!-- INSUMOS -->
 <div id="viewInsumos" class="view">
-  <div class="toolbar">
-    <input id="searchInsumos" class="search-input" type="search" autocomplete="off" name="busqueda-insumos" placeholder="Buscar insumo…" oninput="renderInsumos()">
-    <select id="filterCat" onchange="renderInsumos()">
-      <option value="">Todas las categorías</option>
-    </select>
-    <button class="btn btn-outline" onclick="openModal('modalImport')">Importar Excel</button>
-    <button class="btn btn-outline" onclick="buscarDuplicados()">Buscar duplicados</button>
-    <button class="btn btn-outline" onclick="limpiarSinProveedor()" style="color:var(--danger)">Limpiar sin proveedor</button>
-    <button class="btn btn-outline" onclick="clearAll()" style="color:var(--danger)">Limpiar todo</button>
-    <button class="btn btn-primary" onclick="openAddModal()">+ Insumo</button>
+  <div class="toolbar" style="margin-bottom:14px;gap:10px;flex-wrap:wrap;align-items:center">
+    <input id="searchInsumos" class="search-input" type="search" autocomplete="off" name="busqueda-insumos" placeholder="Buscar insumo o proveedor…" oninput="renderInsumos()" style="flex:1;min-width:240px">
+    <select id="filterCat" onchange="renderInsumos()" style="display:none"><option value=""></option></select>
+    <button class="btn btn-outline btn-sm" onclick="openModal('modalImport')">Importar Excel</button>
+    <button class="btn btn-outline btn-sm" onclick="buscarDuplicados()">Duplicados</button>
+    <button class="btn btn-outline btn-sm" onclick="limpiarSinProveedor()" style="color:var(--danger)">Limpiar sin proveedor</button>
+    <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Insumo</button>
   </div>
-  <div id="statsInsumos" class="stats-bar"></div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Nombre</th>
-          <th>Unidad</th>
-          <th style="text-align:right">Precio</th>
-          <th>Presentación</th>
-          <th style="text-align:right">$/kg · $/L</th>
-          <th>Observaciones</th>
-          <th>Proveedores</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="tbodyInsumos"></tbody>
-    </table>
-  </div>
+  <div id="statsInsumos" class="stats-bar" style="margin-bottom:14px"></div>
+  <div id="insumosScreen"></div>
 </div>
 
 <!-- PROVEEDORES -->
@@ -2514,107 +2495,146 @@ function _toggleProvGroup(nombre) {
   renderInsumos();
 }
 
+function _frecuenciaInsumo(insumoId) {
+  let count = 0;
+  facturas.forEach(f => (f.items || []).forEach(it => { if (it.insumoId === insumoId) count++; }));
+  return count;
+}
+
+function _insumosByProv() {
+  const map = {};
+  proveedores.forEach(p => {
+    map[p.id] = (p.items || []).map(it => it.insumoId).filter(Boolean);
+  });
+  return map;
+}
+
 function renderInsumos() {
-  const search    = document.getElementById('searchInsumos').value.toLowerCase();
-  const catFilter = document.getElementById('filterCat').value;
+  const screen = document.getElementById('insumosScreen');
+  if (!screen) return;
+  if (window._insumosProvId) { _renderInsumosDetalle(window._insumosProvId); return; }
+  const search = (document.getElementById('searchInsumos')?.value || '').toLowerCase().trim();
+  const insumosByProv = _insumosByProv();
 
-  // Rebuild category filter
-  const usedCats = new Set(insumos.map(i => i.categoria).filter(Boolean));
-  const allCats  = [...new Set([...CATEGORIAS_INSUMOS, ...usedCats])];
-  const sel = document.getElementById('filterCat');
-  const prev = sel.value;
-  sel.innerHTML = '<option value="">Todas las categorías</option>';
-  allCats.forEach(c => {
-    const o = document.createElement('option');
-    o.value = c; o.textContent = c;
-    if (c === prev) o.selected = true;
-    sel.appendChild(o);
-  });
-
-  // Filter
-  const visible = insumos.filter(i => {
-    const matchSearch = !search
-      || i.nombre.toLowerCase().includes(search)
-      || i.categoria.toLowerCase().includes(search)
-      || (i.observaciones || '').toLowerCase().includes(search);
-    const matchCat = !catFilter || i.categoria === catFilter;
-    return matchSearch && matchCat;
-  });
-
-  // Stats
   document.getElementById('statsInsumos').innerHTML = `
     <div class="stat-chip"><strong>${insumos.length}</strong> insumos</div>
-    <div class="stat-chip"><strong>${usedCats.size}</strong> categorías</div>
-    ${visible.length !== insumos.length ? `<div class="stat-chip"><strong>${visible.length}</strong> resultados</div>` : ''}
-  `;
+    <div class="stat-chip"><strong>${proveedores.length}</strong> proveedores</div>`;
 
-  const tbody = document.getElementById('tbodyInsumos');
-
-  if (visible.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8">
-      <div class="empty-state">
-        ${insumos.length === 0
-          ? `<h3>Sin insumos</h3>
-             <p>Importá el Excel de recetas o agregá insumos manualmente.</p>
-             <button class="btn btn-primary" onclick="openModal('modalImport')">Importar Excel</button>`
-          : `<h3>Sin resultados</h3><p>Probá con otra búsqueda.</p>`}
-      </div>
-    </td></tr>`;
+  if (!proveedores.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin proveedores</h3><p>Cargá una boleta o agregá un proveedor para empezar.</p></div>`;
     return;
   }
 
-  // Mapear insumoId → proveedor
-  const insumoAProv = {};
-  proveedores.forEach(p => {
-    (p.items || []).forEach(it => {
-      if (it.insumoId) insumoAProv[it.insumoId] = p;
-    });
+  const provsConData = proveedores.map(p => {
+    const insIds = insumosByProv[p.id] || [];
+    const insumosProv = insIds.map(id => insumos.find(i => i.id === id)).filter(Boolean);
+    const totalFreq = insumosProv.reduce((s, i) => s + _frecuenciaInsumo(i.id), 0);
+    return { p, insumosProv, totalFreq };
   });
 
-  // Agrupar por proveedor
-  const grouped = {};
-  visible.forEach(i => {
-    const prov = insumoAProv[i.id];
-    if (!prov) return; // ocultar sin proveedor
-    const key = prov.nombre;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(i);
-  });
+  const filtered = !search ? provsConData : provsConData.filter(({ p, insumosProv }) =>
+    p.nombre.toLowerCase().includes(search) ||
+    insumosProv.some(i => i.nombre.toLowerCase().includes(search))
+  );
 
-  window._insumosCollapsed = window._insumosCollapsed || new Set();
-  const rows = [];
-  Object.entries(grouped)
-    .sort(([a], [b]) => a.localeCompare(b, 'es'))
-    .forEach(([provNombre, items]) => {
-      const key      = provNombre.replace(/'/g, "\\'");
-      const collapsed = window._insumosCollapsed.has(provNombre);
-      const arrow    = collapsed ? '▶' : '▼';
-      rows.push(`
-        <tr class="cat-row" onclick="_toggleProvGroup('${key}')">
-          <td colspan="8"><span style="display:inline-block;width:14px">${arrow}</span> ${provNombre} <span style="font-weight:400;color:#cbd5e1;font-size:12px">· ${items.length} insumo${items.length !== 1 ? 's' : ''}</span></td>
-        </tr>`);
+  const sorted = filtered.sort((a, b) => b.totalFreq - a.totalFreq || a.p.nombre.localeCompare(b.p.nombre, 'es'));
 
-      if (collapsed) return;
+  const TOP_N = 10;
+  const verTodos = !!window._insumosVerTodos || !!search;
+  const visibles = verTodos ? sorted : sorted.slice(0, TOP_N);
+  const hayMas = sorted.length - visibles.length;
 
-      items.sort((a,b) => a.nombre.localeCompare(b.nombre, 'es')).forEach(i => {
-        rows.push(`
-          <tr>
-            <td><strong>${i.nombre}</strong></td>
-            <td style="color:var(--ink2)">${i.unidad || '—'}</td>
-            <td class="mono price-civa" style="text-align:right">${i.precioConIVA != null ? fmt(i.precioConIVA) : i.precioSinIVA != null ? fmt(i.precioSinIVA) : '—'}</td>
-            <td style="font-size:12px;color:var(--ink2);font-family:'DM Mono',monospace">${_fmtPres(i)}</td>
-            <td class="mono" style="text-align:right;font-size:12px">${(() => { const pb = _precioPorBase(i); return pb ? `<strong>${fmt(Math.round(pb.valor))}</strong><span style="color:var(--ink3);font-size:10px">${pb.unidad}</span>` : '—'; })()}</td>
-            <td style="color:var(--ink3);font-size:12px;max-width:200px">${i.observaciones || ''}</td>
-            <td></td>
-            <td style="white-space:nowrap">
-              <button class="btn btn-ghost btn-sm" onclick="openEditModal('${i.id}')">Editar</button>
-              <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteInsumo('${i.id}')">✕</button>
-            </td>
-          </tr>`);
-      });
-    });
+  if (!visibles.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin coincidencias</h3><p>Probá con otra búsqueda.</p></div>`;
+    return;
+  }
 
-  tbody.innerHTML = rows.join('');
+  const cards = visibles.map(({ p, insumosProv, totalFreq }) => {
+    const top3 = [...insumosProv]
+      .map(i => ({ i, f: _frecuenciaInsumo(i.id) }))
+      .sort((a, b) => b.f - a.f)
+      .slice(0, 3)
+      .filter(x => x.f > 0)
+      .map(x => `<span style="font-size:11px;color:var(--ink2);background:var(--surface2);padding:2px 8px;border-radius:999px;white-space:nowrap">${x.i.nombre} <strong>·${x.f}</strong></span>`)
+      .join(' ');
+    return `<div class="ped-card" onclick="window._insumosProvId='${p.id}';renderInsumos()" style="cursor:pointer">
+      <div class="ped-card-head">
+        <div style="min-width:0;flex:1">
+          <div class="ped-prov-name">${p.nombre}</div>
+          <div style="font-size:12px;color:var(--ink2);margin-top:2px"><strong>${insumosProv.length}</strong> insumo${insumosProv.length === 1 ? '' : 's'} · <strong>${totalFreq}</strong> pedido${totalFreq === 1 ? '' : 's'} histórico${totalFreq === 1 ? '' : 's'}</div>
+        </div>
+      </div>
+      ${top3 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 2px">${top3}</div>` : `<div style="font-size:12px;color:var(--ink3);padding:6px 2px">Sin actividad registrada</div>`}
+      <div class="ped-card-actions">
+        <button class="btn-wa" style="background:var(--surface2);color:var(--ink)" onclick="event.stopPropagation();window._insumosProvId='${p.id}';renderInsumos()">Ver insumos</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const toggle = !search && (hayMas > 0 || verTodos)
+    ? `<div style="display:flex;justify-content:center;margin-top:18px">
+        <button class="btn btn-outline" onclick="window._insumosVerTodos=${!verTodos};renderInsumos()" style="padding:10px 22px;font-weight:600">
+          ${verTodos ? '▲ Mostrar solo los top 10' : `▼ Ver todos los proveedores (${hayMas} más)`}
+        </button>
+      </div>` : '';
+
+  screen.innerHTML = `<div class="ped-grid">${cards}</div>${toggle}`;
+}
+
+function _renderInsumosDetalle(provId) {
+  const screen = document.getElementById('insumosScreen');
+  const prov = proveedores.find(p => p.id === provId);
+  if (!prov) { window._insumosProvId = null; renderInsumos(); return; }
+  const search = (document.getElementById('searchInsumos')?.value || '').toLowerCase().trim();
+  const ids = (prov.items || []).map(it => it.insumoId).filter(Boolean);
+  let items = ids.map(id => insumos.find(i => i.id === id)).filter(Boolean);
+  if (search) items = items.filter(i => i.nombre.toLowerCase().includes(search));
+  const ranked = items
+    .map(i => ({ i, f: _frecuenciaInsumo(i.id) }))
+    .sort((a, b) => b.f - a.f || a.i.nombre.localeCompare(b.i.nombre, 'es'));
+
+  document.getElementById('statsInsumos').innerHTML = `
+    <div class="stat-chip"><strong>${items.length}</strong> insumos</div>
+    <div class="stat-chip"><strong>${ranked.reduce((s, x) => s + x.f, 0)}</strong> pedidos históricos</div>`;
+
+  const rowsHtml = !ranked.length
+    ? `<div class="empty-state"><h3>Sin insumos</h3><p>Este proveedor no tiene insumos vinculados.</p></div>`
+    : `<div class="table-wrap"><table>
+        <thead><tr>
+          <th style="width:48px;text-align:center">#</th>
+          <th>Insumo</th>
+          <th style="text-align:center">Frecuencia</th>
+          <th>Unidad</th>
+          <th style="text-align:right">Precio</th>
+          <th>Presentación</th>
+          <th style="text-align:right">$/kg · $/L</th>
+          <th></th>
+        </tr></thead>
+        <tbody>
+          ${ranked.map(({ i, f }, idx) => `
+            <tr>
+              <td style="text-align:center;color:var(--ink3);font-weight:700">${idx + 1}</td>
+              <td><strong>${i.nombre}</strong>${i.observaciones ? `<div style="font-size:11px;color:var(--ink3)">${i.observaciones}</div>` : ''}</td>
+              <td style="text-align:center">${f > 0 ? `<span style="background:var(--accent-light);color:var(--accent);font-weight:700;padding:2px 10px;border-radius:999px;font-size:12px">${f}×</span>` : `<span style="color:var(--ink3);font-size:12px">—</span>`}</td>
+              <td style="color:var(--ink2)">${i.unidad || '—'}</td>
+              <td class="mono" style="text-align:right">${i.precioConIVA != null ? fmt(i.precioConIVA) : i.precioSinIVA != null ? fmt(i.precioSinIVA) : '—'}</td>
+              <td style="font-size:12px;color:var(--ink2);font-family:'DM Mono',monospace">${_fmtPres(i)}</td>
+              <td class="mono" style="text-align:right;font-size:12px">${(() => { const pb = _precioPorBase(i); return pb ? `<strong>${fmt(pb.valor)}</strong><span style="color:var(--ink3);font-size:10px">${pb.unidad}</span>` : '—'; })()}</td>
+              <td style="white-space:nowrap">
+                <button class="btn btn-ghost btn-sm" onclick="openEditModal('${i.id}')">Editar</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteInsumo('${i.id}')">✕</button>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table></div>`;
+
+  screen.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="window._insumosProvId=null;renderInsumos()">← Volver</button>
+      <h2 style="margin:0;font-size:1.3rem">${prov.nombre}</h2>
+      <span style="color:var(--ink3);font-size:13px">Insumos rankeados por frecuencia de pedido</span>
+    </div>
+    ${rowsHtml}`;
 }
 
 /* ── PROVEEDORES ────────────────────────────────────────────────── */
