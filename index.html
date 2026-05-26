@@ -5928,22 +5928,16 @@ function renderContable() {
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin retiros de MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel de retiros.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
         ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
-          const facMatch = !m.facturaId
-            ? facturas.find(f => Math.abs((f.importeTotal||0) - m.monto) < 1)
-            : facturas.find(f => f.id === m.facturaId);
-          const prov = facMatch ? (proveedores.find(p => p.id === facMatch.proveedorId)?.nombre || '') : '';
           const vinculado = !!m.facturaId;
-          const rowBg = vinculado ? 'background:#F0FDF4' : facMatch ? 'background:#FEF9C3' : '';
-          const badge = vinculado
-            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${prov}</span>`
-            : facMatch
-              ? `<span style="font-size:11px;background:#FEF08A;color:#854D0E;padding:2px 8px;border-radius:999px;font-weight:700">⚠ Coincide con boleta de ${prov}</span>`
-              : '';
+          const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
+          const provVinc  = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
+          const rowBg     = vinculado ? 'background:#F0FDF4' : '';
+          const badge     = vinculado
+            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta ? ' · N°'+facVinc.nroBoleta : ''}</span>`
+            : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
-            : facMatch
-              ? `<button class="btn btn-primary btn-sm" onclick="_vincularMP('${m.id}','${facMatch.id}')" style="font-size:11px">Vincular</button>`
-              : '';
+            : `<button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular factura</button>`;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px">${m.destino} ${badge}</td>
@@ -6003,7 +5997,52 @@ function _borrarMP(id) {
   persistContable();
   renderContable();
 }
+function _abrirVincularMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const destNorm = norm(m.destino);
+  // Ordenar facturas: primero las que coinciden por nombre de proveedor
+  const facsOrdenadas = [...facturas]
+    .filter(f => f.importeTotal)
+    .sort((a, b) => {
+      const nA = norm(proveedores.find(p=>p.id===a.proveedorId)?.nombre||'');
+      const nB = norm(proveedores.find(p=>p.id===b.proveedorId)?.nombre||'');
+      const matchA = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
+      const matchB = destNorm.includes(nB) || nB.split(' ').some(w => w.length>3 && destNorm.includes(w));
+      if (matchA && !matchB) return -1;
+      if (!matchA && matchB) return 1;
+      return b.fecha.localeCompare(a.fecha);
+    });
+
+  const opcionesHtml = facsOrdenadas.slice(0, 50).map(f => {
+    const prov = proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor';
+    const nA   = norm(prov);
+    const match = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
+    return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}"
+      onclick="_vincularMP('${mpId}','${f.id}')">
+      <div style="font-weight:700;font-size:13px;color:var(--ink)">${prov}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta ? 'N° '+f.nroBoleta : 'Sin número'} · ${pesos(f.importeTotal)}</div>
+    </button>`;
+  }).join('');
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularMPModal" style="display:flex">
+      <div class="modal" style="max-width:560px">
+        <h2>Vincular retiro a factura</h2>
+        <p class="modal-sub">${m.fecha} · ${m.destino} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
+          ${opcionesHtml}
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularMPModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+
 function _vincularMP(mpId, facturaId) {
+  document.getElementById('vincularMPModal')?.remove();
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
   m.facturaId = facturaId;
