@@ -1819,6 +1819,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       </div>
     </div>
     <div class="field">
+      <label>Tipo de comprobante</label>
+      <select id="efTipoComprobante" style="padding:10px;font-size:14px;border-radius:8px;border:1px solid var(--border);background:#FFF;width:100%">
+        <option value="factura">Factura (suma al adeudado)</option>
+        <option value="nota_credito">Nota de Crédito (resta del adeudado — devolución / pedido mal enviado)</option>
+        <option value="nota_debito">Nota de Débito (suma al adeudado — recargo / interés)</option>
+      </select>
+    </div>
+    <div class="field">
       <label>Ítems</label>
       <div id="efItemsList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
       <button class="btn btn-outline btn-sm" onclick="_efAddItem()">+ Agregar ítem</button>
@@ -2847,7 +2855,12 @@ function renderProveedores() {
             </div>
           </div>
           ${(() => {
-            const adeudado = facturasProv.reduce((s, f) => s + (!f.pagado ? (Number(f.importeTotal) || 0) : 0), 0);
+            const adeudado = facturasProv.reduce((s, f) => {
+              if (f.pagado) return s;
+              const amt = Number(f.importeTotal) || 0;
+              const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+              return s + (tipo === 'nota_credito' ? -amt : amt);
+            }, 0);
             return `<div style="font-size:12px;color:var(--ink2);padding:6px 2px">
               ${nFacturas
                 ? `<strong>${nFacturas}</strong> factura${nFacturas !== 1 ? 's' : ''}${ultima ? ` · Última: ${ultima.fecha}` : ''}`
@@ -3170,10 +3183,15 @@ function renderProveedorFacturas(provId, subtab) {
           <div style="display:flex;gap:8px;align-items:stretch;opacity:${opacity}">
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.85rem 1.2rem;cursor:pointer;flex:1" onclick="renderFacturaDetalle('${f.id}','${provId}')">
               <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:.25rem;flex-wrap:wrap">
-                <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}</span>
+                <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}${(() => {
+                  const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+                  if (tipo === 'nota_credito') return ` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">NC</span>`;
+                  if (tipo === 'nota_debito')  return ` <span style="background:#FEF3C7;color:#92400E;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">ND</span>`;
+                  return '';
+                })()}</span>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   ${badge}
-                  <span style="font-size:.95rem;color:var(--accent);font-weight:700">${f.importeTotal ? pesos(f.importeTotal) : '—'}</span>
+                  <span style="font-size:.95rem;color:${(f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura')) === 'nota_credito' ? '#991B1B' : 'var(--accent)'};font-weight:700">${f.importeTotal ? ((f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura')) === 'nota_credito' ? '−' : '') + pesos(f.importeTotal) : '—'}</span>
                 </div>
               </div>
               <div style="font-size:.82rem;color:var(--ink2)">
@@ -4165,6 +4183,7 @@ function openEditFactura(facturaId, provId) {
   document.getElementById('efFecha').value      = f.fecha || '';
   document.getElementById('efHora').value       = f.hora || '';
   document.getElementById('efTotal').value      = f.importeTotal || '';
+  document.getElementById('efTipoComprobante').value = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
   document.getElementById('efFacturaId').value  = facturaId;
   document.getElementById('efProvId').value     = provId;
   _efItems = (f.items || []).map(it => ({ ...it }));
@@ -4303,6 +4322,8 @@ function saveEditFactura() {
   f.fecha        = document.getElementById('efFecha').value;
   f.hora         = document.getElementById('efHora').value;
   f.importeTotal = document.getElementById('efTotal').value === '' ? null : parseFloat(document.getElementById('efTotal').value);
+  f.tipoComprobante = document.getElementById('efTipoComprobante').value || 'factura';
+  delete f.esNotaCredito;
   f.items        = _efItems.map(it => ({ ...it }));
   const prov = proveedores.find(p => p.id === provId);
   f.items.forEach(item => {
