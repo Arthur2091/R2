@@ -1820,11 +1820,18 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
     <div class="field">
       <label>Tipo de comprobante</label>
-      <select id="efTipoComprobante" style="padding:10px;font-size:14px;border-radius:8px;border:1px solid var(--border);background:#FFF;width:100%">
+      <select id="efTipoComprobante" style="padding:10px;font-size:14px;border-radius:8px;border:1px solid var(--border);background:#FFF;width:100%" onchange="_efToggleNCSelect()">
         <option value="factura">Factura (suma al adeudado)</option>
         <option value="nota_credito">Nota de Crédito (resta del adeudado — devolución / pedido mal enviado)</option>
         <option value="nota_debito">Nota de Débito (suma al adeudado — recargo / interés)</option>
       </select>
+    </div>
+    <div class="field" id="efNotaCreditoSobreWrap" style="display:none">
+      <label>Aplicar esta NC sobre la factura</label>
+      <select id="efNotaCreditoSobre" style="padding:10px;font-size:14px;border-radius:8px;border:1px solid var(--border);background:#FFF;width:100%">
+        <option value="">— Sin asignar (resta al total general) —</option>
+      </select>
+      <div style="font-size:11px;color:var(--ink3);margin-top:4px">El importe de la NC se descuenta de la factura elegida.</div>
     </div>
     <div class="field">
       <label>Ítems</label>
@@ -2857,9 +2864,9 @@ function renderProveedores() {
           ${(() => {
             const adeudado = facturasProv.reduce((s, f) => {
               if (f.pagado) return s;
-              const amt = Number(f.importeTotal) || 0;
               const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
-              return s + (tipo === 'nota_credito' ? -amt : amt);
+              if (tipo === 'nota_credito' && f.notaCreditoSobre) return s; // ya descontada en su factura host
+              return s + _netoFactura(f);
             }, 0);
             return `<div style="font-size:12px;color:var(--ink2);padding:6px 2px">
               ${nFacturas
@@ -3191,7 +3198,24 @@ function renderProveedorFacturas(provId, subtab) {
                 })()}</span>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   ${badge}
-                  <span style="font-size:.95rem;color:${(f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura')) === 'nota_credito' ? '#991B1B' : 'var(--accent)'};font-weight:700">${f.importeTotal ? ((f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura')) === 'nota_credito' ? '−' : '') + pesos(f.importeTotal) : '—'}</span>
+                  ${(() => {
+                    const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+                    if (!f.importeTotal) return `<span style="font-size:.95rem;color:var(--ink3);font-weight:700">—</span>`;
+                    if (tipo === 'nota_credito') {
+                      const host = f.notaCreditoSobre ? facturas.find(x => x.id === f.notaCreditoSobre) : null;
+                      const hostLbl = host ? ` <span style="font-size:10px;color:var(--ink2);font-weight:500">→ ${host.nroBoleta ? 'N°'+host.nroBoleta : host.fecha}</span>` : '';
+                      return `<span style="font-size:.95rem;color:#991B1B;font-weight:700">−${pesos(f.importeTotal)}</span>${hostLbl}`;
+                    }
+                    const nc = _ncAplicadasA(f.id);
+                    const desc = nc.reduce((s, n) => s + (Number(n.importeTotal) || 0), 0);
+                    if (desc > 0) {
+                      const neto = _netoFactura(f);
+                      return `<span style="font-size:.78rem;color:var(--ink3);text-decoration:line-through">${pesos(f.importeTotal)}</span>
+                              <span style="font-size:.78rem;color:#991B1B">−${pesos(desc)}</span>
+                              <span style="font-size:.95rem;color:var(--accent);font-weight:700">${pesos(neto)}</span>`;
+                    }
+                    return `<span style="font-size:.95rem;color:var(--accent);font-weight:700">${pesos(f.importeTotal)}</span>`;
+                  })()}
                 </div>
               </div>
               <div style="font-size:.82rem;color:var(--ink2)">
@@ -4184,12 +4208,47 @@ function openEditFactura(facturaId, provId) {
   document.getElementById('efHora').value       = f.hora || '';
   document.getElementById('efTotal').value      = f.importeTotal || '';
   document.getElementById('efTipoComprobante').value = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+  _efPoblarNCSelect(provId, facturaId, f.notaCreditoSobre || '');
+  _efToggleNCSelect();
   document.getElementById('efFacturaId').value  = facturaId;
   document.getElementById('efProvId').value     = provId;
   _efItems = (f.items || []).map(it => ({ ...it }));
   _efRefreshItems();
   _efCheckTotal();
   openModal('modalEditFactura');
+}
+
+function _efToggleNCSelect() {
+  const tipo = document.getElementById('efTipoComprobante').value;
+  document.getElementById('efNotaCreditoSobreWrap').style.display = tipo === 'nota_credito' ? '' : 'none';
+}
+
+function _efPoblarNCSelect(provId, currentFacturaId, selected) {
+  const sel = document.getElementById('efNotaCreditoSobre');
+  const opts = facturas
+    .filter(f => f.proveedorId === provId && f.id !== currentFacturaId)
+    .filter(f => (f.tipoComprobante || 'factura') !== 'nota_credito')
+    .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  sel.innerHTML = '<option value="">— Sin asignar (resta al total general) —</option>' +
+    opts.map(f => {
+      const lbl = `${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'} · ${f.fecha || ''} · ${pesos(f.importeTotal || 0)}${f.pagado ? ' · PAGADA' : ''}`;
+      return `<option value="${f.id}"${f.id === selected ? ' selected' : ''}>${lbl}</option>`;
+    }).join('');
+}
+
+function _ncAplicadasA(facturaId) {
+  return facturas.filter(f =>
+    (f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura')) === 'nota_credito'
+    && f.notaCreditoSobre === facturaId
+  );
+}
+
+function _netoFactura(f) {
+  const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+  if (tipo === 'nota_credito') return -(Number(f.importeTotal) || 0);
+  const bruto = Number(f.importeTotal) || 0;
+  const desc  = _ncAplicadasA(f.id).reduce((s, nc) => s + (Number(nc.importeTotal) || 0), 0);
+  return bruto - desc;
 }
 
 function _efEsc(s) { return String(s ?? '').replace(/"/g, '&quot;'); }
@@ -4323,6 +4382,9 @@ function saveEditFactura() {
   f.hora         = document.getElementById('efHora').value;
   f.importeTotal = document.getElementById('efTotal').value === '' ? null : parseFloat(document.getElementById('efTotal').value);
   f.tipoComprobante = document.getElementById('efTipoComprobante').value || 'factura';
+  f.notaCreditoSobre = f.tipoComprobante === 'nota_credito'
+    ? (document.getElementById('efNotaCreditoSobre').value || null)
+    : null;
   delete f.esNotaCredito;
   f.items        = _efItems.map(it => ({ ...it }));
   const prov = proveedores.find(p => p.id === provId);
