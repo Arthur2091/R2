@@ -668,15 +668,12 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <label style="font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">↑ Restaurar<input type="file" accept=".json" onchange="importarDatos(this)" style="display:none"></label>
   <nav>
     <button class="nav-btn active" data-view="viewPedidos">Pedidos</button>
+    <button class="nav-btn" data-group="compras" data-view="viewProveedores">Compras</button>
+    <button class="nav-btn" data-group="stock" data-view="viewDeposito">Stock <span id="depBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:700"></span></button>
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
-    <button class="nav-btn" data-view="viewProveedores">Proveedores</button>
-    <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
-    <button class="nav-btn" data-view="viewPrecios">Precios</button>
-    <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
-    <button class="nav-btn" data-view="viewBoletas">Cargar Boletas</button>
-    <button class="nav-btn" data-view="viewDeposito">Depósito <span id="depBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:700"></span></button>
-    <button class="nav-btn" data-view="viewProduccion">Producción</button>
+    <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
+    <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
     <span id="userEmail" style="display:none;font-size:11px;color:var(--ink2);padding:2px 10px;border-radius:999px;background:var(--surface2);font-weight:600"></span>
@@ -684,6 +681,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button id="logoutBtn" onclick="_doLogout()" style="display:none;font-size:11px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);cursor:pointer">⎋ Salir</button>
   </div>
 </header>
+<div id="subnav" style="display:none;position:sticky;top:56px;z-index:500;background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;gap:6px;flex-wrap:wrap"></div>
 
 <!-- PEDIDOS -->
 <div id="viewPedidos" class="view active">
@@ -1942,22 +1940,72 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(btn.dataset.view).classList.add('active');
+    const group = btn.dataset.group;
+    const lastView = group ? (window['_lastSub_' + group] || btn.dataset.view) : btn.dataset.view;
+    document.getElementById(lastView).classList.add('active');
     btn.classList.add('active');
-    if (btn.dataset.view === 'viewProveedores') renderProveedores();
-    if (btn.dataset.view === 'viewBoletas')    initBoletasView();
-    if (btn.dataset.view === 'viewContable')   initContableView();
-    if (btn.dataset.view === 'viewProductos')  renderProductos();
-    if (btn.dataset.view === 'viewRecetas')    renderRecetas();
-    if (btn.dataset.view === 'viewPrecios')    renderPrecios();
-    if (btn.dataset.view === 'viewPedidos')    renderPedidos();
-    if (btn.dataset.view === 'viewDeposito')   renderDeposito();
-    if (btn.dataset.view === 'viewProduccion') renderProduccion();
-    if (btn.dataset.view === 'viewUsuarios')   _usrCargar();
+    _renderSubnav(group, lastView);
+    _onViewActivate(lastView);
     // Cerrar menú mobile después de seleccionar
     document.querySelector('nav')?.classList.remove('is-open');
   });
 });
+
+const SUBNAV_GROUPS = {
+  compras: [
+    { id: 'viewProveedores', label: 'Proveedores' },
+    { id: 'viewBoletas',     label: '📷 Cargar Boletas' },
+    { id: 'viewPrecios',     label: 'Comparar precios' },
+  ],
+  stock: [
+    { id: 'viewDeposito',  label: 'Depósito' },
+    { id: 'viewProduccion', label: 'Producción' },
+  ],
+};
+
+function _viewAllowed(viewId) {
+  const user = _auth.currentUser;
+  if (_isAdmin(user)) return true;
+  if (ADMIN_ONLY_VIEWS.includes(viewId)) return false;
+  return Array.isArray(_userPermisos) && _userPermisos.includes(viewId);
+}
+
+function _renderSubnav(group, currentView) {
+  const sub = document.getElementById('subnav');
+  if (!sub) return;
+  if (!group || !SUBNAV_GROUPS[group]) { sub.style.display = 'none'; sub.innerHTML = ''; return; }
+  const items = SUBNAV_GROUPS[group].filter(t => _viewAllowed(t.id));
+  if (items.length < 2) { sub.style.display = 'none'; sub.innerHTML = ''; return; }
+  sub.style.display = 'flex';
+  sub.innerHTML = items.map(t => `
+    <button class="prec-subtab ${t.id === currentView ? 'prec-subtab-active' : ''}" onclick="_switchSub('${group}','${t.id}')">${t.label}</button>
+  `).join('');
+}
+
+function _switchSub(group, viewId) {
+  window['_lastSub_' + group] = viewId;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(viewId).classList.add('active');
+  _renderSubnav(group, viewId);
+  _onViewActivate(viewId);
+}
+
+function _onViewActivate(viewId) {
+  const map = {
+    viewProveedores: renderProveedores,
+    viewBoletas:     initBoletasView,
+    viewContable:    initContableView,
+    viewProductos:   renderProductos,
+    viewRecetas:     renderRecetas,
+    viewPrecios:     renderPrecios,
+    viewPedidos:     renderPedidos,
+    viewDeposito:    renderDeposito,
+    viewProduccion:  renderProduccion,
+    viewInsumos:     renderInsumos,
+    viewUsuarios:    typeof _usrCargar === 'function' ? _usrCargar : null,
+  };
+  try { map[viewId]?.(); } catch (e) { console.warn('view activate error', viewId, e); }
+}
 
 function _toggleMobileNav() {
   const nav = document.querySelector('nav');
@@ -9728,13 +9776,21 @@ async function _cargarPermisosUsuario(user) {
 
 function _aplicarPermisosUI(user) {
   const admin = _isAdmin(user);
+  const _allowed = v => admin
+    ? true
+    : (ADMIN_ONLY_VIEWS.includes(v) ? false : (Array.isArray(_userPermisos) && _userPermisos.includes(v)));
   document.querySelectorAll('.nav-btn').forEach(btn => {
     const v = btn.dataset.view;
     if (!v) return;
+    const group = btn.dataset.group;
     let visible;
-    if (admin) visible = true;
-    else if (ADMIN_ONLY_VIEWS.includes(v)) visible = false;
-    else visible = Array.isArray(_userPermisos) && _userPermisos.includes(v);
+    if (group && SUBNAV_GROUPS[group]) {
+      visible = SUBNAV_GROUPS[group].some(t => _allowed(t.id));
+      const first = SUBNAV_GROUPS[group].find(t => _allowed(t.id));
+      if (first) btn.dataset.view = first.id;
+    } else {
+      visible = _allowed(v);
+    }
     btn.style.display = visible ? '' : 'none';
   });
 
