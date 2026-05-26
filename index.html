@@ -3452,7 +3452,12 @@ function renderVencimientosGlobal() {
   const cardsHtml = !items.length
     ? `<div class="empty-state"><h3>Sin vencimientos pendientes</h3><p>Todas las facturas con condición de pago están pagadas o aún no vencen.</p></div>`
     : items.map(({f, prov, e}) => {
-        const total = f.importeTotal ? pesos(f.importeTotal) : '—';
+        const _ncDesc = _ncAplicadasA(f.id).reduce((s, n) => s + (Number(n.importeTotal) || 0), 0);
+        const total = f.importeTotal
+          ? (_ncDesc > 0
+              ? `<span style="font-size:11px;color:var(--ink3);text-decoration:line-through;display:block">${pesos(f.importeTotal)}</span>${pesos(_netoFactura(f))}`
+              : pesos(f.importeTotal))
+          : '—';
         const cond = prov?.condicionPago ? ({efectivo:'💵 Efectivo', transferencia:'🏦 Transferencia', ambos:'💵🏦 Ambos'})[prov.condicionPago] : '';
         const borderColor = e.estado === 'vencido' ? '#DC2626' : (e.estado === 'vence_hoy' ? '#EA580C' : (e.estado === 'vence_manana' ? '#F59E0B' : 'var(--border)'));
         return `<div style="background:var(--surface);border:1.5px solid ${borderColor};border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
@@ -4174,7 +4179,17 @@ function renderFacturaDetalle(facturaId, provId) {
           <div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">N° Factura</div><div style="font-weight:700;font-size:1rem">${f.nroBoleta || '—'}</div></div>
           <div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">Fecha</div><div style="font-weight:600">${f.fecha}</div></div>
           <div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">Hora</div><div style="font-weight:600">${f.hora || '—'}</div></div>
-          <div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">Total</div><div style="font-weight:700;color:var(--accent);font-size:1.1rem">${f.importeTotal ? pesos(f.importeTotal) : '—'}</div></div>
+          ${(() => {
+            const nc = _ncAplicadasA(f.id);
+            const desc = nc.reduce((s, n) => s + (Number(n.importeTotal) || 0), 0);
+            if (desc > 0 && f.importeTotal) {
+              const neto = _netoFactura(f);
+              return `<div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">Total factura</div><div style="font-weight:600;color:var(--ink2);font-size:.9rem;text-decoration:line-through">${pesos(f.importeTotal)}</div></div>
+                <div><div style="font-size:.72rem;color:#991B1B;text-transform:uppercase;font-weight:700">NC aplicada</div><div style="font-weight:600;color:#991B1B;font-size:.9rem">−${pesos(desc)}</div></div>
+                <div><div style="font-size:.72rem;color:var(--accent);text-transform:uppercase;font-weight:700">A transferir</div><div style="font-weight:700;color:var(--accent);font-size:1.2rem">${pesos(neto)}</div></div>`;
+            }
+            return `<div><div style="font-size:.72rem;color:var(--ink3);text-transform:uppercase;font-weight:700">Total</div><div style="font-weight:700;color:var(--accent);font-size:1.1rem">${f.importeTotal ? pesos(f.importeTotal) : '—'}</div></div>`;
+          })()}
         </div>
       </div>
       <button onclick="eliminarFactura('${f.id}','${provId}')" style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:.5rem .9rem;cursor:pointer;font-size:.85rem;white-space:nowrap;align-self:flex-start">Eliminar</button>
