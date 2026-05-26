@@ -1894,7 +1894,9 @@ let _matchPendientes = [];
 
 
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
+let _fbLoaded = false;
 function persist() {
+  if (!_fbLoaded) { console.warn('[persist] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
   Promise.all([
     _fbWrite('insumos',       { items: insumos }),
@@ -4916,6 +4918,7 @@ const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","A
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 
 function persistContable() {
+  if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
   _fbWrite('contable', { ventas, sueldos, otrosEgresos, productosRubros }).then(() => _syncChip('ok')).catch(() => {});
 }
@@ -5610,6 +5613,7 @@ function calcCostoIng(ins, cantidad, unidad) {
 
 /* ── RECETAS ─────────────────────────────────────────────────────── */
 function persistRecetas() {
+  if (!_fbLoaded) { console.warn('[persistRecetas] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
   _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok')).catch(() => {});
 }
@@ -7419,11 +7423,12 @@ async function _fbLoad() {
     const bannerApikey = document.getElementById('apikeyBanner');
     if (bannerApikey && getApiKey()) bannerApikey.style.display = 'none';
     if (_bItems.length) _bRenderItems();
+    _fbLoaded = true;
     _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
     _syncChip('error');
-    toast('Error al conectar con la base de datos', 'error');
+    toast('Error al conectar con la base de datos. Recargá la página antes de tocar nada.', 'error');
   }
 }
 
