@@ -2451,7 +2451,7 @@ function clearAll() {
 /* ── RENDER INSUMOS ─────────────────────────────────────────────── */
 function fmt(n) {
   if (n === null || n === undefined) return '—';
-  return '$' + Math.ceil(n).toLocaleString('es-AR');
+  return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function _parseNum(raw) {
@@ -4962,7 +4962,7 @@ function toggleSection(id) {
 
 function pesos(n) {
   if (!n && n !== 0) return '—';
-  return '$' + Math.ceil(n).toLocaleString('es-AR');
+  return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 /* PRODUCTOS */
@@ -7454,6 +7454,27 @@ async function _fbLoad() {
     _syncChip('error');
     toast('Error al conectar con la base de datos. Recargá la página antes de tocar nada.', 'error');
   }
+}
+
+function _recomputarImportes(dryRun = true) {
+  let cambiadas = 0, sinItems = 0, sinCambio = 0;
+  const detalle = [];
+  facturas.forEach(f => {
+    if (!Array.isArray(f.items) || !f.items.length) { sinItems++; return; }
+    const neto = f.items.reduce((s, it) => s + (Number(it.precio_total) || 0), 0);
+    const iva  = f.items.reduce((s, it) => s + (Number(it.iva) || 0), 0);
+    const exacto = Math.round((neto + iva) * 100) / 100;
+    const actual = Number(f.importeTotal) || 0;
+    if (exacto > 0 && Math.abs(exacto - actual) > 0.001) {
+      detalle.push({ id: f.id, nro: f.nroBoleta, fecha: f.fecha, antes: actual, despues: exacto });
+      if (!dryRun) f.importeTotal = exacto;
+      cambiadas++;
+    } else sinCambio++;
+  });
+  console.table(detalle);
+  console.log(`Cambiables: ${cambiadas} · Sin cambio: ${sinCambio} · Sin items: ${sinItems}`);
+  if (dryRun) console.log('DRY RUN. Para aplicar: _recomputarImportes(false)');
+  else { persist(); toast(`${cambiadas} facturas corregidas`, 'success'); }
 }
 
 async function _borrarTodo() {
