@@ -3362,7 +3362,7 @@ function renderProveedorFacturas(provId, subtab) {
               ? `<button class="btn btn-primary btn-sm" style="background:#10B981" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
               : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
                  ${esperando
-                   ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
+                   ? `<button class="btn btn-primary btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>`
                    : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
           </div>
         </div>`;
@@ -3658,7 +3658,7 @@ function renderPendientesGlobal() {
               ? `<button class="btn btn-primary btn-sm" style="background:#10B981" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
               : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
                  ${esperando
-                   ? `<span style="font-size:12px;color:var(--ink2);align-self:center">Cargá la boleta para cerrar</span>`
+                   ? `<button class="btn btn-primary btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>`
                    : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
           </div>
         </div>`;
@@ -3698,6 +3698,60 @@ function cancelarPedidoPendiente(pedidoId) {
   if (_pendViewMode === 'global') renderPendientesGlobal();
   else renderProveedorFacturas(provId, 'pend');
   toast('Pedido cancelado', 'info');
+}
+
+function vincularFacturaAPedido(pedidoId) {
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped) return;
+  const prov = proveedores.find(p => p.id === ped.proveedorId);
+  const facsProv = facturas
+    .filter(f => f.proveedorId === ped.proveedorId)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+  if (!facsProv.length) {
+    toast('No hay facturas cargadas para este proveedor. Importá la boleta primero.', 'error');
+    return;
+  }
+
+  const opcionesHtml = facsProv.map(f => {
+    const nItems = (f.items || []).length;
+    const total  = f.importeTotal ? ` · $${Number(f.importeTotal).toLocaleString('es-AR')}` : '';
+    const label  = f.nroBoleta ? `Boleta N° ${f.nroBoleta}` : `Sin número`;
+    return `<button class="btn btn-outline" style="text-align:left;padding:12px 14px;width:100%"
+      onclick="_confirmarVinculo('${pedidoId}','${f.id}')">
+      <div style="font-weight:700;font-size:13px;color:var(--ink)">${label} — ${f.fecha}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${nItems} ítems${total}</div>
+    </button>`;
+  }).join('');
+
+  const html = `<div class="overlay open" id="vincularFactModal" style="display:flex">
+    <div class="modal" style="max-width:540px">
+      <h2>Vincular factura — ${prov?.nombre}</h2>
+      <p class="modal-sub">Seleccioná la factura que corresponde a este pedido:</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;max-height:360px;overflow-y:auto">
+        ${opcionesHtml}
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="document.getElementById('vincularFactModal').remove()">Cancelar</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function _confirmarVinculo(pedidoId, facturaId) {
+  document.getElementById('vincularFactModal')?.remove();
+  const ped = pedidosPendientes.find(p => p.id === pedidoId);
+  const fac = facturas.find(f => f.id === facturaId);
+  if (!ped || !fac) return;
+  ped.estado     = 'vinculado';
+  ped.facturaId  = facturaId;
+  ped.nroBoleta  = fac.nroBoleta || null;
+  ped.fechaBoleta = fac.fecha;
+  persist();
+  if (_pendViewMode === 'global') renderPendientesGlobal();
+  else renderProveedorFacturas(ped.proveedorId, 'pend');
+  toast(`Pedido vinculado a boleta${fac.nroBoleta ? ' N° ' + fac.nroBoleta : ''}`, 'success');
 }
 
 function cerrarPedidoVinculado(pedidoId) {
@@ -4518,7 +4572,7 @@ function saveEditFactura() {
   persist();
   closeModal('modalEditFactura');
   toast('Boleta actualizada', 'success');
-  renderFacturaDetalle(facturaId, provId);
+  renderProveedorFacturas(provId, 'fact');
 }
 
 /* ── BOLETAS ────────────────────────────────────────────────────── */
@@ -5402,10 +5456,14 @@ const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato',
 
 function _renderGastosFijosBody(items, periodo, pagado, adeudado) {
   if (!items.length) {
+    const hayTemplate = gastosFijos.some(g => g.periodo !== periodo);
     return `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">
       Sin gastos fijos cargados para este período.<br>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="_importarGastosFijos()">↑ Importar histórico (Excel)</button>
-      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="_nuevoGastoFijo('${periodo}')">+ Nuevo gasto fijo</button>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">
+        ${hayTemplate ? `<button class="btn btn-primary btn-sm" onclick="_replicarGastosFijos('${periodo}')">↻ Replicar mes anterior</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="_importarGastosFijos()">↑ Importar histórico (Excel)</button>
+        <button class="btn btn-outline btn-sm" onclick="_nuevoGastoFijo('${periodo}')">+ Nuevo gasto fijo</button>
+      </div>
     </div>`;
   }
   const byCat = {};
@@ -5418,6 +5476,7 @@ function _renderGastosFijosBody(items, periodo, pagado, adeudado) {
     <div style="margin-left:auto;display:flex;gap:6px">
       <button class="btn btn-outline btn-sm" onclick="_importarGastosFijos()">↑ Importar histórico</button>
       <button class="btn btn-outline btn-sm" onclick="_nuevoGastoFijo('${periodo}')">+ Gasto fijo</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodosGastosFijos('${periodo}')">✕ Borrar todo</button>
     </div>
   </div>
   ${cats.map(cat => {
@@ -5455,6 +5514,100 @@ function _importarGastosFijos() {
   persistContable();
   renderContable();
   toast(`Importados ${added} · saltados ${_GASTOS_FIJOS_SEED.length - added} duplicados`, 'success');
+}
+
+function _renderComprasTabla(comprasPeriod, byProv, totalCompras) {
+  const totalDeuda = comprasPeriod.filter(f => !f.pagado).reduce((s, f) => s + (f.importeTotal || 0), 0);
+  const rows = Object.entries(byProv).sort(([,a],[,b]) => b - a).map(([nombre, total]) => {
+    const facsDelProv = comprasPeriod
+      .filter(f => (proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor') === nombre)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+    const deudaProv = facsDelProv.filter(f => !f.pagado).reduce((s, f) => s + (f.importeTotal || 0), 0);
+    const detalle = facsDelProv.map(f => `
+      <tr style="background:${f.pagado ? '#F0FDF4' : '#FEF2F2'}">
+        <td style="padding-left:28px;font-family:var(--mono);font-size:12px;color:${f.pagado ? 'var(--ink2)' : 'var(--danger)'};${f.pagado ? 'text-decoration:line-through' : ''}">${f.nroBoleta || '—'}</td>
+        <td style="font-size:12px;color:${f.pagado ? 'var(--ink2)' : 'var(--danger)'}">${f.fecha}</td>
+        <td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:${f.pagado ? '#10B981' : 'var(--danger)'}">${pesos(f.importeTotal)}</td>
+        <td style="text-align:right;padding-right:8px">
+          <button onclick="_pagarFacturaContable('${f.id}')" style="font-size:11px;padding:2px 10px;border-radius:6px;border:1.5px solid ${f.pagado ? '#10B981' : 'var(--danger)'};background:${f.pagado ? '#10B981' : 'transparent'};color:${f.pagado ? '#fff' : 'var(--danger)'};cursor:pointer;font-weight:700">
+            ${f.pagado ? '✓' : 'OK'}
+          </button>
+        </td>
+      </tr>`).join('');
+    return `
+      <tr style="cursor:pointer" onclick="_toggleComprasProv(this)">
+        <td style="display:flex;align-items:center;gap:8px">
+          <span class="compras-chevron" style="font-size:10px;color:var(--ink3);transition:transform .2s">▶</span>
+          ${nombre}
+        </td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(total)}</td>
+        <td style="text-align:right;font-family:var(--mono);color:${deudaProv > 0 ? 'var(--danger)' : '#10B981'};font-size:12px">${deudaProv > 0 ? pesos(deudaProv) : '✓'}</td>
+      </tr>
+      <tr class="compras-detail-row" style="display:none"><td colspan="3" style="padding:0">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#F0EDE8">
+            <th style="padding:6px 28px;font-size:11px;text-align:left;font-weight:600;color:var(--ink2)">N° Boleta</th>
+            <th style="padding:6px 8px;font-size:11px;text-align:left;font-weight:600;color:var(--ink2)">Fecha</th>
+            <th style="padding:6px 8px;font-size:11px;text-align:right;font-weight:600;color:var(--ink2)">Importe</th>
+            <th style="width:60px"></th>
+          </tr></thead>
+          <tbody>${detalle}</tbody>
+        </table>
+      </td></tr>`;
+  }).join('');
+  return `<table><thead><tr><th>Proveedor</th><th style="text-align:right">Total</th><th style="text-align:right">Deuda</th></tr></thead><tbody>
+    ${rows}
+    <tr style="font-weight:600;background:var(--surface2)">
+      <td>Total</td>
+      <td style="text-align:right;font-family:var(--mono)">${pesos(totalCompras)}</td>
+      <td style="text-align:right;font-family:var(--mono);color:${totalDeuda > 0 ? 'var(--danger)' : '#10B981'}">${totalDeuda > 0 ? pesos(totalDeuda) : '✓ Todo pagado'}</td>
+    </tr>
+  </tbody></table>`;
+}
+
+function _pagarFacturaContable(facturaId) {
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  f.pagado   = !f.pagado;
+  f.fechaPago = f.pagado ? _hoyISO() : null;
+  persist();
+  renderContable();
+}
+
+function _toggleComprasProv(row) {
+  const detailRow = row.nextElementSibling;
+  const chevron   = row.querySelector('.compras-chevron');
+  const open      = detailRow.style.display !== 'none';
+  detailRow.style.display = open ? 'none' : '';
+  chevron.style.transform = open ? '' : 'rotate(90deg)';
+}
+
+function _borrarTodosGastosFijos(periodo) {
+  const cant = gastosFijos.filter(g => g.periodo === periodo).length;
+  if (!cant) return;
+  if (!confirm(`¿Borrar los ${cant} gastos fijos de ${periodo}?`)) return;
+  gastosFijos = gastosFijos.filter(g => g.periodo !== periodo);
+  persistContable();
+  renderContable();
+  toast(`${cant} gastos fijos eliminados`, 'success');
+}
+
+function _replicarGastosFijos(periodoDestino) {
+  const periodosConDatos = [...new Set(gastosFijos.map(g => g.periodo))].sort();
+  if (!periodosConDatos.length) { toast('No hay ningún mes con datos para replicar', 'error'); return; }
+  const origen = periodosConDatos.filter(p => p < periodoDestino).pop() || periodosConDatos[0];
+  const fuente = gastosFijos.filter(g => g.periodo === origen);
+  if (!fuente.length) { toast('No se encontró mes con datos', 'error'); return; }
+  const keyExistente = g => `${g.periodo}::${g.servicio.toLowerCase()}`;
+  const existentes = new Set(gastosFijos.map(keyExistente));
+  let added = 0;
+  fuente.forEach(g => {
+    const nuevo = { ...g, id: crypto.randomUUID(), periodo: periodoDestino, pagado: false, fechaPago: null };
+    if (!existentes.has(keyExistente(nuevo))) { gastosFijos.push(nuevo); added++; }
+  });
+  persistContable();
+  renderContable();
+  toast(`${added} gastos replicados de ${origen}`, 'success');
 }
 
 function _toggleGastoFijoPagado(id) {
@@ -5550,12 +5703,7 @@ function renderContable() {
   document.getElementById('totalCompras').textContent = pesos(totalCompras);
   document.getElementById('secComprasBody').innerHTML = comprasPeriod.length === 0
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin compras registradas para este período.<br><span style="font-size:12px">Confirmá boletas en la tab Boletas.</span></div>`
-    : `<table><thead><tr><th>Proveedor</th><th style="text-align:right">Total</th></tr></thead><tbody>
-      ${Object.entries(byProv).sort(([,a],[,b])=>b-a).map(([k,v])=>`
-        <tr><td>${k}</td><td style="text-align:right;font-family:var(--mono)">${pesos(v)}</td></tr>
-      `).join('')}
-      <tr style="font-weight:600;background:var(--surface2)"><td>Total</td><td style="text-align:right;font-family:var(--mono)">${pesos(totalCompras)}</td></tr>
-    </tbody></table>`;
+    : _renderComprasTabla(comprasPeriod, byProv, totalCompras);
 
   // ── SUELDOS ──
   const sueldosPeriod = sueldos.filter(s => {
