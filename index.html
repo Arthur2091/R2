@@ -5935,26 +5935,31 @@ function renderContable() {
 
   // ── MERCADO PAGO RETIROS ──
   const mpPeriod   = mpMovs.filter(m => inPeriod(m.fecha));
-  const totalMP    = mpPeriod.filter(m => !m.facturaId).reduce((s, m) => s + (m.monto || 0), 0);
+  const totalMP    = mpPeriod.filter(m => !m.facturaId && !m.esInterna).reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalMP').textContent = pesos(totalMP);
   document.getElementById('secMPBody').innerHTML = !mpPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin retiros de MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel de retiros.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
         ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
           const vinculado = !!m.facturaId;
+          const interna   = !!m.esInterna;
+          const excluido  = vinculado || interna;
           const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
           const provVinc  = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
-          const rowBg     = vinculado ? 'background:#F0FDF4' : '';
+          const rowBg     = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9' : '';
           const badge     = vinculado
-            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta ? ' · N°'+facVinc.nroBoleta : ''}</span>`
-            : '';
+            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
+            : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Transferencia interna</span>` : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
-            : `<button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular factura</button>`;
+            : interna
+              ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+              : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                 <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px">${m.destino} ${badge}</td>
-            <td style="text-align:right;font-family:var(--mono);${vinculado?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge}</td>
+            <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
             <td style="display:flex;gap:4px;align-items:center">${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
           </tr>`;
         }).join('')}
@@ -5967,23 +5972,27 @@ function renderContable() {
 
   // ── GALICIA ──
   const galiciaPeriod = galiciaMovs.filter(m => inPeriod(m.fecha));
-  const totalGalicia  = galiciaPeriod.filter(m => !m.facturaId).reduce((s, m) => s + (m.monto || 0), 0);
+  const totalGalicia  = galiciaPeriod.filter(m => !m.facturaId && !m.esInterna).reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalGalicia').textContent = pesos(totalGalicia);
   document.getElementById('secGaliciaBody').innerHTML = !galiciaPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos Galicia para este período.<br><span style="font-size:12px">Usá "Importar Galicia" para cargar el Excel.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
         ${galiciaPeriod.sort((a,b) => b.fecha.localeCompare(a.fecha)).map(m => {
-          const vinculado = !!m.facturaId;
-          const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
-          const provVinc  = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
-          const badge     = vinculado ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>` : '';
-          const accion    = vinculado
-            ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGalicia('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
-            : `<button class="btn btn-outline btn-sm" onclick="_abrirVincularGalicia('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
-          return `<tr style="${vinculado?'background:#F0FDF4':''}">
+          const vinculado = !!m.mpVinculadoId;
+          const interna   = !!m.esInterna;
+          const excluido  = vinculado || interna;
+          const mpVinc    = vinculado ? mpMovs.find(x => x.id === m.mpVinculadoId) : null;
+          const badge     = vinculado
+            ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ MP${mpVinc?' · '+mpVinc.fecha:''}</span>`
+            : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Transferencia interna</span>` : '';
+          const accion = (vinculado || interna)
+            ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGalicia('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+            : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGalicia('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+               <button class="btn btn-outline btn-sm" onclick="_abrirVincularGalicia('${m.id}')" style="font-size:11px">🔗 Vincular MP</button>`;
+          return `<tr style="${vinculado?'background:#F0FDF4':interna?'background:#F1F5F9':''}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px">${m.descripcion} ${badge}</td>
-            <td style="text-align:right;font-family:var(--mono);${vinculado?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.descripcion} ${badge}</td>
+            <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
             <td style="display:flex;gap:4px;align-items:center">${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGalicia('${m.id}')">✕</button></td>
           </tr>`;
         }).join('')}
@@ -6040,31 +6049,25 @@ function _borrarGalicia(id) {
 function _abrirVincularGalicia(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
-  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const descNorm = norm(m.descripcion);
-  const facsOrdenadas = [...facturas].filter(f => f.importeTotal).sort((a, b) => {
-    const nA = norm(proveedores.find(p=>p.id===a.proveedorId)?.nombre||'');
-    const nB = norm(proveedores.find(p=>p.id===b.proveedorId)?.nombre||'');
-    const mA = descNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && descNorm.includes(w));
-    const mB = descNorm.includes(nB) || nB.split(' ').some(w => w.length>3 && descNorm.includes(w));
-    if (mA && !mB) return -1; if (!mA && mB) return 1;
-    return b.fecha.localeCompare(a.fecha);
-  });
+  // Solo muestra retiros de MP (transferencias entre cuentas propias)
+  const mpDisponibles = mpMovs.filter(mp => !mp.esInterna && !mp.facturaId)
+    .sort((a, b) => b.fecha.localeCompare(a.fecha));
+  const filas = mpDisponibles.length
+    ? mpDisponibles.map(mp => `
+        <button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%"
+          onclick="_vincularGalicia('${galId}','${mp.id}')">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)">${mp.destino || 'Retiro MP'}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:2px">${mp.fecha} · ${pesos(mp.monto)}</div>
+        </button>`).join('')
+    : `<p style="color:var(--ink3);font-size:13px;text-align:center;padding:20px">No hay retiros de MP disponibles para vincular.</p>`;
   document.body.insertAdjacentHTML('beforeend', `
     <div class="overlay open" id="vincularGalModal" style="display:flex">
       <div class="modal" style="max-width:560px">
-        <h2>Vincular movimiento Galicia</h2>
+        <h2>Vincular con retiro de MP</h2>
         <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
+        <p style="font-size:12px;color:var(--ink2);margin-top:4px">Seleccioná el retiro de Mercado Pago que corresponde a este débito en Galicia.</p>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
-          ${facsOrdenadas.slice(0,50).map(f => {
-            const prov = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
-            const match = norm(descNorm).includes(norm(prov).slice(0,6));
-            return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}"
-              onclick="_vincularGalicia('${galId}','${f.id}')">
-              <div style="font-weight:700;font-size:13px">${prov}</div>
-              <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta?'N° '+f.nroBoleta:'Sin número'} · ${pesos(f.importeTotal)}</div>
-            </button>`;
-          }).join('')}
+          ${filas}
         </div>
         <div class="modal-actions" style="margin-top:14px">
           <button class="btn btn-outline" onclick="document.getElementById('vincularGalModal').remove()">Cancelar</button>
@@ -6072,24 +6075,49 @@ function _abrirVincularGalicia(galId) {
       </div>
     </div>`);
 }
-function _vincularGalicia(galId, facturaId) {
+function _vincularGalicia(galId, mpId) {
   document.getElementById('vincularGalModal')?.remove();
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
-  m.facturaId = facturaId;
+  // Vincular ambos como internos entre sí
+  m.esInterna = true;
+  m.mpVinculadoId = mpId;
+  const mp = mpMovs.find(x => x.id === mpId);
+  if (mp) { mp.esInterna = true; mp.galVinculadaId = galId; }
   persistContable(); renderContable();
   toast('Movimiento vinculado — no suma a egresos Galicia', 'success');
 }
 function _desvincularGalicia(id) {
   const m = galiciaMovs.find(x => x.id === id);
   if (!m) return;
+  // Si estaba vinculado a un retiro MP, desmarcar también ese
+  if (m.mpVinculadoId) {
+    const mp = mpMovs.find(x => x.id === m.mpVinculadoId);
+    if (mp) { mp.esInterna = false; delete mp.galVinculadaId; }
+    delete m.mpVinculadoId;
+  }
   delete m.facturaId;
+  m.esInterna = false;
   persistContable(); renderContable();
   toast('Desvinculado', 'info');
 }
 
 function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
+  persistContable();
+  renderContable();
+}
+function _toggleInternaMP(id) {
+  const m = mpMovs.find(x => x.id === id);
+  if (!m) return;
+  m.esInterna = !m.esInterna;
+  persistContable();
+  renderContable();
+}
+function _toggleInternaGalicia(id) {
+  const m = galiciaMovs.find(x => x.id === id);
+  if (!m) return;
+  m.esInterna = !m.esInterna;
   persistContable();
   renderContable();
 }
@@ -6177,7 +6205,8 @@ function importMP(e) {
         const monto  = parseAmt(r['Monto (amount)']);
         const destino = [r['Nombre del titular (bank_account_holder)'], r['Nombre del banco (bank_name)']].filter(Boolean).join(' — ');
         if (!fecha || !monto || existentes.has(id)) return;
-        mpMovs.push({ id, fecha, monto, destino, tipo: 'retiro' });
+        const esInterna = /lay.o/i.test(destino) && /galicia/i.test(destino);
+        mpMovs.push({ id, fecha, monto, destino, tipo: 'retiro', ...(esInterna ? { esInterna: true } : {}) });
         added++;
       });
       persistContable();
@@ -6220,7 +6249,7 @@ function importGalicia(e) {
         const fecha = `${y}-${m?.padStart(2,'0')}-${d?.padStart(2,'0')}`;
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
         const movRaw  = String(r[iM] || '').trim();
-        const descripcion = movRaw.split(/\n/)[0].trim() || 'Sin descripción';
+        const descripcion = movRaw || 'Sin descripción';
         const id = `gal-${fecha}-${monto}-${i}`;
         if (existentes.has(id)) return;
         galiciaMovs.push({ id, fecha, monto, descripcion, tipo: 'galicia' });
