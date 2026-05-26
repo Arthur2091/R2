@@ -981,6 +981,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       Importar ventas Excel
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importVentas(event)">
     </label>
+    <label class="btn btn-outline" style="cursor:pointer">
+      Importar MP
+      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
+    </label>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
   </div>
@@ -1027,6 +1031,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <div class="section-total" id="totalGastosFijos" style="color:var(--danger)"></div>
     </div>
     <div id="secGastosFijosBody" class="contable-section-body"></div>
+  </div>
+
+  <div class="contable-section" id="secMP">
+    <div class="contable-section-header" onclick="toggleSection('secMPBody')">
+      <h3>Egresos — Mercado Pago</h3>
+      <div class="section-total" id="totalMP" style="color:var(--danger)"></div>
+    </div>
+    <div id="secMPBody" class="contable-section-body"></div>
   </div>
 </div>
 
@@ -5297,6 +5309,7 @@ let ventas       = [];
 let sueldos      = [];
 let otrosEgresos = [];
 let gastosFijos  = [];
+let mpMovs       = [];
 
 const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","ALFAJOR COCO":"Pastelería","Americano Doble":"Cafetería","apple crumble":"Pastelería","Avo Croissant":"Desayunos y Meriendas","Avocado Toast":"Desayunos y Meriendas","Boloñesa":"Pastas","Brownie":"Pastelería","Brunch Para 2":"Desayunos y Meriendas","Budin Arandanochoco":"Pastelería","Budin Banana choco":"Pastelería","budin limon amap":"Pastelería","Cafe GRAMOL COLOMBIA":"Cafetería","CAFE GRANO BR":"Cafetería","CAFE MOLIDO BR":"Cafetería","CAFE MOLIDO COL":"Cafetería","Capu Avel G":"Cafetería","Capu Avel M":"Cafetería","Capu Caram G":"Cafetería","Capu Caram M":"Cafetería","Capu Vai G":"Cafetería","Capu Vai M":"Cafetería","Capuccino G":"Cafetería","Capuccino M":"Cafetería","Cheese F. Rojos":"Pastelería","Chocolate Caliente":"Cafetería","Cold Brew":"Cafetería","Combo Anakin":"Sandwich","Combo Chewie":"Sandwich","Combo EP 2":"Sandwich","Combo EP 3":"Sandwich","Combo EP 5":"Sandwich","Combo EP 6":"Sandwich","Combo Han Solo":"Desayunos y Meriendas","Combo Keto":"Ensaladas","Combo Leia":"Desayunos y Meriendas","Combo Luke":"Desayunos y Meriendas","Combo Obi-Wan":"Desayunos y Meriendas","Combo Padme":"Desayunos y Meriendas","Combo Qui-Gon":"Desayunos y Meriendas","Combo Rei":"Desayunos y Meriendas","Combo Yoda":"Desayunos y Meriendas","cookie doble choco":"Pastelería","COOKIE FRAMBUESA":"Pastelería","Cookie Nutella":"Pastelería","Cookie Red Velvet":"Pastelería","Cookie Toddy":"Pastelería","Cortado Chico":"Cafetería","Cortado Doble":"Cafetería","Cortado Jarrito":"Cafetería","Croissant":"Desayunos y Meriendas","Croissant Crudo":"Desayunos y Meriendas","Croissant JQ":"Desayunos y Meriendas","Croque Monsieur":"Desayunos y Meriendas","Doble Espresso":"Cafetería","Ens. BB-8":"Ensaladas","Ens. C3PO KETO":"Ensaladas","Ens. R2-D2":"Ensaladas","Episodio 2":"Sandwich","Episodio 3":"Sandwich","Episodio 5":"Sandwich","Episodio 6":"Sandwich","Espresso Largo  Americano S.":"Cafetería","Espresso single":"Cafetería","Exprimido Naranja":"Cafetería","Extra Aderezo Caesar":"Ensaladas","Extra huevo":"Ensaladas","EXTRA PALTA":"Ensaladas","Extra PAN":"Pastas","Extra PESTO":"Pastas","Extra Pollo":"Pastas","Extra QUESITO":"Pastas","Extra SHOT":"Cafetería","Extra Syrup":"Cafetería","Flat Frio G":"Cafetería","Flat White":"Cafetería","Flat White GRANDE":"Cafetería","French Toast Dulce":"Desayunos y Meriendas","French Toast salada":"Cafetería","Huevos Revueltos":"Desayunos y Meriendas","Iced Capu Syrup":"Cafetería","Iced Capuccino":"Cafetería","Iced Coffee":"Cafetería","Iced Tea":"Cafetería","Lagrima chica":"Cafetería","Lagrima G":"Cafetería","LAGRIMA JARRITO":"Cafetería","Lagrima M":"Cafetería","Latte G":"Cafetería","Latte G  Budin":"Desayunos y Meriendas","Latte G  Roll de canela":"Desayunos y Meriendas","Latte G  Torta":"Desayunos y Meriendas","Latte M":"Cafetería","Leche Almendra Lic":"Cafetería","Leche Almendras":"Cafetería","Lemon Pie":"Pastelería","Licuado en AGUA":"Cafetería","Licuado en LECHE":"Cafetería","LIMONADA + BUDIN LIMON":"Desayunos y Meriendas","LIMONADA EN JARRA":"Cafetería","Limonada MenJen":"Cafetería","lungo jarrito":"Cafetería","Lungo o Cafeciito":"Cafetería","Macaron":"Pastelería","MDD raviol calabaza":"Menú del Día","MDD Sand Vitel":"Menú del Día","MDD SUMMER SALAD":"Menú del Día","MDD wrap crispy":"Menú del Día","MediaLuna JQx1":"Desayunos y Meriendas","MediaLuna JQx2":"Desayunos y Meriendas","Medialuna Manteca":"Desayunos y Meriendas","MENU 1":"Pastas","Mocaccino G":"Cafetería","Mocaccino M":"Cafetería","Omelette JQ":"Desayunos y Meriendas","Papas Fritas":"Sandwich","Parisienne":"Pastas","Pesto Lovers":"Pastas","Pink  Rosa":"Pastas","PP":"Pastas","Promo Latte 1Luna":"Desayunos y Meriendas","Promo Latte 2Lunas":"Desayunos y Meriendas","Red Velvet Entera 10porc":"Pastelería","ROLL CANELA":"Desayunos y Meriendas","Scarparo":"Pastas","Scon de Queso":"Desayunos y Meriendas","Scon Queso Caliente":"Desayunos y Meriendas","Sfogliatella":"Desayunos y Meriendas","Submarino":"Cafetería","Tarta T-6 Cebolla":"Tartas","Torta Bruce":"Pastelería","Tarta X-Wing":"Tartas","Tarta AT-AT Walker":"Tartas","Te Inti":"Cafetería","TIRAMISU":"Pastelería","Torta Marquise":"Pastelería","Torta Red Velvet":"Pastelería","Tostadas Blancas":"Desayunos y Meriendas","Tostadas Negras":"Desayunos y Meriendas","Tostado KETO":"Desayunos y Meriendas","Tostado Pan Blanco":"Desayunos y Meriendas","Tostado Pan Negro":"Desayunos y Meriendas","Triangulo DDL":"Pastelería","Trifle Yogur Granola":"Cafetería","Wrap Caesar":"Wraps","Wrap Criollo":"Wraps","Wrap Falafel":"Wraps","Wrap Veggie":"Wraps"};
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
@@ -5304,10 +5317,10 @@ let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
-  _fbWrite('contable', { ventas, sueldos, otrosEgresos, gastosFijos, productosRubros }).then(() => _syncChip('ok')).catch(() => {});
+  _fbWrite('contable', { ventas, sueldos, otrosEgresos, gastosFijos, productosRubros, mpMovs }).then(() => _syncChip('ok')).catch(() => {});
 }
 function hydrateContable() {
-  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; productosRubros = {..._RUBROS_DEFAULT};
+  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; productosRubros = {..._RUBROS_DEFAULT};
 }
 
 function initContableView() {
@@ -5907,10 +5920,28 @@ function renderContable() {
   document.getElementById('totalGastosFijos').textContent = pesos(totalFijos);
   document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos);
 
+  // ── MERCADO PAGO RETIROS ──
+  const mpPeriod = mpMovs.filter(m => inPeriod(m.fecha));
+  const totalMP  = mpPeriod.reduce((s, m) => s + (m.monto || 0), 0);
+  document.getElementById('totalMP').textContent = pesos(totalMP);
+  document.getElementById('secMPBody').innerHTML = !mpPeriod.length
+    ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin retiros de MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel de retiros.</span></div>`
+    : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
+        ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
+          <tr>
+            <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
+            <td style="font-size:13px">${m.destino}</td>
+            <td style="text-align:right;font-family:var(--mono)">${pesos(m.monto)}</td>
+            <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
+          </tr>
+        `).join('')}
+        <tr style="font-weight:600;background:var(--surface2)"><td colspan="2">${mpPeriod.length} retiro${mpPeriod.length!==1?'s':''}</td><td style="text-align:right;font-family:var(--mono)">${pesos(totalMP)}</td><td></td></tr>
+      </tbody></table>`;
+
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
   const comprasAdeudadas = comprasPeriod.filter(f => !f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
-  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos;
+  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP;
   const totalAdeudado  = comprasAdeudadas + adeudadoFijos;
   const totalEgresos   = totalPagado + totalAdeudado;
   const resultado      = totalIngresos - totalEgresos;
@@ -5945,6 +5976,45 @@ function renderContable() {
       <div class="amount" style="color:${resultColor}">${resultado >= 0 ? '' : '−'}${pesos(Math.abs(resultado))}</div>
       <div class="sub">${resultado >= 0 ? 'Ganancia' : 'Pérdida'} del período</div>
     </div>`;
+}
+
+function _borrarMP(id) {
+  mpMovs = mpMovs.filter(m => m.id !== id);
+  persistContable();
+  renderContable();
+}
+
+// ── IMPORT MP RETIROS ──
+function importMP(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb   = XLSX.read(ev.target.result, { type: 'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const parseAmt = v => { const n = parseFloat(String(v).replace(/['"]/g,'')); return isFinite(n) ? n : 0; };
+      const existentes = new Set(mpMovs.map(m => m.id));
+      let added = 0;
+      rows.forEach(r => {
+        const estado = String(r['Estado (status)'] || r['status'] || '').toLowerCase();
+        if (estado !== 'approved') return;
+        const id     = String(r['Número de retiro (withdraw_id)'] || '').replace(/['"]/g,'').trim();
+        const fecha  = String(r['Fecha de creación del retiro (date_created)'] || '').slice(0,10);
+        const monto  = parseAmt(r['Monto (amount)']);
+        const destino = [r['Nombre del titular (bank_account_holder)'], r['Nombre del banco (bank_name)']].filter(Boolean).join(' — ');
+        if (!fecha || !monto || existentes.has(id)) return;
+        mpMovs.push({ id, fecha, monto, destino, tipo: 'retiro' });
+        added++;
+      });
+      persistContable();
+      renderContable();
+      toast(`${added} retiros importados`, 'success');
+    } catch(err) { toast('Error al leer el archivo: ' + err.message, 'error'); }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ── IMPORT VENTAS ──
@@ -8033,6 +8103,7 @@ async function _fbLoad() {
           if (d.sueldos?.length)      sueldos        = d.sueldos;
           if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
           if (d.gastosFijos?.length)  gastosFijos    = d.gastosFijos;
+          if (d.mpMovs?.length)       mpMovs         = d.mpMovs;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
           break;
         case 'config':
