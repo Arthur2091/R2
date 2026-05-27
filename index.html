@@ -6114,9 +6114,9 @@ function importMP(e) {
             if (f.importeTotal <= 0) return false;
             const prov = proveedores.find(p => p.id === f.proveedorId);
             if (!prov) return false;
-            const provNorm = norm(prov.nombre);
-            const palabras = provNorm.split(/(?=[A-Z])/).filter(w => w.length > 3);
-            const nombreMatch = destNorm.includes(provNorm) || provNorm.split(/\s+/).filter(w=>w.length>3).some(w => destNorm.includes(w));
+            // Separar palabras ANTES de normalizar para no perder los espacios
+            const provWords = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 3);
+            const nombreMatch = provWords.some(w => destNorm.includes(w));
             if (!nombreMatch) return false;
             return Math.round(f.importeTotal) === Math.round(monto);
           });
