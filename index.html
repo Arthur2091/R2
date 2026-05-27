@@ -6000,7 +6000,7 @@ function renderContable() {
   const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha));
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
-  const galGastos      = galMovsPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
+  const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
   const totalGal       = galGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_H     = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_L     = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
