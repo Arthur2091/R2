@@ -5672,6 +5672,7 @@ function _renderGastosFijosBody(items, periodo, pagado, adeudado, vinculadosIds 
             <div style="font-size:11px;color:var(--ink3)">${g.modo || ''}${g.fechaPago?` · pagado ${g.fechaPago}`:''}${g.notas?` · ${g.notas}`:''}</div>
           </div>
           <div style="font-family:var(--mono);font-weight:700;color:${g.pagado?'var(--ink2)':'var(--danger)'};white-space:nowrap">${pesos(g.monto)}</div>
+          ${!vinculadosIds.has(g.id) ? `<button class="btn btn-outline btn-sm" onclick="_abrirVincularExtractoGF('${g.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6;padding:2px 8px;white-space:nowrap">🔗 Extracto</button>` : `<button class="btn btn-ghost btn-sm" onclick="_desvincularExtractoGF('${g.id}')" style="font-size:11px;color:var(--ink2);padding:2px 8px">Desvincular</button>`}
           <button class="btn btn-ghost btn-sm" onclick="_editarGastoFijo('${g.id}')" style="padding:2px 8px">✎</button>
           <button class="btn btn-ghost btn-sm" onclick="_borrarGastoFijo('${g.id}')" style="color:var(--danger);padding:2px 8px">✕</button>
         </div>
@@ -6221,6 +6222,67 @@ function _desvincularGFGal(id) {
   persistContable();
   renderContable();
   toast('Desvinculado de gasto fijo', 'info');
+}
+function _abrirVincularExtractoGF(gfId) {
+  const gf = gastosFijos.find(g => g.id === gfId);
+  if (!gf) return;
+  const buildMovRow = (mov, source) => {
+    const desc   = source === 'mp' ? mov.destino : mov.descripcion;
+    const match  = Math.round(mov.monto) === Math.round(gf.monto);
+    const mismes = (mov.fecha||'').slice(0,7) === gf.periodo;
+    const badge  = source === 'mp'
+      ? `<span style="font-size:10px;background:#E0F2FE;color:#0369A1;padding:1px 6px;border-radius:999px;font-weight:700">MP</span>`
+      : `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;font-weight:700">GAL</span>`;
+    return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#5B21B6':''}" onclick="_vincularExtractoAGF('${source}','${mov.id}','${gfId}')">
+      <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;color:var(--ink)">${badge} ${desc}${mismes?'':` <span style="font-size:10px;color:var(--ink3);font-weight:400">${(mov.fecha||'').slice(0,7)}</span>`}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${mov.fecha} · ${pesos(mov.monto)}${match?' · <span style="color:#5B21B6;font-weight:700">monto exacto</span>':''}</div>
+    </button>`;
+  };
+  const libresMP  = mpMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const libresGal = galiciaMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const todos = [
+    ...libresMP.map(m  => ({ mov: m,  source: 'mp'  })),
+    ...libresGal.map(m => ({ mov: m,  source: 'gal' }))
+  ].sort((a, b) => {
+    const aMes = (a.mov.fecha||'').slice(0,7) === gf.periodo ? 0 : 1;
+    const bMes = (b.mov.fecha||'').slice(0,7) === gf.periodo ? 0 : 1;
+    if (aMes !== bMes) return aMes - bMes;
+    return Math.abs(a.mov.monto - gf.monto) - Math.abs(b.mov.monto - gf.monto);
+  });
+  const opcionesHtml = todos.length
+    ? todos.map(({ mov, source }) => buildMovRow(mov, source)).join('')
+    : `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos disponibles para vincular</div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularExtractoGFModal" style="display:flex">
+      <div class="modal" style="max-width:560px">
+        <h2>Vincular extracto a gasto fijo</h2>
+        <p class="modal-sub">${gf.periodo} · ${gf.servicio} · <strong>${pesos(gf.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:440px;overflow-y:auto">
+          ${opcionesHtml}
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularExtractoGFModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+function _vincularExtractoAGF(source, movId, gfId) {
+  document.getElementById('vincularExtractoGFModal')?.remove();
+  const arr = source === 'mp' ? mpMovs : galiciaMovs;
+  const m   = arr.find(x => x.id === movId);
+  const gf  = gastosFijos.find(g => g.id === gfId);
+  if (!m || !gf) return;
+  m.gastoFijoId = gfId;
+  if (Math.round(gf.monto) !== Math.round(m.monto)) gf.monto = m.monto;
+  persistContable();
+  renderContable();
+  toast('Vinculado a gasto fijo', 'success');
+}
+function _desvincularExtractoGF(gfId) {
+  [...mpMovs, ...galiciaMovs].forEach(m => { if (m.gastoFijoId === gfId) delete m.gastoFijoId; });
+  persistContable();
+  renderContable();
+  toast('Desvinculado', 'info');
 }
 function _abrirVincularSueldoMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
