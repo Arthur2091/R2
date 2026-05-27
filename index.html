@@ -6156,7 +6156,7 @@ function importMP(e) {
         const id = `mp-${fecha}-${monto}-${i}`;
         if (existentes.has(id)) return;
 
-        const esInterna = /transferencias a cuentas propias/i.test(categoria) || /lay.o/i.test(destino);
+        const esInterna = /transferencias a cuentas propias/i.test(categoria) || /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
         const mov = { id, fecha, monto, destino, tipo, categoria, ...(esInterna ? { esInterna: true } : {}) };
 
         if (!esInterna) {
