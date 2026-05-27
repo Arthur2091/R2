@@ -6392,6 +6392,11 @@ function _matchProvPorMov(nombre, cuitNum) {
         .filter(w => w.length > 4).some(w => nNorm.includes(norm(w)));
   }) || null;
 }
+function _montoPagadoFactura(facturaId) {
+  const sumMP  = mpMovs.filter(m => m.facturaId === facturaId).reduce((s, m) => s + (m.monto || 0), 0);
+  const sumGal = galiciaMovs.filter(m => m.facturaId === facturaId).reduce((s, m) => s + (m.monto || 0), 0);
+  return sumMP + sumGal;
+}
 function _reAutoLinkContableManual() {
   const v = _reAutoLinkContable();
   toast(v ? `${v} movimiento${v===1?'':'s'} vinculado${v===1?'':'s'} automáticamente` : 'No se encontraron nuevos matches', v ? 'success' : 'info');
@@ -6417,7 +6422,10 @@ function _reAutoLinkContable() {
       const cuitMatch = cuitLimpio && prov.cuit && prov.cuit.replace(/\D/g,'') === cuitLimpio;
       const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
         .filter(w => w.length > 3).some(w => descNorm.includes(norm(w)));
-      return (cuitMatch || nombreMatch) && Math.round(f.importeTotal) === Math.round(mov.monto);
+      if (!cuitMatch && !nombreMatch) return false;
+      const pagado   = _montoPagadoFactura(f.id);
+      const restante = f.importeTotal - pagado;
+      return Math.round(f.importeTotal) === Math.round(mov.monto) || (restante > 0 && Math.round(restante) === Math.round(mov.monto));
     });
     if (match) { mov.facturaId = match.id; vinculados++; }
   });
@@ -6480,13 +6488,17 @@ function _abrirVincularMP(mpId) {
     });
 
   const opcionesHtml = facsOrdenadas.slice(0, 50).map(f => {
-    const prov = proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor';
-    const nA   = norm(prov);
-    const match = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
+    const prov    = proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor';
+    const nA      = norm(prov);
+    const match   = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
+    const pagado  = _montoPagadoFactura(f.id);
+    const restante = f.importeTotal - pagado;
+    const parcialHtml = pagado > 0
+      ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
     return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}"
       onclick="_vincularMP('${mpId}','${f.id}')">
-      <div style="font-weight:700;font-size:13px;color:var(--ink)">${prov}</div>
-      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta ? 'N° '+f.nroBoleta : 'Sin número'} · ${pesos(f.importeTotal)}</div>
+      <div style="font-weight:700;font-size:13px;color:var(--ink)">${prov}${parcialHtml}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta ? 'N° '+f.nroBoleta : 'Sin número'} · total ${pesos(f.importeTotal)}</div>
     </button>`;
   }).join('');
 
@@ -6806,11 +6818,15 @@ function _abrirVincularGal(galId) {
         <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
           ${facsOrdenadas.slice(0,50).map(f=>{
-            const prov=proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
-            const match=norm(descNorm).includes(norm(prov).slice(0,8));
+            const prov    = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
+            const match   = norm(descNorm).includes(norm(prov).slice(0,8));
+            const pagado  = _montoPagadoFactura(f.id);
+            const restante = f.importeTotal - pagado;
+            const parcialHtml = pagado > 0
+              ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
             return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}" onclick="_vincularGal('${galId}','${f.id}')">
-              <div style="font-weight:700;font-size:13px">${prov}</div>
-              <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta?'N° '+f.nroBoleta:'Sin número'} · ${pesos(f.importeTotal)}</div>
+              <div style="font-weight:700;font-size:13px">${prov}${parcialHtml}</div>
+              <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta?'N° '+f.nroBoleta:'Sin número'} · total ${pesos(f.importeTotal)}</div>
             </button>`;
           }).join('')}
         </div>
