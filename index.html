@@ -5339,7 +5339,11 @@ let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
-  _fbWrite('contable', { ventas, sueldos, otrosEgresos, gastosFijos, productosRubros, mpMovs, galiciaMovs }).then(() => _syncChip('ok')).catch(() => {});
+  Promise.all([
+    _db.collection('data').doc('contable').set({ ventas, sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
+    _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
+  ]).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
 }
 function hydrateContable() {
   ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
@@ -9043,9 +9047,16 @@ async function _fbLoad() {
           if (d.sueldos?.length)      sueldos        = d.sueldos;
           if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
           if (d.gastosFijos?.length)  gastosFijos    = d.gastosFijos;
-          if (d.mpMovs?.length)       mpMovs         = d.mpMovs;
-          if (d.galiciaMovs?.length)  galiciaMovs    = d.galiciaMovs;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
+          // Fallback: si aún no existe contable_mp/gal (primer deploy post-split)
+          if (d.mpMovs?.length && !mpMovs.length)       mpMovs      = d.mpMovs;
+          if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
+          break;
+        case 'contable_mp':
+          if (d.items?.length) mpMovs = d.items;
+          break;
+        case 'contable_gal':
+          if (d.items?.length) galiciaMovs = d.items;
           break;
         case 'config':
           if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
