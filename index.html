@@ -5627,7 +5627,7 @@ function renderProductosRubro(key, rubro) {
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
 
-function _renderGastosFijosBody(items, periodo, pagado, adeudado) {
+function _renderGastosFijosBody(items, periodo, pagado, adeudado, vinculadosIds = new Set()) {
   if (!items.length) {
     const hayTemplate = gastosFijos.some(g => g.periodo !== periodo);
     return `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">
@@ -5660,10 +5660,13 @@ function _renderGastosFijosBody(items, periodo, pagado, adeudado) {
         <span>${cat}</span><span style="font-family:var(--mono);color:var(--ink2)">${pesos(totCat)}</span>
       </div>
       ${list.map(g => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;${g.pagado?'background:#F0FDF4;opacity:.85':'background:var(--surface)'};margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;${g.pagado?'background:#F0FDF4;opacity:.85':vinculadosIds.has(g.id)?'background:#FAF5FF':'background:var(--surface)'};margin-bottom:4px">
           <button onclick="_toggleGastoFijoPagado('${g.id}')" title="${g.pagado?'Pagado':'Marcar pagado'}" style="background:${g.pagado?'#10B981':'transparent'};color:${g.pagado?'#fff':'var(--ink3)'};border:1.5px solid ${g.pagado?'#10B981':'var(--border)'};border-radius:6px;width:26px;height:26px;cursor:pointer;font-weight:700;flex-shrink:0">${g.pagado?'✓':''}</button>
           <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:13px;${g.pagado?'text-decoration:line-through;color:var(--ink2)':''}">${g.servicio}</div>
+            <div style="font-weight:600;font-size:13px;${g.pagado?'text-decoration:line-through;color:var(--ink2)':''}">
+              ${g.servicio}
+              ${vinculadosIds.has(g.id)?`<span style="font-size:10px;background:#EDE9FE;color:#5B21B6;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ en extracto</span>`:''}
+            </div>
             <div style="font-size:11px;color:var(--ink3)">${g.modo || ''}${g.fechaPago?` · pagado ${g.fechaPago}`:''}${g.notas?` · ${g.notas}`:''}</div>
           </div>
           <div style="font-family:var(--mono);font-weight:700;color:${g.pagado?'var(--ink2)':'var(--danger)'};white-space:nowrap">${pesos(g.monto)}</div>
@@ -5926,8 +5929,9 @@ function renderContable() {
   const totalFijos = fijosPeriod.reduce((s, g) => s + (Number(g.monto) || 0), 0);
   const pagadoFijos = fijosPeriod.filter(g => g.pagado).reduce((s, g) => s + (Number(g.monto) || 0), 0);
   const adeudadoFijos = totalFijos - pagadoFijos;
+  const gfVinculadosIds = new Set([...mpMovs, ...galiciaMovs].filter(m => m.gastoFijoId).map(m => m.gastoFijoId));
   document.getElementById('totalGastosFijos').textContent = pesos(totalFijos);
-  document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos);
+  document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos, gfVinculadosIds);
 
   // ── MERCADO PAGO ──
   const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha));
