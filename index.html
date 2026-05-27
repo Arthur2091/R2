@@ -985,6 +985,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       Importar MP
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
     </label>
+    <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
@@ -6003,6 +6004,26 @@ function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
   persistContable();
   renderContable();
+}
+function _autoVincularMP() {
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  let vinculados = 0;
+  mpMovs.forEach(m => {
+    if (m.facturaId || m.esInterna) return;
+    const destNorm = norm(m.destino);
+    const match = facturas.find(f => {
+      if (f.importeTotal <= 0) return false;
+      const prov = proveedores.find(p => p.id === f.proveedorId);
+      if (!prov) return false;
+      const provWords = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 3);
+      return provWords.some(w => destNorm.includes(w)) && Math.round(f.importeTotal) === Math.round(m.monto);
+    });
+    if (match) { m.facturaId = match.id; vinculados++; }
+  });
+  if (!vinculados) { toast('No se encontraron coincidencias nuevas', 'info'); return; }
+  persistContable();
+  renderContable();
+  toast(`${vinculados} movimiento${vinculados!==1?'s':''} vinculado${vinculados!==1?'s':''} automáticamente`, 'success');
 }
 function _borrarTodoMP() {
   if (!mpMovs.length) return;
