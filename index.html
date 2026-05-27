@@ -4994,31 +4994,6 @@ async function extraerBoleta() {
   document.getElementById('btnExtraer').disabled = true;
   document.getElementById('boletaItemsWrap').innerHTML = '<div style="color:var(--ink3);font-size:13px;padding:20px 0">Analizando…</div>';
 
-  // Intentar extracción directa del PDF antes de usar IA
-  if (isPdf) {
-    try {
-      const rows   = await _bExtractPDFRows(_bImg64);
-      const parsed = _bParseBoleta(rows);
-      if (parsed && parsed.items && parsed.items.length > 0) {
-        _bApplyParsed(parsed);
-        toast(`${parsed.items.length} ítems extraídos del PDF`, 'success');
-        document.getElementById('btnExtraer').disabled = false;
-        return;
-      }
-      // Extrajo algo pero sin ítems — completar lo que se pudo y avisar
-      if (parsed && (parsed.fecha || parsed.importe_total)) {
-        _bApplyParsed(parsed);
-        toast('Datos básicos extraídos — revisá los ítems', 'info');
-        document.getElementById('btnExtraer').disabled = false;
-        return;
-      }
-    } catch(e) {
-      console.warn('[PDF parser]', e);
-    }
-    // Si llegamos acá, el PDF no tiene texto seleccionable → IA
-    document.getElementById('boletaItemsWrap').innerHTML = '<div style="color:var(--ink3);font-size:13px;padding:20px 0">PDF sin texto — usando IA…</div>';
-  }
-
   if (!getApiKey()) { document.getElementById('apikeyBanner').style.display = 'flex'; toast('Configurá la API key primero', 'error'); document.getElementById('btnExtraer').disabled = false; return; }
 
   try {
