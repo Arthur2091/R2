@@ -6272,36 +6272,7 @@ function importMP(e) {
 }
 
 // ── CUIT LOOKUP ──
-async function _fetchCuit(cuit) {
-  // Intentar API JSON directa de datosgoar
-  try {
-    const res = await fetch('https://afip.datosgoar.com.ar/api/v1/persona/' + cuit, { signal: AbortSignal.timeout(6000) });
-    if (res.ok) {
-      const json = await res.json();
-      const nombre = json.nombre || json.razonSocial || json.apellido;
-      if (nombre) return nombre.trim();
-    }
-  } catch(e) {}
-
-  // Fallback: proxies a cuitonline
-  const url = 'https://www.cuitonline.com/search.php?q=' + cuit;
-  const proxies = [
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-    'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
-    'https://thingproxy.freeboard.io/fetch/' + url,
-  ];
-  for (const proxy of proxies) {
-    try {
-      const res  = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
-      let html = '';
-      if (proxy.includes('/get?')) { const j = await res.json(); html = j.contents || ''; }
-      else html = await res.text();
-      const m = html.match(/href="detalle\/\d+\/[^"]+">([^<]+)<\/a>/);
-      if (m) return m[1].trim();
-    } catch(e) { continue; }
-  }
-  return null;
-}
+async function _fetchCuit(cuit) { return null; } // proxies externos bloqueados — usar lookup manual
 
 async function _consultarCuitsGalicia() {
   // Recolectar CUITs únicos de todos los movimientos Galicia
@@ -6325,9 +6296,9 @@ async function _consultarCuitsGalicia() {
         <p class="modal-sub">${cuits.length} CUITs únicos encontrados</p>
         <div id="cuitResultados" style="display:flex;flex-direction:column;gap:8px;margin-top:14px;max-height:420px;overflow-y:auto">
           ${cuits.map(c => `
-            <div id="cuit-row-${c}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
-              <div style="font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:110px">${c}</div>
-              <div id="cuit-res-${c}" style="flex:1;font-size:13px;color:var(--ink3)">Consultando…</div>
+            <div id="cuit-row-${c}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+              <a href="https://www.cuitonline.com/search.php?q=${c}" target="_blank" style="font-family:var(--mono);font-size:12px;color:var(--info);min-width:110px;text-decoration:none">${c} 🔗</a>
+              <input type="text" id="cuit-res-${c}" placeholder="Pegá el nombre acá" style="flex:1;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="window._cuitNombres['${c}']=this.value;document.getElementById('cuit-apply-${c}').style.display=this.value?'':'none'">
               <button id="cuit-apply-${c}" class="btn btn-outline btn-sm" style="display:none;font-size:11px" onclick="_aplicarNombreCuit('${c}')">Aplicar</button>
             </div>`).join('')}
         </div>
@@ -6338,24 +6309,7 @@ async function _consultarCuitsGalicia() {
       </div>
     </div>`);
 
-  // Consultar cada CUIT secuencialmente (para no bombardear el servidor)
   window._cuitNombres = {};
-  for (const cuit of cuits) {
-    const el = document.getElementById('cuit-res-' + cuit);
-    if (!el) continue;
-    const nombre = await _fetchCuit(cuit);
-    window._cuitNombres[cuit] = nombre;
-    if (nombre) {
-      el.textContent = nombre;
-      el.style.color = 'var(--accent)';
-      const btn = document.getElementById('cuit-apply-' + cuit);
-      if (btn) btn.style.display = '';
-    } else {
-      el.innerHTML = `<input type="text" placeholder="Ingresá el nombre manualmente" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;width:100%" oninput="window._cuitNombres['${cuit}']=this.value" onchange="document.getElementById('cuit-apply-${cuit}').style.display=this.value?'':'none'">`;
-      const btn = document.getElementById('cuit-apply-' + cuit);
-      if (btn) btn.style.display = 'none';
-    }
-  }
 }
 
 function _aplicarNombreCuit(cuit) {
