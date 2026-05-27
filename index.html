@@ -6083,7 +6083,7 @@ function _desvincularMP(mpId) {
   toast('Retiro desvinculado', 'info');
 }
 
-// ── IMPORT MP RETIROS ──
+// ── IMPORT MP ──
 function importMP(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -6091,28 +6091,47 @@ function importMP(e) {
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      const wb   = XLSX.read(ev.target.result, { type: 'array' });
+      const wb   = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 });
       const ws   = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      const parseAmt = v => { const n = parseFloat(String(v).replace(/['"]/g,'')); return isFinite(n) ? n : 0; };
-      const existentes = new Set(mpMovs.map(m => m.id));
-      let added = 0;
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 2) { toast('Archivo vacío', 'error'); return; }
+
+      // Detectar columnas por header
+      const headers = rows[0].map(h => String(h).trim());
+      const iF   = headers.findIndex(h => /fecha/i.test(h));
+      const iD   = headers.findIndex(h => /destino/i.test(h));
+      const iT   = headers.findIndex(h => /^tipo$/i.test(h));
+      const iM   = headers.findIndex(h => /^monto$/i.test(h));
+      const iCat = headers.findIndex(h => /categor/i.test(h));
+      if (iF < 0 || iM < 0) { toast('Formato no reconocido', 'error'); return; }
+
+      const serialToISO = s => {
+        const n = typeof s === 'number' ? s : parseFloat(s);
+        if (!isFinite(n)) return null;
+        const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+        return d.toISOString().slice(0, 10);
+      };
+
       const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      let autoVinculados = 0;
-      rows.forEach(r => {
-        const estado = String(r['Estado (status)'] || r['status'] || '').toLowerCase();
-        if (estado !== 'approved') return;
-        const id     = String(r['Número de retiro (withdraw_id)'] || '').replace(/['"]/g,'').trim();
-        const fecha  = String(r['Fecha de creación del retiro (date_created)'] || '').slice(0,10);
-        const monto  = parseAmt(r['Monto (amount)']);
-        const destino = [r['Nombre del titular (bank_account_holder)'], r['Nombre del banco (bank_name)']].filter(Boolean).join(' — ');
-        if (!fecha || !monto || existentes.has(id)) return;
-        const esInterna = /lay.o/i.test(destino) && /galicia/i.test(destino);
-        const mov = { id, fecha, monto, destino, tipo: 'retiro', ...(esInterna ? { esInterna: true } : {}) };
-        // Auto-match: buscar factura de proveedor cuyo nombre coincida con destino y monto similar (±5%)
+      const existentes = new Set(mpMovs.map(m => m.id));
+      let added = 0, autoVinculados = 0;
+
+      rows.slice(1).forEach((r, i) => {
+        const monto = parseFloat(r[iM]);
+        if (!isFinite(monto) || monto <= 0) return;
+        const fecha = serialToISO(r[iF]);
+        if (!fecha) return;
+        const destino  = String(r[iD] || '').trim();
+        const tipo     = String(r[iT] || '').trim();
+        const categoria = String(iCat >= 0 ? r[iCat] : '').trim();
+        const id = `mp-${fecha}-${monto}-${i}`;
+        if (existentes.has(id)) return;
+
+        const esInterna = /transferencias a cuentas propias/i.test(categoria) || /lay.o/i.test(destino);
+        const mov = { id, fecha, monto, destino, tipo, categoria, ...(esInterna ? { esInterna: true } : {}) };
+
         if (!esInterna) {
-          const titular = destino.split(/\s*—\s*/)[0];
-          const titNorm = norm(titular);
+          const titNorm = norm(destino);
           const match = facturas.find(f => {
             if (f.importeTotal <= 0) return false;
             const prov = proveedores.find(p => p.id === f.proveedorId);
@@ -6125,13 +6144,15 @@ function importMP(e) {
           });
           if (match) { mov.facturaId = match.id; autoVinculados++; }
         }
+
         mpMovs.push(mov);
         added++;
       });
+
       persistContable();
       renderContable();
-      toast(`${added} retiros importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
-    } catch(err) { toast('Error al leer el archivo: ' + err.message, 'error'); }
+      toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
+    } catch(err) { toast('Error: ' + err.message, 'error'); }
   };
   reader.readAsArrayBuffer(file);
 }
