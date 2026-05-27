@@ -985,12 +985,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
     </label>
     <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
+    <button class="btn btn-outline" onclick="_autoVincularGastosFijosMP()">GF → MP</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
     <label class="btn btn-outline" style="cursor:pointer">
       Importar Galicia
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event)">
     </label>
     <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
+    <button class="btn btn-outline" onclick="_autoVincularGastosFijosGal()">GF → Galicia</button>
     <button class="btn btn-outline" onclick="_consultarCuitsGalicia()">Consultar CUITs</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoGalicia()">Borrar todo Galicia</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
@@ -5929,7 +5931,7 @@ function renderContable() {
 
   // ── MERCADO PAGO ──
   const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha));
-  const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna);
+  const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_L   = mpGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -5942,16 +5944,20 @@ function renderContable() {
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
         ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
-          const vinculado = !!m.facturaId;
-          const interna   = !!m.esInterna;
-          const excluido  = vinculado || interna;
-          const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
-          const provVinc  = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
-          const rowBg     = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
-                          : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : '';
-          const badge     = vinculado
+          const vinculado  = !!m.facturaId;
+          const interna    = !!m.esInterna;
+          const gfVinc     = !!m.gastoFijoId;
+          const excluido   = vinculado || interna || gfVinc;
+          const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
+          const provVinc   = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
+          const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
+          const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
+                           : gfVinc ? 'background:#FAF5FF'
+                           : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : '';
+          const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
+            : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : m.gasto === 'H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
             : m.gasto === 'L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
           const accionGasto = !excluido ? `
@@ -5959,10 +5965,12 @@ function renderContable() {
             <button class="btn btn-ghost btn-sm" onclick="_setGastoMP('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>` : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
-            : interna
-              ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
-              : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                 <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+            : gfVinc
+              ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGFMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular GF</button>`
+              : interna
+                ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge}</td>
@@ -5984,7 +5992,7 @@ function renderContable() {
 
   // ── BANCO GALICIA ──
   const galPeriod  = galiciaMovs.filter(m => inPeriod(m.fecha));
-  const galGastos  = galPeriod.filter(m => !m.facturaId && !m.esInterna);
+  const galGastos  = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
   const totalGal   = galGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_H = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_L = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -5995,16 +6003,20 @@ function renderContable() {
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos Galicia para este período.<br><span style="font-size:12px">Usá "Importar Galicia" para cargar el extracto.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
         ${galPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
-          const vinculado = !!m.facturaId;
-          const interna   = !!m.esInterna;
-          const excluido  = vinculado || interna;
-          const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
-          const provVinc  = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
-          const rowBg     = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
-                          : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : '';
-          const badge     = vinculado
+          const vinculado  = !!m.facturaId;
+          const interna    = !!m.esInterna;
+          const gfVinc     = !!m.gastoFijoId;
+          const excluido   = vinculado || interna || gfVinc;
+          const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
+          const provVinc   = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
+          const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
+          const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
+                           : gfVinc ? 'background:#FAF5FF'
+                           : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : '';
+          const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
+            : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : m.gasto==='H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
             : m.gasto==='L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
           const accionGasto = !excluido ? `
@@ -6012,10 +6024,12 @@ function renderContable() {
             <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>` : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
-            : interna
-              ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
-              : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                 <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+            : gfVinc
+              ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGFGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular GF</button>`
+              : interna
+                ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+                : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
           // Detectar CUITs en la descripción y agregar botón de lookup
           const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
           const cuitNum   = cuitMatch ? cuitMatch[1] : null;
@@ -6111,6 +6125,51 @@ function _autoVincularMP() {
   persistContable();
   renderContable();
   toast(`${vinculados} movimiento${vinculados!==1?'s':''} vinculado${vinculados!==1?'s':''} automáticamente`, 'success');
+}
+function _autoVincularGastosFijosMP() {
+  const periodoStr = (() => { const s = document.getElementById('contablePeriodo'); return s ? s.value : null; })();
+  let vinculados = 0;
+  mpMovs.forEach(m => {
+    if (m.facturaId || m.esInterna || m.gastoFijoId) return;
+    const mPeriodo = m.fecha ? m.fecha.slice(0, 7) : null;
+    if (!mPeriodo) return;
+    const match = gastosFijos.find(g => g.periodo === mPeriodo && Math.round(g.monto) === Math.round(m.monto));
+    if (match) { m.gastoFijoId = match.id; vinculados++; }
+  });
+  if (!vinculados) { toast('Sin coincidencias con gastos fijos', 'info'); return; }
+  persistContable();
+  renderContable();
+  toast(`${vinculados} movimiento${vinculados!==1?'s':''} vinculado${vinculados!==1?'s':''} a gastos fijos`, 'success');
+}
+function _autoVincularGastosFijosGal() {
+  let vinculados = 0;
+  galiciaMovs.forEach(m => {
+    if (m.facturaId || m.esInterna || m.gastoFijoId) return;
+    const mPeriodo = m.fecha ? m.fecha.slice(0, 7) : null;
+    if (!mPeriodo) return;
+    const match = gastosFijos.find(g => g.periodo === mPeriodo && Math.round(g.monto) === Math.round(m.monto));
+    if (match) { m.gastoFijoId = match.id; vinculados++; }
+  });
+  if (!vinculados) { toast('Sin coincidencias con gastos fijos', 'info'); return; }
+  persistContable();
+  renderContable();
+  toast(`${vinculados} movimiento${vinculados!==1?'s':''} vinculado${vinculados!==1?'s':''} a gastos fijos`, 'success');
+}
+function _desvincularGFMP(id) {
+  const m = mpMovs.find(x => x.id === id);
+  if (!m) return;
+  delete m.gastoFijoId;
+  persistContable();
+  renderContable();
+  toast('Desvinculado de gasto fijo', 'info');
+}
+function _desvincularGFGal(id) {
+  const m = galiciaMovs.find(x => x.id === id);
+  if (!m) return;
+  delete m.gastoFijoId;
+  persistContable();
+  renderContable();
+  toast('Desvinculado de gasto fijo', 'info');
 }
 function _borrarTodoMP() {
   if (!mpMovs.length) return;
