@@ -6542,7 +6542,6 @@ function _abrirVincularMP(mpId) {
   if (!m) return;
   _abrirVincularBoletaModal({ desc: m.destino, fecha: m.fecha, monto: m.monto, modalId: 'vincularMPModal', onSelect: fId => _vincularMP(mpId, fId) });
 }
-}
 
 function _vincularMP(mpId, facturaId) {
   document.getElementById('vincularMPModal')?.remove();
