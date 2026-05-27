@@ -9062,7 +9062,7 @@ async function _fbLoad() {
           if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
           break;
         default:
-          if (doc.id.startsWith('contable_ventas') && d.items?.length)
+          if (/^contable_ventas_\d{4}_\d{2}$/.test(doc.id) && d.items?.length)
             ventas = ventas.concat(d.items);
           break;
         case 'contable_mp':
