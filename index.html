@@ -6401,9 +6401,10 @@ function _matchProvPorMov(nombre, cuitNum) {
   return proveedores.find(p => {
     const pNorm = norm(p.nombre);
     if (!pNorm || pNorm.length < 4) return false;
-    return nNorm.includes(pNorm) || pNorm.includes(nNorm) ||
-      p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
-        .filter(w => w.length > 4).some(w => nNorm.includes(norm(w)));
+    if (nNorm.includes(pNorm) || pNorm.includes(nNorm)) return true;
+    const words = p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 4);
+    const hits  = words.filter(w => nNorm.includes(norm(w)));
+    return hits.length >= 2;
   }) || null;
 }
 function _montoPagadoFactura(facturaId) {
