@@ -6281,8 +6281,7 @@ async function _lookupCuit(cuit) {
     const res  = await fetch(proxy);
     const json = await res.json();
     const html = json.contents || '';
-    // Extraer primer resultado: <strong>NOMBRE</strong> dentro del resultado
-    const m = html.match(/<h3[^>]*>\s*<a[^>]*>([^<]+)<\/a>/);
+    const m = html.match(/href="detalle\/\d+\/[^"]+">([^<]+)<\/a>/);
     const nombre = m ? m[1].trim() : null;
     if (nombre) {
       span.textContent = nombre;
