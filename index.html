@@ -5339,18 +5339,18 @@ let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
-  const ventasPorAnio = {};
+  const ventasPorMes = {};
   ventas.forEach(v => {
-    const anio = (v.fecha || '').slice(0, 4) || 'sin_anio';
-    if (!ventasPorAnio[anio]) ventasPorAnio[anio] = [];
-    ventasPorAnio[anio].push(v);
+    const mes = (v.fecha || '').slice(0, 7).replace('-', '_') || 'sin_mes';
+    if (!ventasPorMes[mes]) ventasPorMes[mes] = [];
+    ventasPorMes[mes].push(v);
   });
   const writes = [
     _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
     _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
     _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
-    ...Object.entries(ventasPorAnio).map(([anio, items]) =>
-      _db.collection('data').doc(`contable_ventas_${anio}`).set({ items })
+    ...Object.entries(ventasPorMes).map(([mes, items]) =>
+      _db.collection('data').doc(`contable_ventas_${mes}`).set({ items })
     ),
   ];
   Promise.all(writes).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
