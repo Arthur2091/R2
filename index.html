@@ -5993,9 +5993,12 @@ function renderContable() {
                      <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Boleta</button>
                      <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFMP('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>
                      <button class="btn btn-outline btn-sm" onclick="_abrirVincularSueldoMP('${m.id}')" style="font-size:11px;color:#065F46;border-color:#065F46">👤 Sueldo</button>`;
+          const cuitEnDest  = (m.destino||'').match(/\d{10,11}/)?.[0] || null;
+          const provMatch   = !excluido ? _matchProvPorMov(m.destino, cuitEnDest) : null;
+          const provBadge   = provMatch ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-weight:700">🏢 ${provMatch.nombre}</span>` : '';
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge} ${provBadge}</td>
             <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
             <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
           </tr>`;
@@ -6067,9 +6070,11 @@ function renderContable() {
           const descHtml  = cuitNum
             ? m.descripcion.replace(cuitMatch[0], `${cuitMatch[0]} <button class="btn btn-ghost btn-sm" id="cuit-btn-${cuitNum}" onclick="_lookupCuit('${cuitNum}')" style="font-size:10px;padding:1px 5px;color:var(--info);border:1px solid var(--info);border-radius:4px">?</button> <span id="cuit-name-${cuitNum}" style="font-size:11px;color:var(--accent);font-weight:600"></span>`)
             : m.descripcion;
+          const provMatch  = !excluido ? _matchProvPorMov(m.descripcion, cuitNum) : null;
+          const provBadge  = provMatch ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-weight:700">🏢 ${provMatch.nombre}</span>` : '';
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${descHtml} ${badge}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${descHtml} ${badge} ${provBadge}</td>
             <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
             <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
           </tr>`;
@@ -6359,6 +6364,22 @@ function _desvincularSueldoGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId); if (!m) return;
   delete m.sueldoId; persistContable(); renderContable();
   toast('Desvinculado de sueldo', 'info');
+}
+function _matchProvPorMov(nombre, cuitNum) {
+  if (cuitNum) {
+    const cuitLimpio = String(cuitNum).replace(/\D/g,'');
+    const porCuit = proveedores.find(p => p.cuit && p.cuit.replace(/\D/g,'') === cuitLimpio);
+    if (porCuit) return porCuit;
+  }
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const nNorm = norm(nombre);
+  return proveedores.find(p => {
+    const pNorm = norm(p.nombre);
+    if (!pNorm || pNorm.length < 4) return false;
+    return nNorm.includes(pNorm) || pNorm.includes(nNorm) ||
+      p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+        .filter(w => w.length > 4).some(w => nNorm.includes(norm(w)));
+  }) || null;
 }
 function _setSortMP(field) {
   _sortMP = _sortMP.field === field ? { field, dir: _sortMP.dir * -1 } : { field, dir: field === 'monto' ? -1 : -1 };
