@@ -5340,7 +5340,8 @@ function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
   Promise.all([
-    _db.collection('data').doc('contable').set({ ventas, sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable_ventas').set({ items: ventas }),
     _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
     _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
   ]).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
@@ -9043,14 +9044,17 @@ async function _fbLoad() {
           if (Array.isArray(d.movs)) produccionMovs = d.movs;
           break;
         case 'contable':
-          if (d.ventas?.length)       ventas         = d.ventas;
           if (d.sueldos?.length)      sueldos        = d.sueldos;
           if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
           if (d.gastosFijos?.length)  gastosFijos    = d.gastosFijos;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
-          // Fallback: si aún no existe contable_mp/gal (primer deploy post-split)
-          if (d.mpMovs?.length && !mpMovs.length)       mpMovs      = d.mpMovs;
+          // Fallbacks para migración (docs viejos antes del split)
+          if (d.ventas?.length && !ventas.length)         ventas      = d.ventas;
+          if (d.mpMovs?.length && !mpMovs.length)         mpMovs      = d.mpMovs;
           if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
+          break;
+        case 'contable_ventas':
+          if (d.items?.length) ventas = d.items;
           break;
         case 'contable_mp':
           if (d.items?.length) mpMovs = d.items;
