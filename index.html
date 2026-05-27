@@ -5889,13 +5889,14 @@ function renderContable() {
   });
   const totalSueldos = sueldosPeriod.reduce((s,x) => s + (x.monto || 0), 0);
 
+  const sueldoVinculadosIds = new Set([...mpMovs, ...galiciaMovs].filter(m => m.sueldoId).map(m => m.sueldoId));
   document.getElementById('totalSueldos').textContent = pesos(totalSueldos);
   document.getElementById('secSueldosBody').innerHTML = sueldosPeriod.length === 0
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin sueldos registrados. Usá "+ Sueldo".</div>`
     : `<table><thead><tr><th>Empleado</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
       ${sueldosPeriod.map(s=>`
         <tr>
-          <td>${s.empleado}</td>
+          <td>${s.empleado}${sueldoVinculadosIds.has(s.id) ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ en extracto</span>` : ''}</td>
           <td style="text-align:right;font-family:var(--mono)">${pesos(s.monto)}</td>
           <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
         </tr>
@@ -5935,7 +5936,7 @@ function renderContable() {
 
   // ── MERCADO PAGO ──
   const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha));
-  const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
+  const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_L   = mpGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -5951,17 +5952,20 @@ function renderContable() {
           const vinculado  = !!m.facturaId;
           const interna    = !!m.esInterna;
           const gfVinc     = !!m.gastoFijoId;
-          const excluido   = vinculado || interna || gfVinc;
+          const sueldoVinc = !!m.sueldoId;
+          const excluido   = vinculado || interna || gfVinc || sueldoVinc;
           const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
           const provVinc   = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
           const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
                            : gfVinc ? 'background:#FAF5FF'
+                           : sueldoVinc ? 'background:#ECFDF5'
                            : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : '';
           const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
+            : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
             : m.gasto === 'H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
             : m.gasto === 'L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
           const accionGasto = !excluido ? `
@@ -5971,11 +5975,14 @@ function renderContable() {
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
             : gfVinc
               ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGFMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular GF</button>`
-              : interna
-                ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
-                : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Boleta</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFMP('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>`;
+              : sueldoVinc
+                ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularSueldoMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular Sueldo</button>`
+                : interna
+                  ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+                  : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Boleta</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFMP('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularSueldoMP('${m.id}')" style="font-size:11px;color:#065F46;border-color:#065F46">👤 Sueldo</button>`;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge}</td>
@@ -6000,7 +6007,7 @@ function renderContable() {
   const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha));
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
-  const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId);
+  const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalGal       = galGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_H     = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_L     = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -6013,17 +6020,20 @@ function renderContable() {
           const vinculado  = !!m.facturaId;
           const interna    = !!m.esInterna;
           const gfVinc     = !!m.gastoFijoId;
-          const excluido   = vinculado || interna || gfVinc;
+          const sueldoVinc = !!m.sueldoId;
+          const excluido   = vinculado || interna || gfVinc || sueldoVinc;
           const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
           const provVinc   = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
           const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
                            : gfVinc ? 'background:#FAF5FF'
+                           : sueldoVinc ? 'background:#ECFDF5'
                            : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : '';
           const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
+            : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
             : m.gasto==='H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
             : m.gasto==='L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
           const accionGasto = !excluido ? `
@@ -6033,11 +6043,14 @@ function renderContable() {
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
             : gfVinc
               ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGFGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular GF</button>`
-              : interna
-                ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
-                : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Boleta</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFGal('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>`;
+              : sueldoVinc
+                ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularSueldoGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular Sueldo</button>`
+                : interna
+                  ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+                  : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Boleta</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFGal('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>
+                     <button class="btn btn-outline btn-sm" onclick="_abrirVincularSueldoGal('${m.id}')" style="font-size:11px;color:#065F46;border-color:#065F46">👤 Sueldo</button>`;
           // Detectar CUITs en la descripción y agregar botón de lookup
           const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
           const cuitNum   = cuitMatch ? cuitMatch[1] : null;
@@ -6191,6 +6204,82 @@ function _desvincularGFGal(id) {
   persistContable();
   renderContable();
   toast('Desvinculado de gasto fijo', 'info');
+}
+function _abrirVincularSueldoMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
+  const lista = sueldos.filter(s => s.mes === periodo)
+    .sort((a, b) => Math.abs(a.monto - m.monto) - Math.abs(b.monto - m.monto));
+  const opcionesHtml = lista.length
+    ? lista.map(s => {
+        const match = Math.round(s.monto) === Math.round(m.monto);
+        return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}" onclick="_vincularSueldoMP('${mpId}','${s.id}')">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)">${s.empleado}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pesos(s.monto)}${match?' · <span style="color:#10B981;font-weight:700">monto exacto</span>':''}</div>
+        </button>`;
+      }).join('')
+    : `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin sueldos registrados para ${periodo}</div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularSueldoMPModal" style="display:flex">
+      <div class="modal" style="max-width:480px">
+        <h2>Vincular a sueldo</h2>
+        <p class="modal-sub">${m.fecha} · ${m.destino} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">${opcionesHtml}</div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularSueldoMPModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+function _vincularSueldoMP(mpId, sueldoId) {
+  document.getElementById('vincularSueldoMPModal')?.remove();
+  const m = mpMovs.find(x => x.id === mpId); if (!m) return;
+  m.sueldoId = sueldoId; persistContable(); renderContable();
+  toast('Vinculado a sueldo', 'success');
+}
+function _desvincularSueldoMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId); if (!m) return;
+  delete m.sueldoId; persistContable(); renderContable();
+  toast('Desvinculado de sueldo', 'info');
+}
+function _abrirVincularSueldoGal(galId) {
+  const m = galiciaMovs.find(x => x.id === galId);
+  if (!m) return;
+  const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
+  const lista = sueldos.filter(s => s.mes === periodo)
+    .sort((a, b) => Math.abs(a.monto - m.monto) - Math.abs(b.monto - m.monto));
+  const opcionesHtml = lista.length
+    ? lista.map(s => {
+        const match = Math.round(s.monto) === Math.round(m.monto);
+        return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}" onclick="_vincularSueldoGal('${galId}','${s.id}')">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)">${s.empleado}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pesos(s.monto)}${match?' · <span style="color:#10B981;font-weight:700">monto exacto</span>':''}</div>
+        </button>`;
+      }).join('')
+    : `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin sueldos registrados para ${periodo}</div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularSueldoGalModal" style="display:flex">
+      <div class="modal" style="max-width:480px">
+        <h2>Vincular a sueldo</h2>
+        <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">${opcionesHtml}</div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularSueldoGalModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+function _vincularSueldoGal(galId, sueldoId) {
+  document.getElementById('vincularSueldoGalModal')?.remove();
+  const m = galiciaMovs.find(x => x.id === galId); if (!m) return;
+  m.sueldoId = sueldoId; persistContable(); renderContable();
+  toast('Vinculado a sueldo', 'success');
+}
+function _desvincularSueldoGal(galId) {
+  const m = galiciaMovs.find(x => x.id === galId); if (!m) return;
+  delete m.sueldoId; persistContable(); renderContable();
+  toast('Desvinculado de sueldo', 'info');
 }
 function _borrarTodoMP() {
   if (!mpMovs.length) return;
