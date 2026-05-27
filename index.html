@@ -6010,13 +6010,19 @@ function _autoVincularMP() {
   let vinculados = 0;
   mpMovs.forEach(m => {
     if (m.facturaId || m.esInterna) return;
-    const destNorm = norm(m.destino);
+    // Tomar solo la parte antes del " — " (el titular, no el banco)
+    const titular = (m.destino || '').split(/\s*—\s*/)[0];
+    const titNorm = norm(titular);
     const match = facturas.find(f => {
       if (f.importeTotal <= 0) return false;
       const prov = proveedores.find(p => p.id === f.proveedorId);
       if (!prov) return false;
-      const provWords = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 3);
-      return provWords.some(w => destNorm.includes(w)) && Math.round(f.importeTotal) === Math.round(m.monto);
+      const provNorm = norm(prov.nombre);
+      // Match si el proveedor está contenido en el titular o viceversa
+      const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
+        prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+          .filter(w => w.length > 3).some(w => titNorm.includes(w));
+      return nombreMatch && Math.round(f.importeTotal) === Math.round(m.monto);
     });
     if (match) { m.facturaId = match.id; vinculados++; }
   });
@@ -6130,16 +6136,17 @@ function importMP(e) {
         const mov = { id, fecha, monto, destino, tipo: 'retiro', ...(esInterna ? { esInterna: true } : {}) };
         // Auto-match: buscar factura de proveedor cuyo nombre coincida con destino y monto similar (±5%)
         if (!esInterna) {
-          const destNorm = norm(destino);
+          const titular = destino.split(/\s*—\s*/)[0];
+          const titNorm = norm(titular);
           const match = facturas.find(f => {
             if (f.importeTotal <= 0) return false;
             const prov = proveedores.find(p => p.id === f.proveedorId);
             if (!prov) return false;
-            // Separar palabras ANTES de normalizar para no perder los espacios
-            const provWords = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 3);
-            const nombreMatch = provWords.some(w => destNorm.includes(w));
-            if (!nombreMatch) return false;
-            return Math.round(f.importeTotal) === Math.round(monto);
+            const provNorm = norm(prov.nombre);
+            const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
+              prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+                .filter(w => w.length > 3).some(w => titNorm.includes(w));
+            return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
           });
           if (match) { mov.facturaId = match.id; autoVinculados++; }
         }
