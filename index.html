@@ -1038,7 +1038,11 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="contable-section" id="secMP">
     <div class="contable-section-header" onclick="toggleSection('secMPBody')">
       <h3>Egresos — Mercado Pago</h3>
-      <div class="section-total" id="totalMP" style="color:var(--danger)"></div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="totalMP_H" style="font-size:12px;font-weight:700;color:#9A3412;display:none"></span>
+        <span id="totalMP_L" style="font-size:12px;font-weight:700;color:#0C4A6E;display:none"></span>
+        <div class="section-total" id="totalMP" style="color:var(--danger)"></div>
+      </div>
     </div>
     <div id="secMPBody" class="contable-section-body" style="display:none"></div>
   </div>
@@ -5905,6 +5909,10 @@ function renderContable() {
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_L   = mpGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalMP').textContent = pesos(totalMP);
+  const elH = document.getElementById('totalMP_H');
+  const elL = document.getElementById('totalMP_L');
+  elH.textContent = `H: ${pesos(totalMP_H)}`; elH.style.display = totalMP_H ? '' : 'none';
+  elL.textContent = `L: ${pesos(totalMP_L)}`; elL.style.display = totalMP_L ? '' : 'none';
   document.getElementById('secMPBody').innerHTML = !mpPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel.</span></div>`
     : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
