@@ -6095,6 +6095,8 @@ function importMP(e) {
       const parseAmt = v => { const n = parseFloat(String(v).replace(/['"]/g,'')); return isFinite(n) ? n : 0; };
       const existentes = new Set(mpMovs.map(m => m.id));
       let added = 0;
+      const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      let autoVinculados = 0;
       rows.forEach(r => {
         const estado = String(r['Estado (status)'] || r['status'] || '').toLowerCase();
         if (estado !== 'approved') return;
@@ -6104,12 +6106,29 @@ function importMP(e) {
         const destino = [r['Nombre del titular (bank_account_holder)'], r['Nombre del banco (bank_name)']].filter(Boolean).join(' — ');
         if (!fecha || !monto || existentes.has(id)) return;
         const esInterna = /lay.o/i.test(destino) && /galicia/i.test(destino);
-        mpMovs.push({ id, fecha, monto, destino, tipo: 'retiro', ...(esInterna ? { esInterna: true } : {}) });
+        const mov = { id, fecha, monto, destino, tipo: 'retiro', ...(esInterna ? { esInterna: true } : {}) };
+        // Auto-match: buscar factura de proveedor cuyo nombre coincida con destino y monto similar (±5%)
+        if (!esInterna) {
+          const destNorm = norm(destino);
+          const match = facturas.find(f => {
+            if (f.importeTotal <= 0) return false;
+            const prov = proveedores.find(p => p.id === f.proveedorId);
+            if (!prov) return false;
+            const provNorm = norm(prov.nombre);
+            const palabras = provNorm.split(/(?=[A-Z])/).filter(w => w.length > 3);
+            const nombreMatch = destNorm.includes(provNorm) || provNorm.split(/\s+/).filter(w=>w.length>3).some(w => destNorm.includes(w));
+            if (!nombreMatch) return false;
+            const diff = Math.abs(f.importeTotal - monto) / monto;
+            return diff <= 0.05; // ±5%
+          });
+          if (match) { mov.facturaId = match.id; autoVinculados++; }
+        }
+        mpMovs.push(mov);
         added++;
       });
       persistContable();
       renderContable();
-      toast(`${added} retiros importados`, 'success');
+      toast(`${added} retiros importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
     } catch(err) { toast('Error al leer el archivo: ' + err.message, 'error'); }
   };
   reader.readAsArrayBuffer(file);
