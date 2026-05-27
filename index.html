@@ -985,6 +985,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       Importar MP
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
     </label>
+    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
   </div>
@@ -6002,6 +6003,14 @@ function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
   persistContable();
   renderContable();
+}
+function _borrarTodoMP() {
+  if (!mpMovs.length) return;
+  if (!confirm(`¿Borrar los ${mpMovs.length} movimientos de MP?`)) return;
+  mpMovs = [];
+  persistContable();
+  renderContable();
+  toast('Movimientos MP eliminados', 'success');
 }
 function _toggleInternaMP(id) {
   const m = mpMovs.find(x => x.id === id);
