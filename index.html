@@ -988,6 +988,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       Importar MP
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
     </label>
+    <button class="btn btn-outline" style="color:var(--accent);border-color:var(--accent);font-weight:700" onclick="_reAutoLinkContableManual()">🔗 Re-match por CUIT</button>
     <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
     <button class="btn btn-outline" onclick="_autoVincularGastosFijosMP()">GF → MP</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
@@ -6390,6 +6391,10 @@ function _matchProvPorMov(nombre, cuitNum) {
       p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
         .filter(w => w.length > 4).some(w => nNorm.includes(norm(w)));
   }) || null;
+}
+function _reAutoLinkContableManual() {
+  const v = _reAutoLinkContable();
+  toast(v ? `${v} movimiento${v===1?'':'s'} vinculado${v===1?'':'s'} automáticamente` : 'No se encontraron nuevos matches', v ? 'success' : 'info');
 }
 function _reAutoLinkContable() {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
