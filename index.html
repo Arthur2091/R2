@@ -857,6 +857,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
           <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Teléfono</label>
           <input id="nuevoProvTel" type="tel" placeholder="11 1234 5678" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
         </div>
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">CUIT <span style="font-weight:400;color:var(--ink3)">(para match automático con MP y Galicia)</span></label>
+          <input id="nuevoProvCuit" type="text" placeholder="20-12345678-9" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);font-family:var(--mono)">
+        </div>
       </div>
       <div class="modal-actions" style="margin-top:18px">
         <button class="btn btn-outline" onclick="closeNuevoProvModal()">Cancelar</button>
@@ -2975,6 +2979,7 @@ function renderProveedores() {
             <div style="min-width:0;flex:1">
               <div class="ped-prov-name">${p.nombre}${nPend ? ` <span style="background:var(--accent);color:#fff;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:700;vertical-align:middle;margin-left:4px">${nPend} pedido${nPend===1?'':'s'}</span>` : ''}</div>
               <div class="ped-prov-tel" onclick="event.stopPropagation();openProvTelModal('${p.id}')">📞 ${telDisplay}</div>
+              <div onclick="event.stopPropagation();openEditProvModal('${p.id}')" style="font-size:11px;font-family:var(--mono);color:${p.cuit ? 'var(--accent)' : 'var(--ink3)'};cursor:pointer;margin-top:2px">${p.cuit ? `🏢 CUIT ${p.cuit}` : '+ Agregar CUIT'}</div>
             </div>
             <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
               <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Datos del proveedor">⚙</button>
@@ -3153,6 +3158,7 @@ function guardarAltaInsumoManual() {
 function openNuevoProvModal() {
   document.getElementById('nuevoProvNombre').value = '';
   document.getElementById('nuevoProvTel').value = '';
+  document.getElementById('nuevoProvCuit').value = '';
   document.getElementById('nuevoProvModal').classList.add('open');
   setTimeout(() => document.getElementById('nuevoProvNombre').focus(), 50);
 }
@@ -3164,6 +3170,7 @@ function closeNuevoProvModal() {
 function guardarNuevoProv() {
   const nombre = document.getElementById('nuevoProvNombre').value.trim();
   const tel    = document.getElementById('nuevoProvTel').value.trim();
+  const cuit   = document.getElementById('nuevoProvCuit').value.replace(/\D/g,'');
   if (!nombre) { toast('Ingresá el nombre', 'error'); return; }
   const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
   const dup = proveedores.find(p => norm(p.nombre) === norm(nombre));
@@ -3172,6 +3179,7 @@ function guardarNuevoProv() {
     id: crypto.randomUUID(),
     nombre,
     telefono: tel,
+    cuit,
     email: '',
     notas: '',
     pago: 'transferencia',
