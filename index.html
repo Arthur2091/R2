@@ -5339,12 +5339,21 @@ let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
-  Promise.all([
+  const ventasPorAnio = {};
+  ventas.forEach(v => {
+    const anio = (v.fecha || '').slice(0, 4) || 'sin_anio';
+    if (!ventasPorAnio[anio]) ventasPorAnio[anio] = [];
+    ventasPorAnio[anio].push(v);
+  });
+  const writes = [
     _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
-    _db.collection('data').doc('contable_ventas').set({ items: ventas }),
     _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
     _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
-  ]).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
+    ...Object.entries(ventasPorAnio).map(([anio, items]) =>
+      _db.collection('data').doc(`contable_ventas_${anio}`).set({ items })
+    ),
+  ];
+  Promise.all(writes).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
 }
 function hydrateContable() {
   ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
@@ -9049,12 +9058,12 @@ async function _fbLoad() {
           if (d.gastosFijos?.length)  gastosFijos    = d.gastosFijos;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
           // Fallbacks para migración (docs viejos antes del split)
-          if (d.ventas?.length && !ventas.length)         ventas      = d.ventas;
           if (d.mpMovs?.length && !mpMovs.length)         mpMovs      = d.mpMovs;
           if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
           break;
-        case 'contable_ventas':
-          if (d.items?.length) ventas = d.items;
+        default:
+          if (doc.id.startsWith('contable_ventas') && d.items?.length)
+            ventas = ventas.concat(d.items);
           break;
         case 'contable_mp':
           if (d.items?.length) mpMovs = d.items;
