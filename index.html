@@ -1716,6 +1716,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <input id="pEmail" type="text" placeholder="">
     </div>
     <div class="field">
+      <label>CUIT</label>
+      <input id="pCuit" type="text" placeholder="ej. 30715057537">
+    </div>
+    <div class="field">
       <label>Notas</label>
       <input id="pNotas" type="text" placeholder="">
     </div>
@@ -2735,7 +2739,7 @@ let _activeProvId = null;
 
 function openAddProvModal() {
   document.getElementById('modalProvTitle').textContent = 'Nuevo Proveedor';
-  ['pNombre','pTelefono','pEmail','pNotas','pEditId'].forEach(id => document.getElementById(id).value = '');
+  ['pNombre','pTelefono','pEmail','pCuit','pNotas','pEditId'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pPago').value = 'transferencia';
   openModal('modalProveedor');
 }
@@ -2747,6 +2751,7 @@ function openEditProvModal(id) {
   document.getElementById('pNombre').value   = p.nombre;
   document.getElementById('pTelefono').value = p.telefono || '';
   document.getElementById('pEmail').value    = p.email    || '';
+  document.getElementById('pCuit').value     = p.cuit     || '';
   document.getElementById('pNotas').value    = p.notas    || '';
   document.getElementById('pPago').value     = p.pago     || 'transferencia';
   document.getElementById('pEditId').value   = id;
@@ -2761,6 +2766,7 @@ function saveProveedor() {
     nombre:   nombre.toUpperCase(),
     telefono: document.getElementById('pTelefono').value.trim(),
     email:    document.getElementById('pEmail').value.trim(),
+    cuit:     document.getElementById('pCuit').value.replace(/\D/g,''),
     notas:    document.getElementById('pNotas').value.trim(),
     pago:     document.getElementById('pPago').value,
   };
@@ -6307,12 +6313,14 @@ function _autoVincularGalicia() {
   galiciaMovs.forEach(m => {
     if (m.facturaId || m.esInterna) return;
     const descNorm = norm(m.descripcion);
+    const cuitEnDesc = (m.descripcion||'').match(/(?:CU|NO)\s+(\d{8,})/)?.[1] || '';
     const match = facturas.find(f => {
       if (f.importeTotal <= 0) return false;
       const prov = proveedores.find(p => p.id === f.proveedorId); if(!prov) return false;
+      const cuitMatch = cuitEnDesc && prov.cuit && prov.cuit === cuitEnDesc;
       const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
         .filter(w=>w.length>3).some(w=>descNorm.includes(w));
-      return nombreMatch && Math.round(f.importeTotal) === Math.round(m.monto);
+      return (cuitMatch || nombreMatch) && Math.round(f.importeTotal) === Math.round(m.monto);
     });
     if (match) { m.facturaId = match.id; vinculados++; }
   });
@@ -6367,15 +6375,17 @@ function importGalicia(e) {
         if (existentes.has(id)) return;
         const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
         const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
-        // Auto-match con facturas
+        // Auto-match con facturas — primero por CUIT, luego por nombre
         if (!esInterna) {
+          const cuitEnDesc = (lineas.find(l => /^(CU|NO)\s+\d{8,}/.test(l)) || '').replace(/\D/g,'');
           const descNorm = norm(descripcion);
           const match = facturas.find(f => {
             if (f.importeTotal <= 0) return false;
             const prov = proveedores.find(p=>p.id===f.proveedorId); if(!prov) return false;
+            const cuitMatch = cuitEnDesc && prov.cuit && prov.cuit === cuitEnDesc;
             const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
               .filter(w=>w.length>3).some(w=>descNorm.includes(w));
-            return nombreMatch && Math.round(f.importeTotal)===Math.round(monto);
+            return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(monto);
           });
           if (match) { mov.facturaId=match.id; autoVinculados++; }
         }
