@@ -987,6 +987,12 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </label>
     <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
+    <label class="btn btn-outline" style="cursor:pointer">
+      Importar Galicia
+      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event)">
+    </label>
+    <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
+    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoGalicia()">Borrar todo Galicia</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
   </div>
@@ -1045,6 +1051,18 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       </div>
     </div>
     <div id="secMPBody" class="contable-section-body" style="display:none"></div>
+  </div>
+
+  <div class="contable-section" id="secGalicia">
+    <div class="contable-section-header" onclick="toggleSection('secGaliciaBody')">
+      <h3>Egresos — Banco Galicia</h3>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="totalGal_H" style="font-size:12px;font-weight:700;color:#9A3412;display:none"></span>
+        <span id="totalGal_L" style="font-size:12px;font-weight:700;color:#0C4A6E;display:none"></span>
+        <div class="section-total" id="totalGalicia" style="color:var(--danger)"></div>
+      </div>
+    </div>
+    <div id="secGaliciaBody" class="contable-section-body" style="display:none"></div>
   </div>
 
 </div>
@@ -5292,6 +5310,7 @@ let sueldos      = [];
 let otrosEgresos = [];
 let gastosFijos  = [];
 let mpMovs       = [];
+let galiciaMovs  = [];
 
 const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","ALFAJOR COCO":"Pastelería","Americano Doble":"Cafetería","apple crumble":"Pastelería","Avo Croissant":"Desayunos y Meriendas","Avocado Toast":"Desayunos y Meriendas","Boloñesa":"Pastas","Brownie":"Pastelería","Brunch Para 2":"Desayunos y Meriendas","Budin Arandanochoco":"Pastelería","Budin Banana choco":"Pastelería","budin limon amap":"Pastelería","Cafe GRAMOL COLOMBIA":"Cafetería","CAFE GRANO BR":"Cafetería","CAFE MOLIDO BR":"Cafetería","CAFE MOLIDO COL":"Cafetería","Capu Avel G":"Cafetería","Capu Avel M":"Cafetería","Capu Caram G":"Cafetería","Capu Caram M":"Cafetería","Capu Vai G":"Cafetería","Capu Vai M":"Cafetería","Capuccino G":"Cafetería","Capuccino M":"Cafetería","Cheese F. Rojos":"Pastelería","Chocolate Caliente":"Cafetería","Cold Brew":"Cafetería","Combo Anakin":"Sandwich","Combo Chewie":"Sandwich","Combo EP 2":"Sandwich","Combo EP 3":"Sandwich","Combo EP 5":"Sandwich","Combo EP 6":"Sandwich","Combo Han Solo":"Desayunos y Meriendas","Combo Keto":"Ensaladas","Combo Leia":"Desayunos y Meriendas","Combo Luke":"Desayunos y Meriendas","Combo Obi-Wan":"Desayunos y Meriendas","Combo Padme":"Desayunos y Meriendas","Combo Qui-Gon":"Desayunos y Meriendas","Combo Rei":"Desayunos y Meriendas","Combo Yoda":"Desayunos y Meriendas","cookie doble choco":"Pastelería","COOKIE FRAMBUESA":"Pastelería","Cookie Nutella":"Pastelería","Cookie Red Velvet":"Pastelería","Cookie Toddy":"Pastelería","Cortado Chico":"Cafetería","Cortado Doble":"Cafetería","Cortado Jarrito":"Cafetería","Croissant":"Desayunos y Meriendas","Croissant Crudo":"Desayunos y Meriendas","Croissant JQ":"Desayunos y Meriendas","Croque Monsieur":"Desayunos y Meriendas","Doble Espresso":"Cafetería","Ens. BB-8":"Ensaladas","Ens. C3PO KETO":"Ensaladas","Ens. R2-D2":"Ensaladas","Episodio 2":"Sandwich","Episodio 3":"Sandwich","Episodio 5":"Sandwich","Episodio 6":"Sandwich","Espresso Largo  Americano S.":"Cafetería","Espresso single":"Cafetería","Exprimido Naranja":"Cafetería","Extra Aderezo Caesar":"Ensaladas","Extra huevo":"Ensaladas","EXTRA PALTA":"Ensaladas","Extra PAN":"Pastas","Extra PESTO":"Pastas","Extra Pollo":"Pastas","Extra QUESITO":"Pastas","Extra SHOT":"Cafetería","Extra Syrup":"Cafetería","Flat Frio G":"Cafetería","Flat White":"Cafetería","Flat White GRANDE":"Cafetería","French Toast Dulce":"Desayunos y Meriendas","French Toast salada":"Cafetería","Huevos Revueltos":"Desayunos y Meriendas","Iced Capu Syrup":"Cafetería","Iced Capuccino":"Cafetería","Iced Coffee":"Cafetería","Iced Tea":"Cafetería","Lagrima chica":"Cafetería","Lagrima G":"Cafetería","LAGRIMA JARRITO":"Cafetería","Lagrima M":"Cafetería","Latte G":"Cafetería","Latte G  Budin":"Desayunos y Meriendas","Latte G  Roll de canela":"Desayunos y Meriendas","Latte G  Torta":"Desayunos y Meriendas","Latte M":"Cafetería","Leche Almendra Lic":"Cafetería","Leche Almendras":"Cafetería","Lemon Pie":"Pastelería","Licuado en AGUA":"Cafetería","Licuado en LECHE":"Cafetería","LIMONADA + BUDIN LIMON":"Desayunos y Meriendas","LIMONADA EN JARRA":"Cafetería","Limonada MenJen":"Cafetería","lungo jarrito":"Cafetería","Lungo o Cafeciito":"Cafetería","Macaron":"Pastelería","MDD raviol calabaza":"Menú del Día","MDD Sand Vitel":"Menú del Día","MDD SUMMER SALAD":"Menú del Día","MDD wrap crispy":"Menú del Día","MediaLuna JQx1":"Desayunos y Meriendas","MediaLuna JQx2":"Desayunos y Meriendas","Medialuna Manteca":"Desayunos y Meriendas","MENU 1":"Pastas","Mocaccino G":"Cafetería","Mocaccino M":"Cafetería","Omelette JQ":"Desayunos y Meriendas","Papas Fritas":"Sandwich","Parisienne":"Pastas","Pesto Lovers":"Pastas","Pink  Rosa":"Pastas","PP":"Pastas","Promo Latte 1Luna":"Desayunos y Meriendas","Promo Latte 2Lunas":"Desayunos y Meriendas","Red Velvet Entera 10porc":"Pastelería","ROLL CANELA":"Desayunos y Meriendas","Scarparo":"Pastas","Scon de Queso":"Desayunos y Meriendas","Scon Queso Caliente":"Desayunos y Meriendas","Sfogliatella":"Desayunos y Meriendas","Submarino":"Cafetería","Tarta T-6 Cebolla":"Tartas","Torta Bruce":"Pastelería","Tarta X-Wing":"Tartas","Tarta AT-AT Walker":"Tartas","Te Inti":"Cafetería","TIRAMISU":"Pastelería","Torta Marquise":"Pastelería","Torta Red Velvet":"Pastelería","Tostadas Blancas":"Desayunos y Meriendas","Tostadas Negras":"Desayunos y Meriendas","Tostado KETO":"Desayunos y Meriendas","Tostado Pan Blanco":"Desayunos y Meriendas","Tostado Pan Negro":"Desayunos y Meriendas","Triangulo DDL":"Pastelería","Trifle Yogur Granola":"Cafetería","Wrap Caesar":"Wraps","Wrap Criollo":"Wraps","Wrap Falafel":"Wraps","Wrap Veggie":"Wraps"};
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
@@ -5299,10 +5318,10 @@ let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   _syncChip('syncing');
-  _fbWrite('contable', { ventas, sueldos, otrosEgresos, gastosFijos, productosRubros, mpMovs }).then(() => _syncChip('ok')).catch(() => {});
+  _fbWrite('contable', { ventas, sueldos, otrosEgresos, gastosFijos, productosRubros, mpMovs, galiciaMovs }).then(() => _syncChip('ok')).catch(() => {});
 }
 function hydrateContable() {
-  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; productosRubros = {..._RUBROS_DEFAULT};
+  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
 }
 
 function initContableView() {
@@ -5957,10 +5976,63 @@ function renderContable() {
         </tr>
       </tbody></table>`;
 
+  // ── BANCO GALICIA ──
+  const galPeriod  = galiciaMovs.filter(m => inPeriod(m.fecha));
+  const galGastos  = galPeriod.filter(m => !m.facturaId && !m.esInterna);
+  const totalGal   = galGastos.reduce((s, m) => s + (m.monto || 0), 0);
+  const totalGal_H = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
+  const totalGal_L = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
+  document.getElementById('totalGalicia').textContent = pesos(totalGal);
+  const elGH = document.getElementById('totalGal_H'); elGH.textContent = `H: ${pesos(totalGal_H)}`; elGH.style.display = totalGal_H ? '' : 'none';
+  const elGL = document.getElementById('totalGal_L'); elGL.textContent = `L: ${pesos(totalGal_L)}`; elGL.style.display = totalGal_L ? '' : 'none';
+  document.getElementById('secGaliciaBody').innerHTML = !galPeriod.length
+    ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos Galicia para este período.<br><span style="font-size:12px">Usá "Importar Galicia" para cargar el extracto.</span></div>`
+    : `<table><thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
+        ${galPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
+          const vinculado = !!m.facturaId;
+          const interna   = !!m.esInterna;
+          const excluido  = vinculado || interna;
+          const facVinc   = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
+          const provVinc  = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
+          const rowBg     = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
+                          : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : '';
+          const badge     = vinculado
+            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
+            : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
+            : m.gasto==='H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
+            : m.gasto==='L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
+          const accionGasto = !excluido ? `
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:11px;font-weight:700;${m.gasto==='H'?'color:#9A3412;background:#FED7AA':'color:var(--ink3)'}">H</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>` : '';
+          const accion = vinculado
+            ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
+            : interna
+              ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
+              : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
+                 <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+          return `<tr style="${rowBg}">
+            <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.descripcion} ${badge}</td>
+            <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
+            <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
+          </tr>`;
+        }).join('')}
+        <tr style="font-weight:600;background:var(--surface2)">
+          <td colspan="2">
+            ${galPeriod.length} movimiento${galPeriod.length!==1?'s':''}
+            ${galPeriod.some(m=>m.facturaId)?' · '+galPeriod.filter(m=>m.facturaId).length+' vinculados':''}
+            ${totalGal_H ? ` · <span style="color:#9A3412">H: ${pesos(totalGal_H)}</span>` : ''}
+            ${totalGal_L ? ` · <span style="color:#0C4A6E">L: ${pesos(totalGal_L)}</span>` : ''}
+          </td>
+          <td style="text-align:right;font-family:var(--mono)">${pesos(totalGal)}</td>
+          <td></td>
+        </tr>
+      </tbody></table>`;
+
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
   const comprasAdeudadas = comprasPeriod.filter(f => !f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
-  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP;
+  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP + totalGal;
   const totalAdeudado  = comprasAdeudadas + adeudadoFijos;
   const totalEgresos   = totalPagado + totalAdeudado;
   const resultado      = totalIngresos - totalEgresos;
@@ -6182,6 +6254,128 @@ function importMP(e) {
       renderContable();
       toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
     } catch(err) { toast('Error: ' + err.message, 'error'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── GALICIA HELPERS ──
+function _borrarGal(id)         { galiciaMovs = galiciaMovs.filter(m => m.id !== id); persistContable(); renderContable(); }
+function _borrarTodoGalicia()   { if (!galiciaMovs.length) return; if (!confirm(`¿Borrar los ${galiciaMovs.length} movimientos de Galicia?`)) return; galiciaMovs = []; persistContable(); renderContable(); toast('Movimientos Galicia eliminados','success'); }
+function _toggleInternaGal(id)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.esInterna=!m.esInterna; persistContable(); renderContable(); }
+function _setGastoGal(id,tipo)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.gasto = m.gasto===tipo ? null : tipo; persistContable(); renderContable(); }
+function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; delete m.facturaId; persistContable(); renderContable(); toast('Desvinculado','info'); }
+function _abrirVincularGal(galId) {
+  const m = galiciaMovs.find(x => x.id === galId);
+  if (!m) return;
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const descNorm = norm(m.descripcion);
+  const facsOrdenadas = [...facturas].filter(f => f.importeTotal > 0).sort((a,b) => {
+    const pA = proveedores.find(p=>p.id===a.proveedorId); const pB = proveedores.find(p=>p.id===b.proveedorId);
+    const nA = norm(pA?.nombre||''); const nB = norm(pB?.nombre||'');
+    const mA = descNorm.includes(nA) || (pA?.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(w));
+    const mB = descNorm.includes(nB) || (pB?.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(w));
+    if(mA&&!mB) return -1; if(!mA&&mB) return 1; return b.fecha.localeCompare(a.fecha);
+  });
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularGalModal" style="display:flex">
+      <div class="modal" style="max-width:560px">
+        <h2>Vincular a factura</h2>
+        <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
+          ${facsOrdenadas.slice(0,50).map(f=>{
+            const prov=proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
+            const match=norm(descNorm).includes(norm(prov).slice(0,8));
+            return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}" onclick="_vincularGal('${galId}','${f.id}')">
+              <div style="font-weight:700;font-size:13px">${prov}</div>
+              <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta?'N° '+f.nroBoleta:'Sin número'} · ${pesos(f.importeTotal)}</div>
+            </button>`;
+          }).join('')}
+        </div>
+        <div class="modal-actions" style="margin-top:14px"><button class="btn btn-outline" onclick="document.getElementById('vincularGalModal').remove()">Cancelar</button></div>
+      </div>
+    </div>`);
+}
+function _vincularGal(galId, facturaId) {
+  document.getElementById('vincularGalModal')?.remove();
+  const m = galiciaMovs.find(x=>x.id===galId); if(!m) return;
+  m.facturaId = facturaId; persistContable(); renderContable();
+  toast('Vinculado a factura','success');
+}
+function _autoVincularGalicia() {
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  let vinculados = 0;
+  galiciaMovs.forEach(m => {
+    if (m.facturaId || m.esInterna) return;
+    const descNorm = norm(m.descripcion);
+    const match = facturas.find(f => {
+      if (f.importeTotal <= 0) return false;
+      const prov = proveedores.find(p => p.id === f.proveedorId); if(!prov) return false;
+      const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+        .filter(w=>w.length>3).some(w=>descNorm.includes(w));
+      return nombreMatch && Math.round(f.importeTotal) === Math.round(m.monto);
+    });
+    if (match) { m.facturaId = match.id; vinculados++; }
+  });
+  if (!vinculados) { toast('No se encontraron coincidencias nuevas','info'); return; }
+  persistContable(); renderContable();
+  toast(`${vinculados} movimiento${vinculados!==1?'s':''} vinculado${vinculados!==1?'s':''} automáticamente`,'success');
+}
+
+// ── IMPORT GALICIA ──
+function importGalicia(e) {
+  const file = e.target.files[0]; if(!file) return; e.target.value='';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb   = XLSX.read(ev.target.result, { type:'array' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+      const parseAR = v => { const n = parseFloat(String(v).replace(/\./g,'').replace(',','.')); return isFinite(n)?n:0; };
+      const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+      // Detectar fila de headers (tiene "Fecha" y "Débito")
+      const headerIdx = rows.findIndex(r => r.some(c=>/^fecha$/i.test(String(c).trim())) && r.some(c=>/débit/i.test(String(c))));
+      if (headerIdx < 0) { toast('No se encontró la tabla en el archivo','error'); return; }
+      const hdrs = rows[headerIdx].map(h=>String(h).trim());
+      const iF = hdrs.findIndex(h=>/^fecha$/i.test(h));
+      const iM = hdrs.findIndex(h=>/^movimiento$/i.test(h));
+      const iD = hdrs.findIndex(h=>/débit/i.test(h));
+      const existentes = new Set(galiciaMovs.map(m=>m.id));
+      let added=0, autoVinculados=0;
+      rows.slice(headerIdx+1).forEach((r,i) => {
+        const deb = parseAR(r[iD]);
+        if (deb >= 0) return; // solo débitos
+        const monto = Math.abs(deb);
+        const fechaRaw = String(r[iF]||'').trim();
+        if (!fechaRaw) return;
+        const [d,mo,y] = fechaRaw.split('/');
+        const fecha = `${y}-${mo?.padStart(2,'0')}-${d?.padStart(2,'0')}`;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+        const movRaw = String(r[iM]||'');
+        const lineas = movRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+        const tipo = lineas[0] || 'Sin tipo';
+        const destinatario = lineas[1] || '';
+        const descripcion = destinatario ? `${tipo} · ${destinatario}` : tipo;
+        const id = `gal-${fecha}-${monto}-${i}`;
+        if (existentes.has(id)) return;
+        const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
+        const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
+        // Auto-match con facturas
+        if (!esInterna) {
+          const descNorm = norm(descripcion);
+          const match = facturas.find(f => {
+            if (f.importeTotal <= 0) return false;
+            const prov = proveedores.find(p=>p.id===f.proveedorId); if(!prov) return false;
+            const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+              .filter(w=>w.length>3).some(w=>descNorm.includes(w));
+            return nombreMatch && Math.round(f.importeTotal)===Math.round(monto);
+          });
+          if (match) { mov.facturaId=match.id; autoVinculados++; }
+        }
+        galiciaMovs.push(mov); added++;
+      });
+      persistContable(); renderContable();
+      toast(`${added} movimientos Galicia importados${autoVinculados?` · ${autoVinculados} vinculados automáticamente`:''}`, 'success');
+    } catch(err) { toast('Error: '+err.message,'error'); }
   };
   reader.readAsArrayBuffer(file);
 }
@@ -8273,6 +8467,7 @@ async function _fbLoad() {
           if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
           if (d.gastosFijos?.length)  gastosFijos    = d.gastosFijos;
           if (d.mpMovs?.length)       mpMovs         = d.mpMovs;
+          if (d.galiciaMovs?.length)  galiciaMovs    = d.galiciaMovs;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
           break;
         case 'config':
