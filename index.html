@@ -6354,7 +6354,15 @@ function importGalicia(e) {
         const lineas = movRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
         const tipo = lineas[0] || 'Sin tipo';
         const destinatario = lineas[1] || '';
-        const descripcion = destinatario ? `${tipo} · ${destinatario}` : tipo;
+        // Incluir líneas adicionales útiles (omitir nros de cuenta largos, tarjeta enmascarada y "VARIOS")
+        const extras = lineas.slice(2).filter(l =>
+          !/^\d{10,}$/.test(l) &&          // nros de cuenta muy largos
+          !/4517X{4,}/.test(l) &&           // tarjeta enmascarada
+          !/^VARIOS$/i.test(l) &&
+          !/^\d{8,}$/.test(l)
+        );
+        const partes = [tipo, destinatario, ...extras].filter(Boolean);
+        const descripcion = partes.join(' · ');
         const id = `gal-${fecha}-${monto}-${i}`;
         if (existentes.has(id)) return;
         const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
