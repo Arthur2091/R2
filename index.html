@@ -5974,7 +5974,8 @@ function renderContable() {
               : interna
                 ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
                 : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaMP('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularMP('${m.id}')" style="font-size:11px">🔗 Boleta</button>
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFMP('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>`;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge}</td>
@@ -6033,7 +6034,8 @@ function renderContable() {
               : interna
                 ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
                 : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
-                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Boleta</button>
+                   <button class="btn btn-outline btn-sm" onclick="_abrirVincularGFGal('${m.id}')" style="font-size:11px;color:#5B21B6;border-color:#5B21B6">📋 GF</button>`;
           // Detectar CUITs en la descripción y agregar botón de lookup
           const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
           const cuitNum   = cuitMatch ? cuitMatch[1] : null;
@@ -6249,6 +6251,44 @@ function _vincularMP(mpId, facturaId) {
   persistContable();
   renderContable();
   toast('Retiro vinculado — no se suma a egresos MP', 'success');
+}
+function _abrirVincularGFMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
+  const lista = gastosFijos.filter(g => g.periodo === periodo)
+    .sort((a, b) => Math.abs(a.monto - m.monto) - Math.abs(b.monto - m.monto));
+  const opcionesHtml = lista.length
+    ? lista.map(g => {
+        const match = Math.round(g.monto) === Math.round(m.monto);
+        return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#5B21B6':''}" onclick="_vincularGFMP('${mpId}','${g.id}')">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)">${g.servicio}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:2px">${g.categoria || ''} · ${pesos(g.monto)}${match?' · <span style="color:#5B21B6;font-weight:700">monto exacto</span>':''}</div>
+        </button>`;
+      }).join('')
+    : `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin gastos fijos cargados para ${periodo}</div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularGFMPModal" style="display:flex">
+      <div class="modal" style="max-width:520px">
+        <h2>Vincular a gasto fijo</h2>
+        <p class="modal-sub">${m.fecha} · ${m.destino} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
+          ${opcionesHtml}
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularGFMPModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+function _vincularGFMP(mpId, gfId) {
+  document.getElementById('vincularGFMPModal')?.remove();
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  m.gastoFijoId = gfId;
+  persistContable();
+  renderContable();
+  toast('Vinculado a gasto fijo', 'success');
 }
 function _desvincularMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
@@ -6508,6 +6548,44 @@ function _vincularGal(galId, facturaId) {
   const m = galiciaMovs.find(x=>x.id===galId); if(!m) return;
   m.facturaId = facturaId; persistContable(); renderContable();
   toast('Vinculado a factura','success');
+}
+function _abrirVincularGFGal(galId) {
+  const m = galiciaMovs.find(x => x.id === galId);
+  if (!m) return;
+  const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
+  const lista = gastosFijos.filter(g => g.periodo === periodo)
+    .sort((a, b) => Math.abs(a.monto - m.monto) - Math.abs(b.monto - m.monto));
+  const opcionesHtml = lista.length
+    ? lista.map(g => {
+        const match = Math.round(g.monto) === Math.round(m.monto);
+        return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#5B21B6':''}" onclick="_vincularGFGal('${galId}','${g.id}')">
+          <div style="font-weight:700;font-size:13px;color:var(--ink)">${g.servicio}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:2px">${g.categoria || ''} · ${pesos(g.monto)}${match?' · <span style="color:#5B21B6;font-weight:700">monto exacto</span>':''}</div>
+        </button>`;
+      }).join('')
+    : `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin gastos fijos cargados para ${periodo}</div>`;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="vincularGFGalModal" style="display:flex">
+      <div class="modal" style="max-width:520px">
+        <h2>Vincular a gasto fijo</h2>
+        <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
+          ${opcionesHtml}
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('vincularGFGalModal').remove()">Cancelar</button>
+        </div>
+      </div>
+    </div>`);
+}
+function _vincularGFGal(galId, gfId) {
+  document.getElementById('vincularGFGalModal')?.remove();
+  const m = galiciaMovs.find(x => x.id === galId);
+  if (!m) return;
+  m.gastoFijoId = gfId;
+  persistContable();
+  renderContable();
+  toast('Vinculado a gasto fijo', 'success');
 }
 function _autoVincularGalicia() {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
