@@ -6273,16 +6273,29 @@ function importMP(e) {
 
 // ── CUIT LOOKUP ──
 async function _fetchCuit(cuit) {
+  // Intentar API JSON directa de datosgoar
+  try {
+    const res = await fetch('https://afip.datosgoar.com.ar/api/v1/persona/' + cuit, { signal: AbortSignal.timeout(6000) });
+    if (res.ok) {
+      const json = await res.json();
+      const nombre = json.nombre || json.razonSocial || json.apellido;
+      if (nombre) return nombre.trim();
+    }
+  } catch(e) {}
+
+  // Fallback: proxies a cuitonline
   const url = 'https://www.cuitonline.com/search.php?q=' + cuit;
   const proxies = [
-    'https://corsproxy.io/?' + url,
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
     'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+    'https://thingproxy.freeboard.io/fetch/' + url,
   ];
   for (const proxy of proxies) {
     try {
       const res  = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
-      const data = await res.json();
-      const html = data.contents || data.body || (typeof data === 'string' ? data : '');
+      let html = '';
+      if (proxy.includes('/get?')) { const j = await res.json(); html = j.contents || ''; }
+      else html = await res.text();
       const m = html.match(/href="detalle\/\d+\/[^"]+">([^<]+)<\/a>/);
       if (m) return m[1].trim();
     } catch(e) { continue; }
@@ -6338,8 +6351,9 @@ async function _consultarCuitsGalicia() {
       const btn = document.getElementById('cuit-apply-' + cuit);
       if (btn) btn.style.display = '';
     } else {
-      el.textContent = 'Sin resultados';
-      el.style.color = 'var(--ink3)';
+      el.innerHTML = `<input type="text" placeholder="Ingresá el nombre manualmente" style="border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;width:100%" oninput="window._cuitNombres['${cuit}']=this.value" onchange="document.getElementById('cuit-apply-${cuit}').style.display=this.value?'':'none'">`;
+      const btn = document.getElementById('cuit-apply-' + cuit);
+      if (btn) btn.style.display = 'none';
     }
   }
 }
