@@ -6118,8 +6118,7 @@ function importMP(e) {
             const palabras = provNorm.split(/(?=[A-Z])/).filter(w => w.length > 3);
             const nombreMatch = destNorm.includes(provNorm) || provNorm.split(/\s+/).filter(w=>w.length>3).some(w => destNorm.includes(w));
             if (!nombreMatch) return false;
-            const diff = Math.abs(f.importeTotal - monto) / monto;
-            return diff <= 0.05; // ±5%
+            return Math.round(f.importeTotal) === Math.round(monto);
           });
           if (match) { mov.facturaId = match.id; autoVinculados++; }
         }
