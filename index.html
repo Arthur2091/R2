@@ -5319,6 +5319,8 @@ let otrosEgresos = [];
 let gastosFijos  = [];
 let mpMovs       = [];
 let galiciaMovs  = [];
+let _sortMP  = { field: 'fecha', dir: -1 };
+let _sortGal = { field: 'fecha', dir: -1 };
 
 const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","ALFAJOR COCO":"Pastelería","Americano Doble":"Cafetería","apple crumble":"Pastelería","Avo Croissant":"Desayunos y Meriendas","Avocado Toast":"Desayunos y Meriendas","Boloñesa":"Pastas","Brownie":"Pastelería","Brunch Para 2":"Desayunos y Meriendas","Budin Arandanochoco":"Pastelería","Budin Banana choco":"Pastelería","budin limon amap":"Pastelería","Cafe GRAMOL COLOMBIA":"Cafetería","CAFE GRANO BR":"Cafetería","CAFE MOLIDO BR":"Cafetería","CAFE MOLIDO COL":"Cafetería","Capu Avel G":"Cafetería","Capu Avel M":"Cafetería","Capu Caram G":"Cafetería","Capu Caram M":"Cafetería","Capu Vai G":"Cafetería","Capu Vai M":"Cafetería","Capuccino G":"Cafetería","Capuccino M":"Cafetería","Cheese F. Rojos":"Pastelería","Chocolate Caliente":"Cafetería","Cold Brew":"Cafetería","Combo Anakin":"Sandwich","Combo Chewie":"Sandwich","Combo EP 2":"Sandwich","Combo EP 3":"Sandwich","Combo EP 5":"Sandwich","Combo EP 6":"Sandwich","Combo Han Solo":"Desayunos y Meriendas","Combo Keto":"Ensaladas","Combo Leia":"Desayunos y Meriendas","Combo Luke":"Desayunos y Meriendas","Combo Obi-Wan":"Desayunos y Meriendas","Combo Padme":"Desayunos y Meriendas","Combo Qui-Gon":"Desayunos y Meriendas","Combo Rei":"Desayunos y Meriendas","Combo Yoda":"Desayunos y Meriendas","cookie doble choco":"Pastelería","COOKIE FRAMBUESA":"Pastelería","Cookie Nutella":"Pastelería","Cookie Red Velvet":"Pastelería","Cookie Toddy":"Pastelería","Cortado Chico":"Cafetería","Cortado Doble":"Cafetería","Cortado Jarrito":"Cafetería","Croissant":"Desayunos y Meriendas","Croissant Crudo":"Desayunos y Meriendas","Croissant JQ":"Desayunos y Meriendas","Croque Monsieur":"Desayunos y Meriendas","Doble Espresso":"Cafetería","Ens. BB-8":"Ensaladas","Ens. C3PO KETO":"Ensaladas","Ens. R2-D2":"Ensaladas","Episodio 2":"Sandwich","Episodio 3":"Sandwich","Episodio 5":"Sandwich","Episodio 6":"Sandwich","Espresso Largo  Americano S.":"Cafetería","Espresso single":"Cafetería","Exprimido Naranja":"Cafetería","Extra Aderezo Caesar":"Ensaladas","Extra huevo":"Ensaladas","EXTRA PALTA":"Ensaladas","Extra PAN":"Pastas","Extra PESTO":"Pastas","Extra Pollo":"Pastas","Extra QUESITO":"Pastas","Extra SHOT":"Cafetería","Extra Syrup":"Cafetería","Flat Frio G":"Cafetería","Flat White":"Cafetería","Flat White GRANDE":"Cafetería","French Toast Dulce":"Desayunos y Meriendas","French Toast salada":"Cafetería","Huevos Revueltos":"Desayunos y Meriendas","Iced Capu Syrup":"Cafetería","Iced Capuccino":"Cafetería","Iced Coffee":"Cafetería","Iced Tea":"Cafetería","Lagrima chica":"Cafetería","Lagrima G":"Cafetería","LAGRIMA JARRITO":"Cafetería","Lagrima M":"Cafetería","Latte G":"Cafetería","Latte G  Budin":"Desayunos y Meriendas","Latte G  Roll de canela":"Desayunos y Meriendas","Latte G  Torta":"Desayunos y Meriendas","Latte M":"Cafetería","Leche Almendra Lic":"Cafetería","Leche Almendras":"Cafetería","Lemon Pie":"Pastelería","Licuado en AGUA":"Cafetería","Licuado en LECHE":"Cafetería","LIMONADA + BUDIN LIMON":"Desayunos y Meriendas","LIMONADA EN JARRA":"Cafetería","Limonada MenJen":"Cafetería","lungo jarrito":"Cafetería","Lungo o Cafeciito":"Cafetería","Macaron":"Pastelería","MDD raviol calabaza":"Menú del Día","MDD Sand Vitel":"Menú del Día","MDD SUMMER SALAD":"Menú del Día","MDD wrap crispy":"Menú del Día","MediaLuna JQx1":"Desayunos y Meriendas","MediaLuna JQx2":"Desayunos y Meriendas","Medialuna Manteca":"Desayunos y Meriendas","MENU 1":"Pastas","Mocaccino G":"Cafetería","Mocaccino M":"Cafetería","Omelette JQ":"Desayunos y Meriendas","Papas Fritas":"Sandwich","Parisienne":"Pastas","Pesto Lovers":"Pastas","Pink  Rosa":"Pastas","PP":"Pastas","Promo Latte 1Luna":"Desayunos y Meriendas","Promo Latte 2Lunas":"Desayunos y Meriendas","Red Velvet Entera 10porc":"Pastelería","ROLL CANELA":"Desayunos y Meriendas","Scarparo":"Pastas","Scon de Queso":"Desayunos y Meriendas","Scon Queso Caliente":"Desayunos y Meriendas","Sfogliatella":"Desayunos y Meriendas","Submarino":"Cafetería","Tarta T-6 Cebolla":"Tartas","Torta Bruce":"Pastelería","Tarta X-Wing":"Tartas","Tarta AT-AT Walker":"Tartas","Te Inti":"Cafetería","TIRAMISU":"Pastelería","Torta Marquise":"Pastelería","Torta Red Velvet":"Pastelería","Tostadas Blancas":"Desayunos y Meriendas","Tostadas Negras":"Desayunos y Meriendas","Tostado KETO":"Desayunos y Meriendas","Tostado Pan Blanco":"Desayunos y Meriendas","Tostado Pan Negro":"Desayunos y Meriendas","Triangulo DDL":"Pastelería","Trifle Yogur Granola":"Cafetería","Wrap Caesar":"Wraps","Wrap Criollo":"Wraps","Wrap Falafel":"Wraps","Wrap Veggie":"Wraps"};
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
@@ -5947,8 +5949,15 @@ function renderContable() {
   elL.textContent = `L: ${pesos(totalMP_L)}`; elL.style.display = totalMP_L ? '' : 'none';
   document.getElementById('secMPBody').innerHTML = !mpPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos MP para este período.<br><span style="font-size:12px">Usá "Importar MP" para cargar el Excel.</span></div>`
-    : `<table><thead><tr><th>Fecha</th><th>Destino</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
-        ${mpPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>{
+    : `<table><thead><tr>
+        ${['fecha','destino','monto'].map(f => {
+          const active = _sortMP.field === f;
+          const arrow  = active ? (_sortMP.dir === -1 ? ' ↓' : ' ↑') : '';
+          const align  = f === 'monto' ? 'text-align:right;' : '';
+          return `<th style="${align}cursor:pointer;user-select:none;${active?'color:var(--ink)':'color:var(--ink2)'}" onclick="_setSortMP('${f}')">${f==='fecha'?'Fecha':f==='destino'?'Destino':'Monto'}${arrow}</th>`;
+        }).join('')}
+        <th></th></tr></thead><tbody>
+        ${_applySort(mpPeriod, _sortMP).map(m=>{
           const vinculado  = !!m.facturaId;
           const interna    = !!m.esInterna;
           const gfVinc     = !!m.gastoFijoId;
@@ -6069,8 +6078,16 @@ function renderContable() {
     if (!movs.length) return '';
     return `
       ${esImpuestos ? `<div style="font-size:11px;font-weight:700;color:#B45309;text-transform:uppercase;letter-spacing:.06em;padding:10px 0 6px;border-top:1px solid var(--border);margin-top:10px">Impuestos y percepciones · ${pesos(total)}</div>` : ''}
-      <table><thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th><th></th></tr></thead><tbody>
-        ${movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m => _renderGalRow(m)).join('')}
+      <table><thead><tr>
+        ${(esImpuestos ? ['fecha','descripcion','monto'] : ['fecha','descripcion','monto']).map(f => {
+          const active = !esImpuestos && _sortGal.field === f;
+          const arrow  = active ? (_sortGal.dir === -1 ? ' ↓' : ' ↑') : '';
+          const align  = f === 'monto' ? 'text-align:right;' : '';
+          const click  = !esImpuestos ? `onclick="_setSortGal('${f}')" style="${align}cursor:pointer;user-select:none;${active?'color:var(--ink)':'color:var(--ink2)'}"` : `style="${align}"`;
+          return `<th ${click}>${f==='fecha'?'Fecha':f==='descripcion'?'Descripción':'Monto'}${arrow}</th>`;
+        }).join('')}
+        <th></th></tr></thead><tbody>
+        ${(esImpuestos ? movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)) : _applySort(movs, _sortGal)).map(m => _renderGalRow(m)).join('')}
         <tr style="font-weight:600;background:var(--surface2)">
           <td colspan="2">
             ${movs.length} movimiento${movs.length!==1?'s':''}
@@ -6280,6 +6297,21 @@ function _desvincularSueldoGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId); if (!m) return;
   delete m.sueldoId; persistContable(); renderContable();
   toast('Desvinculado de sueldo', 'info');
+}
+function _setSortMP(field) {
+  _sortMP = _sortMP.field === field ? { field, dir: _sortMP.dir * -1 } : { field, dir: field === 'monto' ? -1 : -1 };
+  renderContable();
+}
+function _setSortGal(field) {
+  _sortGal = _sortGal.field === field ? { field, dir: _sortGal.dir * -1 } : { field, dir: -1 };
+  renderContable();
+}
+function _applySort(arr, sort) {
+  return [...arr].sort((a, b) => {
+    const va = sort.field === 'monto' ? (a.monto || 0) : (a[sort.field] || '');
+    const vb = sort.field === 'monto' ? (b.monto || 0) : (b[sort.field] || '');
+    return va < vb ? sort.dir : va > vb ? -sort.dir : 0;
+  });
 }
 function _borrarTodoMP() {
   if (!mpMovs.length) return;
