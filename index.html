@@ -6390,6 +6390,8 @@ function _vincularGFMP(mpId, gfId) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
   m.gastoFijoId = gfId;
+  const gf = gastosFijos.find(g => g.id === gfId);
+  if (gf && Math.round(gf.monto) !== Math.round(m.monto)) gf.monto = m.monto;
   persistContable();
   renderContable();
   toast('Vinculado a gasto fijo', 'success');
@@ -6687,6 +6689,8 @@ function _vincularGFGal(galId, gfId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
   m.gastoFijoId = gfId;
+  const gf = gastosFijos.find(g => g.id === gfId);
+  if (gf && Math.round(gf.monto) !== Math.round(m.monto)) gf.monto = m.monto;
   persistContable();
   renderContable();
   toast('Vinculado a gasto fijo', 'success');
