@@ -6261,7 +6261,7 @@ function importMP(e) {
     try {
       // Detectar si es el nuevo formato CSV de MP (parsear como texto para evitar
       // que XLSX auto-convierta fechas DD/MM a serials de Excel)
-      const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result));
+      const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result)).replace(/^﻿/, '');
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0])) {
         _importMPcsv(lines);
