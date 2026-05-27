@@ -2786,7 +2786,8 @@ function saveProveedor() {
   persist();
   renderProveedores();
   closeModal('modalProveedor');
-  toast('Proveedor guardado', 'success');
+  const vinculados = _reAutoLinkContable();
+  toast(vinculados ? `Proveedor guardado · ${vinculados} movimiento${vinculados===1?'':'s'} vinculado${vinculados===1?'':'s'} automáticamente` : 'Proveedor guardado', 'success');
 }
 
 function deleteProveedor(id) {
@@ -3189,7 +3190,8 @@ function guardarNuevoProv() {
   closeNuevoProvModal();
   renderProveedores();
   renderPedidos();
-  toast(`Proveedor "${nombre}" creado`, 'success');
+  const vinculados = _reAutoLinkContable();
+  toast(vinculados ? `Proveedor "${nombre}" creado · ${vinculados} movimiento${vinculados===1?'':'s'} vinculado${vinculados===1?'':'s'} automáticamente` : `Proveedor "${nombre}" creado`, 'success');
 }
 
 function renombrarProveedor(id) {
@@ -6388,6 +6390,34 @@ function _matchProvPorMov(nombre, cuitNum) {
       p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
         .filter(w => w.length > 4).some(w => nNorm.includes(norm(w)));
   }) || null;
+}
+function _reAutoLinkContable() {
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  let vinculados = 0;
+  const todosMovs = [
+    ...mpMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
+      .map(m => ({ src: 'mp', mov: m, desc: m.destino || '', cuitRaw: (m.destino||'').match(/\d{10,11}/)?.[0] || null })),
+    ...galiciaMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
+      .map(m => {
+        const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
+        return { src: 'gal', mov: m, desc: m.descripcion || '', cuitRaw: cuitMatch ? cuitMatch[1] : null };
+      })
+  ];
+  todosMovs.forEach(({ mov, desc, cuitRaw }) => {
+    const descNorm = norm(desc);
+    const cuitLimpio = cuitRaw ? String(cuitRaw).replace(/\D/g,'') : null;
+    const match = facturas.find(f => {
+      if (f.importeTotal <= 0) return false;
+      const prov = proveedores.find(p => p.id === f.proveedorId); if (!prov) return false;
+      const cuitMatch = cuitLimpio && prov.cuit && prov.cuit.replace(/\D/g,'') === cuitLimpio;
+      const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+        .filter(w => w.length > 3).some(w => descNorm.includes(norm(w)));
+      return (cuitMatch || nombreMatch) && Math.round(f.importeTotal) === Math.round(mov.monto);
+    });
+    if (match) { mov.facturaId = match.id; vinculados++; }
+  });
+  if (vinculados) { persistContable(); renderContable(); }
+  return vinculados;
 }
 function _setSortMP(field) {
   _sortMP = _sortMP.field === field ? { field, dir: _sortMP.dir * -1 } : { field, dir: field === 'monto' ? -1 : -1 };
