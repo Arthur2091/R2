@@ -992,6 +992,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event)">
     </label>
     <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
+    <button class="btn btn-outline" onclick="_consultarCuitsGalicia()">Consultar CUITs</button>
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoGalicia()">Borrar todo Galicia</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
@@ -6271,29 +6272,106 @@ function importMP(e) {
 }
 
 // ── CUIT LOOKUP ──
-async function _lookupCuit(cuit) {
-  const btn  = document.getElementById('cuit-btn-' + cuit);
-  const span = document.getElementById('cuit-name-' + cuit);
-  if (!btn || !span) return;
-  btn.textContent = '…'; btn.disabled = true;
-  try {
-    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.cuitonline.com/search.php?q=' + cuit);
-    const res  = await fetch(proxy);
-    const json = await res.json();
-    const html = json.contents || '';
-    const m = html.match(/href="detalle\/\d+\/[^"]+">([^<]+)<\/a>/);
-    const nombre = m ? m[1].trim() : null;
-    if (nombre) {
-      span.textContent = nombre;
-      btn.style.display = 'none';
-    } else {
-      btn.textContent = '?'; btn.disabled = false;
-      toast('No se encontró información para ese CUIT', 'info');
-    }
-  } catch(e) {
-    btn.textContent = '?'; btn.disabled = false;
-    toast('Error al consultar CUIT', 'error');
+async function _fetchCuit(cuit) {
+  const url = 'https://www.cuitonline.com/search.php?q=' + cuit;
+  const proxies = [
+    'https://corsproxy.io/?' + url,
+    'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+  ];
+  for (const proxy of proxies) {
+    try {
+      const res  = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+      const data = await res.json();
+      const html = data.contents || data.body || (typeof data === 'string' ? data : '');
+      const m = html.match(/href="detalle\/\d+\/[^"]+">([^<]+)<\/a>/);
+      if (m) return m[1].trim();
+    } catch(e) { continue; }
   }
+  return null;
+}
+
+async function _consultarCuitsGalicia() {
+  // Recolectar CUITs únicos de todos los movimientos Galicia
+  const cuitMap = {}; // cuit -> [ids de movimientos]
+  galiciaMovs.forEach(m => {
+    const match = (m.descripcion||'').match(/(?:CU|NO)\s+(\d{8,11})/);
+    if (match) {
+      const c = match[1];
+      if (!cuitMap[c]) cuitMap[c] = [];
+      cuitMap[c].push(m.id);
+    }
+  });
+  const cuits = Object.keys(cuitMap);
+  if (!cuits.length) { toast('No hay CUITs en los movimientos de Galicia', 'info'); return; }
+
+  // Modal con tabla de resultados
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="cuitModal" style="display:flex">
+      <div class="modal" style="max-width:640px">
+        <h2>Consulta de CUITs — Banco Galicia</h2>
+        <p class="modal-sub">${cuits.length} CUITs únicos encontrados</p>
+        <div id="cuitResultados" style="display:flex;flex-direction:column;gap:8px;margin-top:14px;max-height:420px;overflow-y:auto">
+          ${cuits.map(c => `
+            <div id="cuit-row-${c}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface)">
+              <div style="font-family:var(--mono);font-size:12px;color:var(--ink2);min-width:110px">${c}</div>
+              <div id="cuit-res-${c}" style="flex:1;font-size:13px;color:var(--ink3)">Consultando…</div>
+              <button id="cuit-apply-${c}" class="btn btn-outline btn-sm" style="display:none;font-size:11px" onclick="_aplicarNombreCuit('${c}')">Aplicar</button>
+            </div>`).join('')}
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('cuitModal').remove()">Cerrar</button>
+          <button class="btn btn-primary" onclick="_aplicarTodosCuits()">Aplicar todos</button>
+        </div>
+      </div>
+    </div>`);
+
+  // Consultar cada CUIT secuencialmente (para no bombardear el servidor)
+  window._cuitNombres = {};
+  for (const cuit of cuits) {
+    const el = document.getElementById('cuit-res-' + cuit);
+    if (!el) continue;
+    const nombre = await _fetchCuit(cuit);
+    window._cuitNombres[cuit] = nombre;
+    if (nombre) {
+      el.textContent = nombre;
+      el.style.color = 'var(--accent)';
+      const btn = document.getElementById('cuit-apply-' + cuit);
+      if (btn) btn.style.display = '';
+    } else {
+      el.textContent = 'Sin resultados';
+      el.style.color = 'var(--ink3)';
+    }
+  }
+}
+
+function _aplicarNombreCuit(cuit) {
+  const nombre = window._cuitNombres?.[cuit];
+  if (!nombre) return;
+  galiciaMovs.forEach(m => {
+    if ((m.descripcion||'').includes(cuit)) {
+      m.descripcion = m.descripcion.replace(new RegExp('((?:CU|NO)\\s+' + cuit + ')'), `$1 (${nombre})`);
+    }
+  });
+  persistContable(); renderContable();
+  const row = document.getElementById('cuit-row-' + cuit);
+  if (row) { row.style.background = '#F0FDF4'; row.style.borderColor = '#10B981'; }
+  toast('Nombre aplicado a los movimientos', 'success');
+}
+
+function _aplicarTodosCuits() {
+  const nombres = window._cuitNombres || {};
+  let aplicados = 0;
+  Object.entries(nombres).forEach(([cuit, nombre]) => {
+    if (!nombre) return;
+    galiciaMovs.forEach(m => {
+      if ((m.descripcion||'').includes(cuit) && !m.descripcion.includes('(' + nombre + ')')) {
+        m.descripcion = m.descripcion.replace(new RegExp('((?:CU|NO)\\s+' + cuit + ')'), `$1 (${nombre})`);
+        aplicados++;
+      }
+    });
+  });
+  if (aplicados) { persistContable(); renderContable(); toast(`${aplicados} movimientos actualizados`, 'success'); }
+  document.getElementById('cuitModal')?.remove();
 }
 
 // ── GALICIA HELPERS ──
