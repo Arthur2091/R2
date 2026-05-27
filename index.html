@@ -6469,52 +6469,79 @@ function _toggleInternaMP(id) {
   persistContable();
   renderContable();
 }
-function _abrirVincularMP(mpId) {
-  const m = mpMovs.find(x => x.id === mpId);
-  if (!m) return;
+function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const destNorm = norm(m.destino);
-  // Ordenar facturas: primero las que coinciden por nombre de proveedor
+  const descNorm = norm(desc);
+  const _provMatch = p => {
+    const pn = norm(p.nombre||'');
+    return descNorm.includes(pn) || (p.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(norm(w)));
+  };
   const facsOrdenadas = [...facturas]
-    .filter(f => f.importeTotal)
+    .filter(f => f.importeTotal > 0)
     .sort((a, b) => {
-      const nA = norm(proveedores.find(p=>p.id===a.proveedorId)?.nombre||'');
-      const nB = norm(proveedores.find(p=>p.id===b.proveedorId)?.nombre||'');
-      const matchA = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
-      const matchB = destNorm.includes(nB) || nB.split(' ').some(w => w.length>3 && destNorm.includes(w));
-      if (matchA && !matchB) return -1;
-      if (!matchA && matchB) return 1;
+      const pA = proveedores.find(p=>p.id===a.proveedorId);
+      const pB = proveedores.find(p=>p.id===b.proveedorId);
+      const mA = pA ? _provMatch(pA) : false;
+      const mB = pB ? _provMatch(pB) : false;
+      if (mA && !mB) return -1;
+      if (!mA && mB) return 1;
       return b.fecha.localeCompare(a.fecha);
     });
 
-  const opcionesHtml = facsOrdenadas.slice(0, 50).map(f => {
-    const prov    = proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor';
-    const nA      = norm(prov);
-    const match   = destNorm.includes(nA) || nA.split(' ').some(w => w.length>3 && destNorm.includes(w));
-    const pagado  = _montoPagadoFactura(f.id);
-    const restante = f.importeTotal - pagado;
-    const parcialHtml = pagado > 0
-      ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
-    return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}"
-      onclick="_vincularMP('${mpId}','${f.id}')">
-      <div style="font-weight:700;font-size:13px;color:var(--ink)">${prov}${parcialHtml}</div>
-      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta ? 'N° '+f.nroBoleta : 'Sin número'} · total ${pesos(f.importeTotal)}</div>
-    </button>`;
-  }).join('');
+  const _renderItems = q => {
+    const qn = norm(q);
+    const lista = qn ? facsOrdenadas.filter(f => {
+      const prov = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'';
+      return norm(prov).includes(qn) || (f.nroBoleta||'').toLowerCase().includes(q.toLowerCase());
+    }) : facsOrdenadas;
+    return lista.map(f => {
+      const prov    = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
+      const match   = !qn && _provMatch(proveedores.find(p=>p.id===f.proveedorId)||{nombre:''});
+      const pagado  = _montoPagadoFactura(f.id);
+      const restante = f.importeTotal - pagado;
+      const parcialHtml = pagado > 0
+        ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
+      return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}"
+        onclick="document.getElementById('${modalId}')._onSelect('${f.id}')">
+        <div style="font-weight:700;font-size:13px;color:var(--ink)">${prov}${parcialHtml}</div>
+        <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta ? 'N° '+f.nroBoleta : 'Sin número'} · total ${pesos(f.importeTotal)}</div>
+      </button>`;
+    }).join('') || `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin resultados</div>`;
+  };
 
+  const provMatchado = proveedores.find(p => _provMatch(p));
+  const _provNombreMatch = provMatchado ? provMatchado.nombre : '';
+
+  document.getElementById(modalId)?.remove();
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="overlay open" id="vincularMPModal" style="display:flex">
+    <div class="overlay open" id="${modalId}" style="display:flex">
       <div class="modal" style="max-width:560px">
-        <h2>Vincular retiro a factura</h2>
-        <p class="modal-sub">${m.fecha} · ${m.destino} · <strong>${pesos(m.monto)}</strong></p>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
-          ${opcionesHtml}
+        <h2>Vincular a factura</h2>
+        <p class="modal-sub">${fecha} · ${desc} · <strong>${pesos(monto)}</strong></p>
+        <input type="search" id="${modalId}_search" placeholder="Buscar proveedor o N° boleta…" autocomplete="off"
+          oninput="document.getElementById('${modalId}_list').innerHTML=document.getElementById('${modalId}')._render(this.value)"
+          style="width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-top:12px;box-sizing:border-box">
+        <div id="${modalId}_list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:380px;overflow-y:auto">
+          ${_renderItems(_provNombreMatch)}
         </div>
         <div class="modal-actions" style="margin-top:14px">
-          <button class="btn btn-outline" onclick="document.getElementById('vincularMPModal').remove()">Cancelar</button>
+          <button class="btn btn-outline" onclick="document.getElementById('${modalId}').remove()">Cancelar</button>
         </div>
       </div>
     </div>`);
+  const el = document.getElementById(modalId);
+  el._render   = _renderItems;
+  el._onSelect = fId => { el.remove(); onSelect(fId); };
+  if (_provNombreMatch) {
+    const inp = document.getElementById(`${modalId}_search`);
+    if (inp) inp.value = _provNombreMatch;
+  }
+}
+function _abrirVincularMP(mpId) {
+  const m = mpMovs.find(x => x.id === mpId);
+  if (!m) return;
+  _abrirVincularBoletaModal({ desc: m.destino, fecha: m.fecha, monto: m.monto, modalId: 'vincularMPModal', onSelect: fId => _vincularMP(mpId, fId) });
+}
 }
 
 function _vincularMP(mpId, facturaId) {
@@ -6802,37 +6829,7 @@ function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!
 function _abrirVincularGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
-  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const descNorm = norm(m.descripcion);
-  const facsOrdenadas = [...facturas].filter(f => f.importeTotal > 0).sort((a,b) => {
-    const pA = proveedores.find(p=>p.id===a.proveedorId); const pB = proveedores.find(p=>p.id===b.proveedorId);
-    const nA = norm(pA?.nombre||''); const nB = norm(pB?.nombre||'');
-    const mA = descNorm.includes(nA) || (pA?.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(w));
-    const mB = descNorm.includes(nB) || (pB?.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(w));
-    if(mA&&!mB) return -1; if(!mA&&mB) return 1; return b.fecha.localeCompare(a.fecha);
-  });
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="overlay open" id="vincularGalModal" style="display:flex">
-      <div class="modal" style="max-width:560px">
-        <h2>Vincular a factura</h2>
-        <p class="modal-sub">${m.fecha} · ${m.descripcion} · <strong>${pesos(m.monto)}</strong></p>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:14px;max-height:400px;overflow-y:auto">
-          ${facsOrdenadas.slice(0,50).map(f=>{
-            const prov    = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
-            const match   = norm(descNorm).includes(norm(prov).slice(0,8));
-            const pagado  = _montoPagadoFactura(f.id);
-            const restante = f.importeTotal - pagado;
-            const parcialHtml = pagado > 0
-              ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
-            return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981':''}" onclick="_vincularGal('${galId}','${f.id}')">
-              <div style="font-weight:700;font-size:13px">${prov}${parcialHtml}</div>
-              <div style="font-size:11px;color:var(--ink2);margin-top:2px">${f.fecha} · ${f.nroBoleta?'N° '+f.nroBoleta:'Sin número'} · total ${pesos(f.importeTotal)}</div>
-            </button>`;
-          }).join('')}
-        </div>
-        <div class="modal-actions" style="margin-top:14px"><button class="btn btn-outline" onclick="document.getElementById('vincularGalModal').remove()">Cancelar</button></div>
-      </div>
-    </div>`);
+  _abrirVincularBoletaModal({ desc: m.descripcion, fecha: m.fecha, monto: m.monto, modalId: 'vincularGalModal', onSelect: fId => _vincularGal(galId, fId) });
 }
 function _vincularGal(galId, facturaId) {
   document.getElementById('vincularGalModal')?.remove();
