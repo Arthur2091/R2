@@ -517,7 +517,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .contable-section-header:hover { background: var(--surface2); }
 .contable-section-header h3 { font-size: 14px; font-weight: 600; }
 .contable-section-header .section-total { font-family: var(--mono); font-size: 15px; font-weight: 600; }
-.contable-section-body { padding: 0; display: none; }
+.contable-section-body { padding: 0; }
 .contable-section-body table { width: 100%; border-collapse: collapse; }
 .contable-section-body td, .contable-section-body th {
   padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 13px;
@@ -999,7 +999,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Ingresos — Ventas</h3>
       <div class="section-total" id="totalVentas" style="color:var(--accent)"></div>
     </div>
-    <div id="secVentasBody" class="contable-section-body"></div>
+    <div id="secVentasBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secCompras">
@@ -1007,7 +1007,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Egresos — Compras a proveedores</h3>
       <div class="section-total" id="totalCompras" style="color:var(--danger)"></div>
     </div>
-    <div id="secComprasBody" class="contable-section-body"></div>
+    <div id="secComprasBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secSueldos">
@@ -1015,7 +1015,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Egresos — Sueldos</h3>
       <div class="section-total" id="totalSueldos" style="color:var(--danger)"></div>
     </div>
-    <div id="secSueldosBody" class="contable-section-body"></div>
+    <div id="secSueldosBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secOtros">
@@ -1023,7 +1023,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Egresos — Otros gastos</h3>
       <div class="section-total" id="totalOtros" style="color:var(--danger)"></div>
     </div>
-    <div id="secOtrosBody" class="contable-section-body"></div>
+    <div id="secOtrosBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secGastosFijos">
@@ -1031,7 +1031,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Egresos — Gastos fijos del mes</h3>
       <div class="section-total" id="totalGastosFijos" style="color:var(--danger)"></div>
     </div>
-    <div id="secGastosFijosBody" class="contable-section-body"></div>
+    <div id="secGastosFijosBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secMP">
@@ -1039,7 +1039,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <h3>Egresos — Mercado Pago</h3>
       <div class="section-total" id="totalMP" style="color:var(--danger)"></div>
     </div>
-    <div id="secMPBody" class="contable-section-body"></div>
+    <div id="secMPBody" class="contable-section-body" style="display:none"></div>
   </div>
 
 </div>
