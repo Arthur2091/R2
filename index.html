@@ -6016,9 +6016,15 @@ function renderContable() {
               ? `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desmarcar</button>`
               : `<button class="btn btn-ghost btn-sm" onclick="_toggleInternaGal('${m.id}')" style="font-size:11px;color:var(--ink3)">↔ Interna</button>
                  <button class="btn btn-outline btn-sm" onclick="_abrirVincularGal('${m.id}')" style="font-size:11px">🔗 Vincular</button>`;
+          // Detectar CUITs en la descripción y agregar botón de lookup
+          const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
+          const cuitNum   = cuitMatch ? cuitMatch[1] : null;
+          const descHtml  = cuitNum
+            ? m.descripcion.replace(cuitMatch[0], `${cuitMatch[0]} <button class="btn btn-ghost btn-sm" id="cuit-btn-${cuitNum}" onclick="_lookupCuit('${cuitNum}')" style="font-size:10px;padding:1px 5px;color:var(--info);border:1px solid var(--info);border-radius:4px">?</button> <span id="cuit-name-${cuitNum}" style="font-size:11px;color:var(--accent);font-weight:600"></span>`)
+            : m.descripcion;
           return `<tr style="${rowBg}">
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
-            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.descripcion} ${badge}</td>
+            <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${descHtml} ${badge}</td>
             <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
             <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
           </tr>`;
@@ -6262,6 +6268,33 @@ function importMP(e) {
     } catch(err) { toast('Error: ' + err.message, 'error'); }
   };
   reader.readAsArrayBuffer(file);
+}
+
+// ── CUIT LOOKUP ──
+async function _lookupCuit(cuit) {
+  const btn  = document.getElementById('cuit-btn-' + cuit);
+  const span = document.getElementById('cuit-name-' + cuit);
+  if (!btn || !span) return;
+  btn.textContent = '…'; btn.disabled = true;
+  try {
+    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent('https://www.cuitonline.com/search.php?q=' + cuit);
+    const res  = await fetch(proxy);
+    const json = await res.json();
+    const html = json.contents || '';
+    // Extraer primer resultado: <strong>NOMBRE</strong> dentro del resultado
+    const m = html.match(/<h3[^>]*>\s*<a[^>]*>([^<]+)<\/a>/);
+    const nombre = m ? m[1].trim() : null;
+    if (nombre) {
+      span.textContent = nombre;
+      btn.style.display = 'none';
+    } else {
+      btn.textContent = '?'; btn.disabled = false;
+      toast('No se encontró información para ese CUIT', 'info');
+    }
+  } catch(e) {
+    btn.textContent = '?'; btn.disabled = false;
+    toast('Error al consultar CUIT', 'error');
+  }
 }
 
 // ── GALICIA HELPERS ──
