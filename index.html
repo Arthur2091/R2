@@ -653,8 +653,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input id="loginPass" type="password" required autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:20px;background:var(--surface);box-sizing:border-box">
     <div id="loginErr" style="display:none;padding:8px 12px;background:#FEE2E2;color:#991B1B;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
     <div id="loginOk" style="display:none;padding:8px 12px;background:#D1FAE5;color:#065F46;border-radius:8px;font-size:13px;margin-bottom:16px"></div>
-    <button id="loginBtn" type="submit" style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font:600 14px var(--font);cursor:pointer;margin-bottom:10px">Ingresar</button>
-    <button id="signupBtn" type="button" onclick="_doSignup()" style="width:100%;padding:11px;background:transparent;color:var(--ink2);border:1px solid var(--border);border-radius:8px;font:600 13px var(--font);cursor:pointer">Crear cuenta nueva</button>
+    <button id="loginBtn" type="submit" style="width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font:600 14px var(--font);cursor:pointer">Ingresar</button>
   </form>
 </div>
 
@@ -6198,6 +6197,61 @@ function _desvincularMP(mpId) {
 }
 
 // ── IMPORT MP ──
+function _importMPcsv(lines) {
+  const headers = lines[0].split(',').map(h => h.trim());
+  const iDate = headers.indexOf('date');
+  const iDet  = headers.indexOf('detalle');
+  const iConc = headers.indexOf('concepto');
+  const iAmt  = headers.indexOf('amount_ars');
+  if (iDate < 0 || iAmt < 0) { toast('Formato no reconocido', 'error'); return; }
+
+  const toISO = s => {
+    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : null;
+  };
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const existentes = new Set(mpMovs.map(m => m.id));
+  let added = 0, autoVinculados = 0;
+
+  lines.slice(1).forEach((line, i) => {
+    if (!line.trim()) return;
+    const r = line.split(',');
+    const monto = parseFloat(r[iAmt]);
+    if (!isFinite(monto) || monto <= 0) return;
+    const fecha = toISO(r[iDate]);
+    if (!fecha) return;
+    const destino = String(r[iDet] || '').trim();
+    const tipo    = String(r[iConc] || '').trim();
+    const id = `mp-${fecha}-${monto}-${i}`;
+    if (existentes.has(id)) return;
+
+    const esInterna = /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
+    const mov = { id, fecha, monto, destino, tipo, categoria: '', ...(esInterna ? { esInterna: true } : {}) };
+
+    if (!esInterna) {
+      const titNorm = norm(destino);
+      const match = facturas.find(f => {
+        if (f.importeTotal <= 0) return false;
+        const prov = proveedores.find(p => p.id === f.proveedorId);
+        if (!prov) return false;
+        const provNorm = norm(prov.nombre);
+        const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
+          prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+            .filter(w => w.length > 3).some(w => titNorm.includes(w));
+        return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
+      });
+      if (match) { mov.facturaId = match.id; autoVinculados++; }
+    }
+
+    mpMovs.push(mov);
+    added++;
+  });
+
+  persistContable();
+  renderContable();
+  toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
+}
+
 function importMP(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -6205,12 +6259,20 @@ function importMP(e) {
   const reader = new FileReader();
   reader.onload = ev => {
     try {
+      // Detectar si es el nuevo formato CSV de MP (parsear como texto para evitar
+      // que XLSX auto-convierta fechas DD/MM a serials de Excel)
+      const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result));
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0])) {
+        _importMPcsv(lines);
+        return;
+      }
+
       const wb   = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 });
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
       if (rows.length < 2) { toast('Archivo vacío', 'error'); return; }
 
-      // Detectar columnas por header
       const headers = rows[0].map(h => String(h).trim());
       const iF   = headers.findIndex(h => /fecha/i.test(h));
       const iD   = headers.findIndex(h => /destino/i.test(h));
@@ -6225,7 +6287,6 @@ function importMP(e) {
         const d = new Date(Math.round((n - 25569) * 86400 * 1000));
         return d.toISOString().slice(0, 10);
       };
-
       const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
       const existentes = new Set(mpMovs.map(m => m.id));
       let added = 0, autoVinculados = 0;
