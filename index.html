@@ -7096,10 +7096,10 @@ function renderAuditoria() {
           <div style="font-size:13px;font-weight:700;color:${colorTitle}">${label}</div>
           <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${colorText}">${pesos(totalEgr)}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+        ${totalIng ? `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
           <div style="font-size:11px;color:var(--ink3)">Ingresos</div>
           <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">${pesos(totalIng)}</div>
-        </div>
+        </div>` : ''}
         <div style="font-size:11px;color:var(--ink3);margin-bottom:10px">${movs.length} movimiento${movs.length !== 1 ? 's' : ''}</div>
         ${movs.length ? movs.map(m => _rowHtml(m, colorBorder)).join('') : empty}
       </div>`;
