@@ -5716,7 +5716,9 @@ function renderProductosRubro(key, rubro) {
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
 
 function _seedGFMayo2026() {
-  const PERIODO = '2026-05';
+  ['2026-03','2026-04','2026-05'].forEach(PERIODO => _seedGFPeriodo(PERIODO));
+}
+function _seedGFPeriodo(PERIODO) {
   const ITEMS = [
     { servicio: 'EDESUR PLAN DE PAGO anticipo',    categoria: 'Servicios' },
     { servicio: 'EDESUR del mes',                  categoria: 'Servicios' },
