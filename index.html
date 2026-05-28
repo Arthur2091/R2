@@ -6277,12 +6277,14 @@ function renderContable() {
     const _ingKeys  = Object.keys(_ingGrups).sort((a,b) =>
       _ingGrups[b].reduce((s,m)=>s+m.monto,0) - _ingGrups[a].reduce((s,m)=>s+m.monto,0));
 
-    const secciones = _ingKeys.map(key => {
+    window._galIngKeys = _ingKeys;
+
+    const secciones = _ingKeys.map((key, ki) => {
       const movs    = _ingGrups[key];
       const total   = movs.reduce((s,m)=>s+m.monto,0);
       const isOpen  = _galIngExpanded === key;
       const otros   = _ingKeys.filter(k=>k!==key);
-      const opts    = otros.map(k=>`<option value="${k.replace(/"/g,'&quot;')}">${k}</option>`).join('');
+      const opts    = otros.map((k,oi)=>`<option value='${oi < ki ? oi : oi+1}'>${k}</option>`).join('');
 
       const filas = isOpen ? movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
         <tr>
@@ -6292,13 +6294,13 @@ function renderContable() {
           <td style="display:flex;gap:4px;align-items:center">
             <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:11px;font-weight:700;color:var(--ink3)">H</button>
             <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;color:var(--ink3)">L</button>
-            ${otros.length?`<select onchange="_galIngMover('${m.id}',this.value);this.value=''" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 4px;background:var(--surface);color:var(--ink2);max-width:110px"><option value="">↗ Mover a…</option>${opts}</select>`:''}
+            ${otros.length?`<select onchange="_galIngMoverIdx('${m.id}',this.value);this.value=''" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 4px;background:var(--surface);color:var(--ink2);max-width:110px"><option value=''>↗ Mover a…</option>${opts}</select>`:''}
             <button class="btn btn-ghost btn-sm" onclick="_borrarGal('${m.id}')" style="color:var(--danger)">✕</button>
           </td>
         </tr>`).join('') : '';
 
       return `
-        <tr onclick="_galIngToggle(${JSON.stringify(key)})" style="cursor:pointer;background:var(--surface2)">
+        <tr onclick="_galIngToggle(${ki})" style="cursor:pointer;background:var(--surface2)">
           <td colspan="2" style="font-size:13px;font-weight:600;padding:10px 8px">${isOpen?'▼':'▶'} ${key}</td>
           <td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--accent);padding:10px 8px">${pesos(total)}</td>
           <td style="color:var(--ink3);font-size:11px;padding:10px 8px">${movs.length} mov.</td>
@@ -6642,8 +6644,21 @@ function _setSortGalIng(field) {
   _sortGalIng = _sortGalIng.field === field ? { field, dir: _sortGalIng.dir * -1 } : { field, dir: -1 };
   renderContable();
 }
-function _galIngToggle(key) {
+function _galIngToggle(ki) {
+  const key = (window._galIngKeys || [])[ki];
+  if (!key) return;
   _galIngExpanded = _galIngExpanded === key ? null : key;
+  renderContable();
+}
+function _galIngMoverIdx(id, idxStr) {
+  const idx = parseInt(idxStr);
+  const nuevoTipo = (window._galIngKeys || [])[idx];
+  if (!nuevoTipo) return;
+  const m = galiciaMovs.find(x => x.id === id);
+  if (!m) return;
+  m.tipo = nuevoTipo;
+  m.descripcion = [nuevoTipo, ...(m.descripcion||'').split(' · ').slice(1)].filter(Boolean).join(' · ');
+  _persistGal();
   renderContable();
 }
 function _galIngMover(id, nuevoTipo) {
