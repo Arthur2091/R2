@@ -6741,9 +6741,22 @@ function _importMPcsv(lines) {
     added++;
   });
 
+  if (added > 0) _irAlPeriodoImportado(mpMovs);
   persistContable();
   renderContable();
   toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
+}
+
+function _irAlPeriodoImportado(movs) {
+  const fechas = movs.map(m => m.fecha).filter(Boolean).sort();
+  if (!fechas.length) return;
+  const [anio, mesIdx] = fechas[0].slice(0, 7).split('-');
+  const selMes  = document.getElementById('contableMes');
+  const selAnio = document.getElementById('contableAnio');
+  if (!selMes || !selAnio) return;
+  selMes.value  = String(parseInt(mesIdx) - 1);
+  if ([...selAnio.options].some(o => o.value === anio)) selAnio.value = anio;
+  savePeriod();
 }
 
 function importMP(e) {
@@ -6820,6 +6833,7 @@ function importMP(e) {
         added++;
       });
 
+      if (added > 0) _irAlPeriodoImportado(mpMovs);
       persistContable();
       renderContable();
       toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
