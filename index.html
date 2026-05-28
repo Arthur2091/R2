@@ -11161,27 +11161,72 @@ function _depRenderStock(screen) {
     screen.innerHTML = `<div class="empty-state"><h3>Depósito vacío</h3><p>Cuando marques un pedido como recibido vas a poder dar de alta la mercadería acá.</p></div>`;
     return;
   }
-  entradas.sort(([a], [b]) => (insumos.find(i => i.id === a)?.nombre || '').localeCompare(insumos.find(i => i.id === b)?.nombre || '', 'es'));
 
-  screen.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">` +
-    entradas.map(([iid, qty]) => {
-      const ins = insumos.find(i => i.id === iid);
-      const nombre = ins?.nombre || iid.slice(0, 8);
-      const pres = _depPresentacionLabel(ins);
-      const bajo = qty <= 1;
-      const qtyDisplay = Number.isInteger(qty) ? qty : qty.toFixed(2);
-      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.04);${bajo ? 'border-color:#FBBF24' : ''}">
-        <div style="font-weight:700;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}</div>
-        <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pres}</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px">
-          <div>
-            <div style="font-size:24px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono);line-height:1">${qtyDisplay}</div>
-            <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">disponibles${bajo ? ' · bajo' : ''}</div>
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}')">Sacar</button>
+  // Mapa insumoId → primer proveedor que lo suministra
+  const insumoAProv = {};
+  proveedores.forEach(prov => {
+    (prov.items || []).forEach(it => {
+      if (it.insumoId && !insumoAProv[it.insumoId]) insumoAProv[it.insumoId] = prov;
+    });
+  });
+
+  // Agrupar por proveedor
+  const grupos = {};
+  entradas.forEach(([iid, qty]) => {
+    const prov = insumoAProv[iid];
+    const key = prov ? prov.id : '__sin_prov__';
+    if (!grupos[key]) grupos[key] = { prov, items: [] };
+    grupos[key].items.push([iid, qty]);
+  });
+
+  // Ordenar items dentro de cada grupo por nombre
+  Object.values(grupos).forEach(g => {
+    g.items.sort(([a], [b]) => (insumos.find(i => i.id === a)?.nombre || '').localeCompare(insumos.find(i => i.id === b)?.nombre || '', 'es'));
+  });
+
+  // Ordenar grupos por nombre de proveedor
+  const gruposOrdenados = Object.values(grupos).sort((a, b) => {
+    const na = a.prov?.nombre || 'z';
+    const nb = b.prov?.nombre || 'z';
+    return na.localeCompare(nb, 'es');
+  });
+
+  const renderCard = ([iid, qty]) => {
+    const ins = insumos.find(i => i.id === iid);
+    const nombre = ins?.nombre || iid.slice(0, 8);
+    const pres = _depPresentacionLabel(ins);
+    const bajo = qty <= 1;
+    const qtyDisplay = Number.isInteger(qty) ? qty : qty.toFixed(2);
+    return `<div style="background:var(--surface);border:1px solid ${bajo ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
+      <div style="font-weight:700;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pres}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px">
+        <div>
+          <div style="font-size:24px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono);line-height:1">${qtyDisplay}</div>
+          <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">disponibles</div>
         </div>
-      </div>`;
-    }).join('') + `</div>`;
+        <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}')">Sacar</button>
+      </div>
+    </div>`;
+  };
+
+  const bajosCount = entradas.filter(([_, qty]) => qty <= 1).length;
+  const alertaHtml = bajosCount
+    ? `<div style="background:#FEF3C7;border:1px solid #FBBF24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:#92400E">
+        ⚠ ${bajosCount} insumo${bajosCount === 1 ? '' : 's'} con stock en 1
+       </div>`
+    : '';
+
+  screen.innerHTML = alertaHtml + gruposOrdenados.map(({ prov, items }) => `
+    <div style="margin-bottom:24px">
+      <div style="font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        ${prov?.nombre || 'Sin proveedor'}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+        ${items.map(renderCard).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 function _depRenderPendientes(screen) {
