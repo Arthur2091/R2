@@ -2681,7 +2681,7 @@ function renderInsumos() {
       .filter(x => x.f > 0)
       .map(x => `<span style="font-size:11px;color:var(--ink2);background:var(--surface2);padding:2px 8px;border-radius:999px;white-space:nowrap">${x.i.nombre} <strong>·${x.f}</strong></span>`)
       .join(' ');
-    return `<div class="ped-card" onclick="window._insumosProvId='${p.id}';renderInsumos()" style="cursor:pointer">
+    return `<div class="ped-card" onclick="window._insumosProvId='${p.id}';const si=document.getElementById('searchInsumos');if(si)si.value='';renderInsumos()" style="cursor:pointer">
       <div class="ped-card-head">
         <div style="min-width:0;flex:1">
           <div class="ped-prov-name">${p.nombre}</div>
@@ -2690,7 +2690,7 @@ function renderInsumos() {
       </div>
       ${top3 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;padding:6px 2px">${top3}</div>` : `<div style="font-size:12px;color:var(--ink3);padding:6px 2px">Sin actividad registrada</div>`}
       <div class="ped-card-actions">
-        <button class="btn-wa" style="background:var(--surface2);color:var(--ink)" onclick="event.stopPropagation();window._insumosProvId='${p.id}';renderInsumos()">Ver insumos</button>
+        <button class="btn-wa" style="background:var(--surface2);color:var(--ink)" onclick="event.stopPropagation();window._insumosProvId='${p.id}';const si=document.getElementById('searchInsumos');if(si)si.value='';renderInsumos()">Ver insumos</button>
       </div>
     </div>`;
   }).join('');
