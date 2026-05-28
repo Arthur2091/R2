@@ -5983,7 +5983,7 @@ function renderContable() {
   document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos, gfVinculadosIds);
 
   // ── MERCADO PAGO ──
-  const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L');
+  const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
@@ -6015,17 +6015,19 @@ function renderContable() {
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
                            : gfVinc ? 'background:#FAF5FF'
                            : sueldoVinc ? 'background:#ECFDF5'
-                           : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : '';
+                           : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : m.gasto === 'D' ? 'background:#FEFCE8' : '';
           const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
             : m.gasto === 'H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
-            : m.gasto === 'L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
+            : m.gasto === 'L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>`
+            : m.gasto === 'D' ? `<span style="font-size:11px;background:#FEF08A;color:#713F12;padding:2px 8px;border-radius:999px;font-weight:700">D</span>` : '';
           const accionGasto = !excluido ? `
             <button class="btn btn-ghost btn-sm" onclick="_setGastoMP('${m.id}','H')" style="font-size:11px;font-weight:700;${m.gasto==='H'?'color:#9A3412;background:#FED7AA':'color:var(--ink3)'}">H</button>
-            <button class="btn btn-ghost btn-sm" onclick="_setGastoMP('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>` : '';
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoMP('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoMP('${m.id}','D')" style="font-size:11px;font-weight:700;${m.gasto==='D'?'color:#713F12;background:#FEF08A':'color:var(--ink3)'}">D</button>` : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularMP('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
             : gfVinc
@@ -6062,7 +6064,7 @@ function renderContable() {
 
   // ── BANCO GALICIA ──
   const _esImpuestoGal = m => /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(m.descripcion||'');
-  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L');
+  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
   const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
@@ -6086,17 +6088,19 @@ function renderContable() {
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
                            : gfVinc ? 'background:#FAF5FF'
                            : sueldoVinc ? 'background:#ECFDF5'
-                           : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : '';
+                           : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : m.gasto==='D' ? 'background:#FEFCE8' : '';
           const badge      = vinculado
             ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
             : m.gasto==='H' ? `<span style="font-size:11px;background:#FED7AA;color:#9A3412;padding:2px 8px;border-radius:999px;font-weight:700">H</span>`
-            : m.gasto==='L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>` : '';
+            : m.gasto==='L' ? `<span style="font-size:11px;background:#BAE6FD;color:#0C4A6E;padding:2px 8px;border-radius:999px;font-weight:700">L</span>`
+            : m.gasto==='D' ? `<span style="font-size:11px;background:#FEF08A;color:#713F12;padding:2px 8px;border-radius:999px;font-weight:700">D</span>` : '';
           const accionGasto = !excluido ? `
             <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:11px;font-weight:700;${m.gasto==='H'?'color:#9A3412;background:#FED7AA':'color:var(--ink3)'}">H</button>
-            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>` : '';
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;${m.gasto==='L'?'color:#0C4A6E;background:#BAE6FD':'color:var(--ink3)'}">L</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','D')" style="font-size:11px;font-weight:700;${m.gasto==='D'?'color:#713F12;background:#FEF08A':'color:var(--ink3)'}">D</button>` : '';
           const accion = vinculado
             ? `<button class="btn btn-ghost btn-sm" onclick="_desvincularGal('${m.id}')" style="font-size:11px;color:var(--ink2)">Desvincular</button>`
             : gfVinc
@@ -6921,7 +6925,7 @@ function renderAuditoria() {
   const anioSel = document.getElementById('audAnio');
   if (!anioSel) return;
   const years = new Set();
-  [...mpMovs, ...galiciaMovs].filter(m => m.gasto === 'H' || m.gasto === 'L').forEach(m => {
+  [...mpMovs, ...galiciaMovs].filter(m => m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D').forEach(m => {
     if (m.fecha) years.add(m.fecha.slice(0, 4));
   });
   const sorted = [...years].sort((a, b) => b - a);
@@ -6933,8 +6937,8 @@ function renderAuditoria() {
   const anio = document.getElementById('audAnio')?.value || '';
 
   const todos = [
-    ...mpMovs.filter(m      => m.gasto === 'H' || m.gasto === 'L').map(m => ({...m, fuente: 'MP',      desc: m.destino      || ''})),
-    ...galiciaMovs.filter(m => m.gasto === 'H' || m.gasto === 'L').map(m => ({...m, fuente: 'Galicia', desc: m.descripcion  || ''}))
+    ...mpMovs.filter(m      => m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D').map(m => ({...m, fuente: 'MP',      desc: m.destino      || ''})),
+    ...galiciaMovs.filter(m => m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D').map(m => ({...m, fuente: 'Galicia', desc: m.descripcion  || ''}))
   ].filter(m => {
     if (anio && !(m.fecha || '').startsWith(anio)) return false;
     if (mes  && (m.fecha || '').slice(5, 7) !== mes)  return false;
@@ -6943,7 +6947,8 @@ function renderAuditoria() {
 
   const totalH = todos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalL = todos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
-  const total  = totalH + totalL;
+  const totalD = todos.filter(m => m.gasto === 'D').reduce((s, m) => s + (m.monto || 0), 0);
+  const total  = totalH + totalL + totalD;
 
   const screen = document.getElementById('auditoriaScreen');
   if (!screen) return;
@@ -6957,6 +6962,10 @@ function renderAuditoria() {
       <div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;padding:14px 20px;min-width:160px">
         <div style="font-size:11px;color:#0C4A6E;font-weight:700;margin-bottom:4px">LAURA</div>
         <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:#0C4A6E">${pesos(totalL)}</div>
+      </div>
+      <div style="background:#FEFCE8;border:1px solid #FEF08A;border-radius:12px;padding:14px 20px;min-width:160px">
+        <div style="font-size:11px;color:#713F12;font-weight:700;margin-bottom:4px">DUDOSO</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:#713F12">${pesos(totalD)}</div>
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 20px;min-width:160px">
         <div style="font-size:11px;color:var(--ink2);font-weight:700;margin-bottom:4px">TOTAL PERSONAL</div>
@@ -6978,9 +6987,10 @@ function renderAuditoria() {
          </tr></thead><tbody>
          ${todos.map(m => {
            const esH      = m.gasto === 'H';
-           const rowBg    = esH ? 'background:#FFF7ED' : 'background:#F0F9FF';
-           const badgeSt  = esH ? 'background:#FED7AA;color:#9A3412' : 'background:#BAE6FD;color:#0C4A6E';
-           const nombre   = esH ? 'Hernán' : 'Laura';
+           const esD      = m.gasto === 'D';
+           const rowBg    = esH ? 'background:#FFF7ED' : esD ? 'background:#FEFCE8' : 'background:#F0F9FF';
+           const badgeSt  = esH ? 'background:#FED7AA;color:#9A3412' : esD ? 'background:#FEF08A;color:#713F12' : 'background:#BAE6FD;color:#0C4A6E';
+           const nombre   = esH ? 'Hernán' : esD ? 'Dudoso' : 'Laura';
            return `<tr style="${rowBg}">
              <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
              <td><span style="font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:999px">${m.fuente}</span></td>
