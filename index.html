@@ -5717,6 +5717,9 @@ const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato',
 
 function _seedGFMayo2026() {
   ['2026-03','2026-04','2026-05'].forEach(PERIODO => _seedGFPeriodo(PERIODO));
+  let fixed = 0;
+  gastosFijos.forEach(g => { if (/uthgra/i.test(g.servicio) && g.categoria !== 'Sindicato') { g.categoria = 'Sindicato'; fixed++; } });
+  if (fixed > 0) _persistBase();
 }
 function _seedGFPeriodo(PERIODO) {
   const ITEMS = [
