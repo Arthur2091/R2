@@ -5715,6 +5715,49 @@ function renderProductosRubro(key, rubro) {
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
 
+function _seedGFMayo2026() {
+  const PERIODO = '2026-05';
+  const ITEMS = [
+    { servicio: 'EDESUR PLAN DE PAGO anticipo',    categoria: 'Servicios' },
+    { servicio: 'EDESUR del mes',                  categoria: 'Servicios' },
+    { servicio: 'METROGAS del mes',                categoria: 'Servicios' },
+    { servicio: 'AYSA (plan de pagos)',             categoria: 'Servicios' },
+    { servicio: 'FLOW',                            categoria: 'Servicios' },
+    { servicio: 'METROTEL (CPS comunicaciones)',   categoria: 'Servicios' },
+    { servicio: 'GSUIT ARTHUR',                    categoria: 'Servicios' },
+    { servicio: 'GSUIT HERNAN',                    categoria: 'Servicios' },
+    { servicio: 'CANVA',                           categoria: 'Servicios' },
+    { servicio: 'VERISURE',                        categoria: 'Servicios' },
+    { servicio: 'MAXIREST',                        categoria: 'Servicios' },
+    { servicio: 'MAPFRE',                          categoria: 'Seguros y profesional' },
+    { servicio: 'ALQUILER A',                      categoria: 'Alquiler' },
+    { servicio: 'ALQUILER B',                      categoria: 'Alquiler' },
+    { servicio: 'EXPENSAS',                        categoria: 'Alquiler' },
+    { servicio: 'ABL',                             categoria: 'Impuestos' },
+    { servicio: 'CONTADORA',                       categoria: 'Seguros y profesional' },
+    { servicio: 'ART',                             categoria: 'Seguros y profesional' },
+    { servicio: 'CARGAS SOCIALES periodo',         categoria: 'Impuestos' },
+    { servicio: 'UTHGRA cuota sindical',           categoria: 'Sindicato' },
+    { servicio: 'UTHGRA seguro y sepelio',         categoria: 'Sindicato' },
+    { servicio: 'UTHGRA fehgra',                   categoria: 'Sindicato' },
+    { servicio: 'IVA periodo',                     categoria: 'Impuestos' },
+    { servicio: 'PLANES iva y cargas sociales (1)',categoria: 'Impuestos' },
+    { servicio: 'PLANES iva y cargas sociales (2)',categoria: 'Impuestos' },
+    { servicio: 'UVA CIUDAD',                      categoria: 'Alquiler' },
+    { servicio: 'AUTONOMOS',                       categoria: 'Impuestos' },
+  ];
+  const existentes = new Set(
+    gastosFijos.filter(g => g.periodo === PERIODO).map(g => g.servicio.toLowerCase().trim())
+  );
+  let added = 0;
+  ITEMS.forEach(({ servicio, categoria }) => {
+    if (existentes.has(servicio.toLowerCase().trim())) return;
+    gastosFijos.push({ id: crypto.randomUUID(), periodo: PERIODO, servicio, categoria, monto: 0, pagado: false, modo: 'transferencia', fechaPago: null, notas: '' });
+    added++;
+  });
+  if (added > 0) _persistBase();
+}
+
 function _renderGastosFijosBody(items, periodo, pagado, adeudado, vinculadosIds = new Set()) {
   if (!items.length) {
     const hayTemplate = gastosFijos.some(g => g.periodo !== periodo);
@@ -9383,6 +9426,7 @@ async function _fbLoad() {
           // Fallbacks para migración (docs viejos antes del split)
           if (d.mpMovs?.length && !mpMovs.length)         mpMovs      = d.mpMovs;
           if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
+          _seedGFMayo2026();
           break;
         default:
           if (/^contable_ventas_\d{4}_\d{2}$/.test(doc.id) && d.items?.length)
