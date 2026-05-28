@@ -11155,22 +11155,14 @@ function renderDeposito() {
   if (_depSubtab === 'movs') return _depRenderMovs(screen);
 }
 
-function _depRenderStock(screen) {
+function _depStockGrupos() {
   const entradas = Object.entries(deposito).filter(([_, qty]) => qty > 0);
-  if (!entradas.length) {
-    screen.innerHTML = `<div class="empty-state"><h3>Depósito vacío</h3><p>Cuando marques un pedido como recibido vas a poder dar de alta la mercadería acá.</p></div>`;
-    return;
-  }
-
-  // Mapa insumoId → primer proveedor que lo suministra
   const insumoAProv = {};
   proveedores.forEach(prov => {
     (prov.items || []).forEach(it => {
       if (it.insumoId && !insumoAProv[it.insumoId]) insumoAProv[it.insumoId] = prov;
     });
   });
-
-  // Agrupar por proveedor
   const grupos = {};
   entradas.forEach(([iid, qty]) => {
     const prov = insumoAProv[iid];
@@ -11178,55 +11170,85 @@ function _depRenderStock(screen) {
     if (!grupos[key]) grupos[key] = { prov, items: [] };
     grupos[key].items.push([iid, qty]);
   });
-
-  // Ordenar items dentro de cada grupo por nombre
   Object.values(grupos).forEach(g => {
     g.items.sort(([a], [b]) => (insumos.find(i => i.id === a)?.nombre || '').localeCompare(insumos.find(i => i.id === b)?.nombre || '', 'es'));
   });
+  return Object.values(grupos).sort((a, b) => (a.prov?.nombre || 'z').localeCompare(b.prov?.nombre || 'z', 'es'));
+}
 
-  // Ordenar grupos por nombre de proveedor
-  const gruposOrdenados = Object.values(grupos).sort((a, b) => {
-    const na = a.prov?.nombre || 'z';
-    const nb = b.prov?.nombre || 'z';
-    return na.localeCompare(nb, 'es');
-  });
+function _depRenderStock(screen) {
+  const entradas = Object.entries(deposito).filter(([_, qty]) => qty > 0);
+  if (!entradas.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Depósito vacío</h3><p>Cuando marques un pedido como recibido vas a poder dar de alta la mercadería acá.</p></div>`;
+    return;
+  }
 
-  const renderCard = ([iid, qty]) => {
-    const ins = insumos.find(i => i.id === iid);
-    const nombre = ins?.nombre || iid.slice(0, 8);
-    const pres = _depPresentacionLabel(ins);
-    const bajo = qty <= 1;
-    const qtyDisplay = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div style="background:var(--surface);border:1px solid ${bajo ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,0.04)">
-      <div style="font-weight:700;font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}</div>
-      <div style="font-size:11px;color:var(--ink2);margin-top:2px">${pres}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px">
-        <div>
-          <div style="font-size:24px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono);line-height:1">${qtyDisplay}</div>
-          <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.05em;margin-top:2px">disponibles</div>
-        </div>
-        <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}')">Sacar</button>
-      </div>
-    </div>`;
-  };
+  const grupos = _depStockGrupos();
+  const bajosTotal = entradas.filter(([_, qty]) => qty <= 1).length;
 
-  const bajosCount = entradas.filter(([_, qty]) => qty <= 1).length;
-  const alertaHtml = bajosCount
-    ? `<div style="background:#FEF3C7;border:1px solid #FBBF24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:#92400E">
-        ⚠ ${bajosCount} insumo${bajosCount === 1 ? '' : 's'} con stock en 1
+  const alertaHtml = bajosTotal
+    ? `<div style="background:#FEF3C7;border:1px solid #FBBF24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:#92400E;display:flex;align-items:center;gap:8px">
+        <span>⚠</span><span>${bajosTotal} insumo${bajosTotal === 1 ? '' : 's'} con stock en 1</span>
        </div>`
     : '';
 
-  screen.innerHTML = alertaHtml + gruposOrdenados.map(({ prov, items }) => `
-    <div style="margin-bottom:24px">
-      <div style="font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">
-        ${prov?.nombre || 'Sin proveedor'}
+  screen.innerHTML = alertaHtml +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">` +
+    grupos.map(({ prov, items }) => {
+      const bajos = items.filter(([_, qty]) => qty <= 1).length;
+      const nombre = prov?.nombre || 'Sin proveedor';
+      return `<button onclick="_depAbrirStockProv('${prov?.id || '__sin_prov__'}')"
+        style="background:var(--surface);border:1px solid ${bajos ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s;width:100%"
+        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+        <div style="font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+          <div style="font-size:22px;font-weight:700;color:var(--accent);font-family:var(--mono)">${items.length}</div>
+          <div style="font-size:11px;color:var(--ink3)">insumos</div>
+        </div>
+        ${bajos ? `<div style="margin-top:8px;font-size:11px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:6px;padding:3px 8px;display:inline-block">⚠ ${bajos} en 1</div>` : ''}
+      </button>`;
+    }).join('') + `</div>`;
+}
+
+function _depAbrirStockProv(provId) {
+  const grupos = _depStockGrupos();
+  const grupo = grupos.find(g => (g.prov?.id || '__sin_prov__') === provId);
+  if (!grupo) return;
+  const nombre = grupo.prov?.nombre || 'Sin proveedor';
+
+  const rows = grupo.items.map(([iid, qty]) => {
+    const ins = insumos.find(i => i.id === iid);
+    const n = ins?.nombre || iid.slice(0, 8);
+    const pres = _depPresentacionLabel(ins);
+    const bajo = qty <= 1;
+    const qtyDisplay = Number.isInteger(qty) ? qty : qty.toFixed(2);
+    return `<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--ink)">${n}</div>
+        ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
-        ${items.map(renderCard).join('')}
+      <div style="text-align:right">
+        <div style="font-size:20px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono)">${qtyDisplay}</div>
+        ${bajo ? `<div style="font-size:10px;color:#92400E;font-weight:600">bajo</div>` : ''}
       </div>
-    </div>
-  `).join('');
+      <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}');document.getElementById('modalDepStockProv').querySelector('.overlay, [id]')?.remove?.()">Sacar</button>
+    </div>`;
+  }).join('');
+
+  const existing = document.getElementById('modalDepStockProv');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modalDepStockProv" class="overlay open" style="display:flex" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:520px;max-height:80vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <h2 style="margin:0">${nombre}</h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalDepStockProv').remove()">✕</button>
+        </div>
+        <p class="modal-sub" style="margin-bottom:10px">${grupo.items.length} insumos en stock</p>
+        <div style="overflow-y:auto;flex:1">${rows}</div>
+      </div>
+    </div>`);
 }
 
 function _depRenderPendientes(screen) {
