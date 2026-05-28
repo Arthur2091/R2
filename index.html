@@ -6914,11 +6914,15 @@ function _borrarTodoGalicia()   { if (!galiciaMovs.length) return; if (!confirm(
 function _toggleInternaGal(id)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.esInterna=!m.esInterna; persistContable(); renderContable(); }
 function _setGastoGal(id,tipo)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.gasto = m.gasto===tipo ? null : tipo; persistContable(); renderContable(); }
 
-function _devolverAContable(id) {
-  const mp = mpMovs.find(x => x.id === id);
-  if (mp)  { mp.gasto = null;  persistContable(); renderContable(); renderAuditoria(); return; }
-  const gal = galiciaMovs.find(x => x.id === id);
-  if (gal) { gal.gasto = null; persistContable(); renderContable(); renderAuditoria(); }
+function _devolverAContable(id) { _reasignarAuditoria(id, null); }
+
+function _reasignarAuditoria(id, nuevoGasto) {
+  const mov = mpMovs.find(x => x.id === id) || galiciaMovs.find(x => x.id === id);
+  if (!mov) return;
+  mov.gasto = nuevoGasto;
+  persistContable();
+  renderAuditoria();
+  if (!nuevoGasto) renderContable();
 }
 
 function renderAuditoria() {
@@ -6953,18 +6957,23 @@ function renderAuditoria() {
   const screen = document.getElementById('auditoriaScreen');
   if (!screen) return;
 
-  const _colHtml = (movs, label, colorBg, colorBorder, colorTitle, colorText, colorRowBg) => {
+  const _colHtml = (movs, label, colorBg, colorBorder, colorTitle, colorText) => {
     const subtotal = movs.reduce((s, m) => s + (m.monto || 0), 0);
     const rows = movs.length
       ? movs.map(m => `
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid ${colorBorder}">
-            <div style="min-width:0;flex:1">
-              <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.desc}</div>
-              <div style="font-size:11px;color:var(--ink3);margin-top:2px">${m.fecha} · <span style="background:var(--surface2);padding:1px 6px;border-radius:999px">${m.fuente}</span></div>
+          <div style="padding:8px 0;border-bottom:1px solid ${colorBorder}">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+              <div style="min-width:0;flex:1">
+                <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.desc}</div>
+                <div style="font-size:11px;color:var(--ink3);margin-top:2px">${m.fecha} · <span style="background:var(--surface2);padding:1px 6px;border-radius:999px">${m.fuente}</span></div>
+              </div>
+              <div style="font-family:var(--mono);font-weight:600;font-size:13px;flex-shrink:0">${pesos(m.monto)}</div>
             </div>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-              <div style="font-family:var(--mono);font-weight:600;font-size:13px">${pesos(m.monto)}</div>
-              <button onclick="_devolverAContable('${m.id}')" style="font-size:10px;color:var(--ink3);background:none;border:none;cursor:pointer;padding:0">↩ devolver</button>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              <button onclick="_reasignarAuditoria('${m.id}','H')" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #FED7AA;background:${m.gasto==='H'?'#FED7AA':'transparent'};color:#9A3412;cursor:pointer">H</button>
+              <button onclick="_reasignarAuditoria('${m.id}','L')" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #BAE6FD;background:${m.gasto==='L'?'#BAE6FD':'transparent'};color:#0C4A6E;cursor:pointer">L</button>
+              <button onclick="_reasignarAuditoria('${m.id}','D')" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid #FEF08A;background:${m.gasto==='D'?'#FEF08A':'transparent'};color:#713F12;cursor:pointer">D</button>
+              <button onclick="_reasignarAuditoria('${m.id}',null)" style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--ink3);cursor:pointer">↩ Local</button>
             </div>
           </div>`).join('')
       : `<div style="padding:24px 0;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos</div>`;
