@@ -3937,6 +3937,21 @@ function _resolverRecepcionFinal(pedidoId, modo) {
     return;
   }
 
+  if (modo === 'autolink' && _autoLinkData) {
+    const factura = facturas.find(f => f.id === _autoLinkData.facturaId);
+    ped.estado = 'vinculado';
+    ped.facturaId = _autoLinkData.facturaId;
+    ped.nroBoleta = factura?.nroBoleta || null;
+    ped.fechaBoleta = factura?.fecha || null;
+    ped.fechaVinculado = new Date().toISOString();
+    ped.fechaRecibido = ped.fechaRecibido || new Date().toISOString();
+    _autoLinkData = null;
+    persist();
+    renderProveedores();
+    toast('Pedido vinculado a la factura y mercadería ingresada al depósito.', 'success');
+    return;
+  }
+
   // modo === 'manual': crear factura interna con correlativo por proveedor
   const provId = ped.proveedorId;
   const prov = proveedores.find(p => p.id === provId);
@@ -4137,16 +4152,10 @@ function _cerrarAutoLink(vincular) {
   if (overlay) overlay.remove();
   if (vincular && _autoLinkData) {
     const ped = pedidosPendientes.find(p => p.id === _autoLinkData.pedidoId);
-    const factura = facturas.find(f => f.id === _autoLinkData.facturaId);
     if (ped) {
-      ped.estado = 'vinculado';
-      ped.facturaId = _autoLinkData.facturaId;
-      ped.nroBoleta = factura?.nroBoleta || null;
-      ped.fechaBoleta = factura?.fecha || null;
-      ped.fechaVinculado = new Date().toISOString();
-      persist();
-      renderProveedores();
-      toast('Pedido vinculado a la factura. Hacé "OK" en el detalle del proveedor para cerrarlo.', 'success');
+      // Abrir modal de ingreso a depósito antes de cerrar, igual que el flujo manual
+      _depAbrirIngreso(ped.id, 'autolink');
+      return; // _resolverRecepcionFinal se llama después de confirmar el ingreso
     }
   }
   _autoLinkData = null;
