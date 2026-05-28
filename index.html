@@ -672,6 +672,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
     <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
+    <button class="nav-btn" data-view="viewAuditoria" style="display:none">Auditoría</button>
     <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
@@ -1194,6 +1195,24 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <button id="lpBtnGuardar" class="btn btn-primary" onclick="confirmarListaPrecios()" style="display:none">Guardar lista</button>
     </div>
   </div>
+</div>
+
+<!-- VIEW: Auditoría -->
+<div id="viewAuditoria" class="view">
+  <div class="period-bar">
+    <select id="audMes">
+      <option value="">Todos los meses</option>
+      <option value="01">Enero</option><option value="02">Febrero</option>
+      <option value="03">Marzo</option><option value="04">Abril</option>
+      <option value="05">Mayo</option><option value="06">Junio</option>
+      <option value="07">Julio</option><option value="08">Agosto</option>
+      <option value="09">Septiembre</option><option value="10">Octubre</option>
+      <option value="11">Noviembre</option><option value="12">Diciembre</option>
+    </select>
+    <select id="audAnio"></select>
+    <button class="btn btn-outline" onclick="renderAuditoria()">Actualizar</button>
+  </div>
+  <div id="auditoriaScreen"></div>
 </div>
 
 <!-- VIEW: Productos Vendidos -->
@@ -2051,6 +2070,7 @@ function _onViewActivate(viewId) {
     viewProveedores: renderProveedores,
     viewBoletas:     initBoletasView,
     viewContable:    initContableView,
+    viewAuditoria:   renderAuditoria,
     viewProductos:   renderProductos,
     viewRecetas:     renderRecetas,
     viewPrecios:     renderPrecios,
@@ -5963,7 +5983,7 @@ function renderContable() {
   document.getElementById('secGastosFijosBody').innerHTML = _renderGastosFijosBody(fijosPeriod, periodoStr, pagadoFijos, adeudadoFijos, gfVinculadosIds);
 
   // ── MERCADO PAGO ──
-  const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha));
+  const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L');
   const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
@@ -6042,7 +6062,7 @@ function renderContable() {
 
   // ── BANCO GALICIA ──
   const _esImpuestoGal = m => /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(m.descripcion||'');
-  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha));
+  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L');
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
   const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
@@ -6889,6 +6909,96 @@ function _borrarGalMes() {
 function _borrarTodoGalicia()   { if (!galiciaMovs.length) return; if (!confirm(`¿Borrar los ${galiciaMovs.length} movimientos de Galicia?`)) return; galiciaMovs = []; persistContable(); renderContable(); toast('Movimientos Galicia eliminados','success'); }
 function _toggleInternaGal(id)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.esInterna=!m.esInterna; persistContable(); renderContable(); }
 function _setGastoGal(id,tipo)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.gasto = m.gasto===tipo ? null : tipo; persistContable(); renderContable(); }
+
+function _devolverAContable(id) {
+  const mp = mpMovs.find(x => x.id === id);
+  if (mp)  { mp.gasto = null;  persistContable(); renderContable(); renderAuditoria(); return; }
+  const gal = galiciaMovs.find(x => x.id === id);
+  if (gal) { gal.gasto = null; persistContable(); renderContable(); renderAuditoria(); }
+}
+
+function renderAuditoria() {
+  const anioSel = document.getElementById('audAnio');
+  if (!anioSel) return;
+  const years = new Set();
+  [...mpMovs, ...galiciaMovs].filter(m => m.gasto === 'H' || m.gasto === 'L').forEach(m => {
+    if (m.fecha) years.add(m.fecha.slice(0, 4));
+  });
+  const sorted = [...years].sort((a, b) => b - a);
+  const prev = anioSel.value;
+  anioSel.innerHTML = `<option value="">Todos los años</option>` + sorted.map(y => `<option value="${y}">${y}</option>`).join('');
+  if (prev && sorted.includes(prev)) anioSel.value = prev;
+
+  const mes  = document.getElementById('audMes')?.value  || '';
+  const anio = document.getElementById('audAnio')?.value || '';
+
+  const todos = [
+    ...mpMovs.filter(m      => m.gasto === 'H' || m.gasto === 'L').map(m => ({...m, fuente: 'MP',      desc: m.destino      || ''})),
+    ...galiciaMovs.filter(m => m.gasto === 'H' || m.gasto === 'L').map(m => ({...m, fuente: 'Galicia', desc: m.descripcion  || ''}))
+  ].filter(m => {
+    if (anio && !(m.fecha || '').startsWith(anio)) return false;
+    if (mes  && (m.fecha || '').slice(5, 7) !== mes)  return false;
+    return true;
+  }).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+
+  const totalH = todos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
+  const totalL = todos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
+  const total  = totalH + totalL;
+
+  const screen = document.getElementById('auditoriaScreen');
+  if (!screen) return;
+
+  screen.innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:14px 20px;min-width:160px">
+        <div style="font-size:11px;color:#92400E;font-weight:700;margin-bottom:4px">HERNÁN</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:#9A3412">${pesos(totalH)}</div>
+      </div>
+      <div style="background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;padding:14px 20px;min-width:160px">
+        <div style="font-size:11px;color:#0C4A6E;font-weight:700;margin-bottom:4px">LAURA</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono);color:#0C4A6E">${pesos(totalL)}</div>
+      </div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px 20px;min-width:160px">
+        <div style="font-size:11px;color:var(--ink2);font-weight:700;margin-bottom:4px">TOTAL PERSONAL</div>
+        <div style="font-size:20px;font-weight:700;font-family:var(--mono)">${pesos(total)}</div>
+      </div>
+    </div>
+    ${!todos.length
+      ? `<div style="padding:40px;text-align:center;color:var(--ink3);font-size:14px">
+           Sin movimientos personales clasificados.<br>
+           <span style="font-size:12px">Asigná H o L a movimientos en Contable.</span>
+         </div>`
+      : `<table><thead><tr>
+           <th style="color:var(--ink2)">Fecha</th>
+           <th style="color:var(--ink2)">Fuente</th>
+           <th style="color:var(--ink2)">Descripción</th>
+           <th style="text-align:right;color:var(--ink2)">Monto</th>
+           <th style="color:var(--ink2)">Quién</th>
+           <th></th>
+         </tr></thead><tbody>
+         ${todos.map(m => {
+           const esH      = m.gasto === 'H';
+           const rowBg    = esH ? 'background:#FFF7ED' : 'background:#F0F9FF';
+           const badgeSt  = esH ? 'background:#FED7AA;color:#9A3412' : 'background:#BAE6FD;color:#0C4A6E';
+           const nombre   = esH ? 'Hernán' : 'Laura';
+           return `<tr style="${rowBg}">
+             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
+             <td><span style="font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:999px">${m.fuente}</span></td>
+             <td style="font-size:13px">${m.desc}</td>
+             <td style="text-align:right;font-family:var(--mono)">${pesos(m.monto)}</td>
+             <td><span style="font-size:11px;${badgeSt};padding:2px 10px;border-radius:999px;font-weight:700">${nombre}</span></td>
+             <td><button class="btn btn-ghost btn-sm" onclick="_devolverAContable('${m.id}')" style="font-size:11px;color:var(--ink3)">↩ Devolver</button></td>
+           </tr>`;
+         }).join('')}
+         <tr style="font-weight:600;background:var(--surface2)">
+           <td colspan="3">${todos.length} movimiento${todos.length !== 1 ? 's' : ''} personales</td>
+           <td style="text-align:right;font-family:var(--mono)">${pesos(total)}</td>
+           <td colspan="2"></td>
+         </tr>
+       </tbody></table>`
+    }
+  `;
+}
 function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; delete m.facturaId; persistContable(); renderContable(); toast('Desvinculado','info'); }
 function _abrirVincularGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
@@ -11242,7 +11352,7 @@ function _bootApp() {
 }
 
 const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
-const ADMIN_ONLY_VIEWS = ['viewContable','viewProductos','viewUsuarios'];
+const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUsuarios'];
 const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
 let _userPermisos = null; // cache de permisos del usuario actual
 let _permsDefault = null; // cache de permisos por defecto (de Firestore)
