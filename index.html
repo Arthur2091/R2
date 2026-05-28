@@ -6398,10 +6398,12 @@ function _matchProvPorMov(nombre, cuitNum) {
   }
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const nNorm = norm(nombre);
+  if (nNorm.length < 4) return null;
   return proveedores.find(p => {
     const pNorm = norm(p.nombre);
     if (!pNorm || pNorm.length < 4) return false;
-    if (nNorm.includes(pNorm) || pNorm.includes(nNorm)) return true;
+    if (nNorm.includes(pNorm)) return true;
+    if (pNorm.includes(nNorm) && nNorm.length >= 5) return true;
     const words = p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 4);
     const hits  = words.filter(w => nNorm.includes(norm(w)));
     return hits.length >= 2;
