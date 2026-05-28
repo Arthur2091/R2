@@ -1073,6 +1073,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div id="secGaliciaBody" class="contable-section-body" style="display:none"></div>
   </div>
 
+  <div class="contable-section" id="secGaliciaIngresos">
+    <div class="contable-section-header" onclick="toggleSection('secGaliciaIngresosBody')">
+      <h3>Ingresos — Banco Galicia</h3>
+      <div class="section-total" id="totalGaliciaIngresos" style="color:var(--accent)"></div>
+    </div>
+    <div id="secGaliciaIngresosBody" class="contable-section-body" style="display:none"></div>
+  </div>
+
 </div>
 
 <!-- MODAL: Consolidado financiero -->
@@ -1234,6 +1242,17 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 </div>
 
 <!-- MODAL: Importar Recetas V2 — paso 2: revisar recetas + tipo -->
+<div id="modalImportGalicia" class="overlay">
+  <div class="modal" style="max-width:600px">
+    <h2>Importar Galicia</h2>
+    <div id="importGaliciaResumen" style="margin:12px 0;font-size:14px;color:var(--ink2)"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalImportGalicia')">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmImportGal" onclick="_confirmarImportGalicia()">Importar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalImpRevisor" class="overlay">
   <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Revisar recetas detectadas</h2>
@@ -6083,7 +6102,8 @@ function renderContable() {
 
   // ── BANCO GALICIA ──
   const _esImpuestoGal = m => /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(m.descripcion||'');
-  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
+  const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && !m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
+  const galIngPeriod   = galiciaMovs.filter(m => inPeriod(m.fecha) && m.esIngreso);
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
   const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
@@ -6179,6 +6199,31 @@ function renderContable() {
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin movimientos Galicia para este período.<br><span style="font-size:12px">Usá "Importar Galicia" para cargar el extracto.</span></div>`
     : _renderGalTabla(galMovsPeriod, totalGal_H, totalGal_L, totalGal, false)
       + _renderGalTabla(galImpuestos, 0, 0, totalGalImp, true);
+
+  // ── INGRESOS GALICIA ──
+  const totalGalIng = galIngPeriod.reduce((s, m) => s + (m.monto || 0), 0);
+  document.getElementById('totalGaliciaIngresos').textContent = totalGalIng ? pesos(totalGalIng) : '';
+  document.getElementById('secGaliciaIngresosBody').innerHTML = !galIngPeriod.length
+    ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos Galicia para este período.</div>`
+    : `<table><thead><tr>
+        <th style="cursor:pointer;user-select:none" onclick="this.closest('table').querySelectorAll('tbody tr:not(:last-child)').forEach((r,i,a)=>{})">Fecha</th>
+        <th>Descripción</th>
+        <th style="text-align:right">Monto</th>
+        <th></th>
+      </tr></thead><tbody>
+      ${galIngPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
+        <tr>
+          <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
+          <td style="font-size:13px">${m.descripcion||''}</td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--accent);font-weight:600">${pesos(m.monto)}</td>
+          <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
+        </tr>`).join('')}
+      <tr style="font-weight:600;background:var(--surface2)">
+        <td colspan="2">${galIngPeriod.length} ingreso${galIngPeriod.length!==1?'s':''}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--accent)">${pesos(totalGalIng)}</td>
+        <td></td>
+      </tr>
+      </tbody></table>`;
 
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
@@ -7101,6 +7146,8 @@ function _autoVincularGalicia() {
 }
 
 // ── IMPORT GALICIA ──
+let _galPendienteImport = null; // { egresos: [], ingresos: [], autoVinculados: number }
+
 function importGalicia(e) {
   const file = e.target.files[0]; if(!file) return; e.target.value='';
   const reader = new FileReader();
@@ -7111,19 +7158,19 @@ function importGalicia(e) {
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       const parseAR = v => { const n = parseFloat(String(v).replace(/\./g,'').replace(',','.')); return isFinite(n)?n:0; };
       const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      // Detectar fila de headers (tiene "Fecha" y "Débito")
       const headerIdx = rows.findIndex(r => r.some(c=>/^fecha$/i.test(String(c).trim())) && r.some(c=>/débit/i.test(String(c))));
       if (headerIdx < 0) { toast('No se encontró la tabla en el archivo','error'); return; }
       const hdrs = rows[headerIdx].map(h=>String(h).trim());
       const iF = hdrs.findIndex(h=>/^fecha$/i.test(h));
       const iM = hdrs.findIndex(h=>/^movimiento$/i.test(h));
       const iD = hdrs.findIndex(h=>/débit/i.test(h));
+      const iC = hdrs.findIndex(h=>/créd/i.test(h));
       const existentes = new Set(galiciaMovs.map(m=>m.id));
-      let added=0, autoVinculados=0;
+      const newEgresos = [], newIngresos = [];
+      let autoVinculados = 0;
       rows.slice(headerIdx+1).forEach((r,i) => {
-        const deb = parseAR(r[iD]);
-        if (deb >= 0) return; // solo débitos
-        const monto = Math.abs(deb);
+        const deb  = parseAR(r[iD]);
+        const cred = iC >= 0 ? parseAR(r[iC]) : 0;
         const fechaRaw = String(r[iF]||'').trim();
         if (!fechaRaw) return;
         const [d,mo,y] = fechaRaw.split('/');
@@ -7133,40 +7180,68 @@ function importGalicia(e) {
         const lineas = movRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
         const tipo = lineas[0] || 'Sin tipo';
         const destinatario = lineas[1] || '';
-        // Incluir líneas adicionales útiles (omitir nros de cuenta largos, tarjeta enmascarada y "VARIOS")
         const extras = lineas.slice(2).filter(l =>
-          !/^\d{10,}$/.test(l) &&          // nros de cuenta muy largos
-          !/4517X{4,}/.test(l) &&           // tarjeta enmascarada
-          !/^VARIOS$/i.test(l) &&
-          !/^\d{8,}$/.test(l)
+          !/^\d{10,}$/.test(l) && !/4517X{4,}/.test(l) && !/^VARIOS$/i.test(l) && !/^\d{8,}$/.test(l)
         );
-        const partes = [tipo, destinatario, ...extras].filter(Boolean);
-        const descripcion = partes.join(' · ');
-        const id = `gal-${fecha}-${monto}-${i}`;
-        if (existentes.has(id)) return;
-        const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
-        const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
-        // Auto-match con facturas — primero por CUIT, luego por nombre
-        if (!esInterna) {
-          const cuitEnDesc = (lineas.find(l => /^(CU|NO)\s+\d{8,}/.test(l)) || '').replace(/\D/g,'');
-          const descNorm = norm(descripcion);
-          const match = facturas.find(f => {
-            if (f.importeTotal <= 0) return false;
-            const prov = proveedores.find(p=>p.id===f.proveedorId); if(!prov) return false;
-            const cuitMatch = cuitEnDesc && prov.cuit && prov.cuit === cuitEnDesc;
-            const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
-              .filter(w=>w.length>3).some(w=>descNorm.includes(w));
-            return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(monto);
-          });
-          if (match) { mov.facturaId=match.id; autoVinculados++; }
+        const descripcion = [tipo, destinatario, ...extras].filter(Boolean).join(' · ');
+
+        if (deb < 0) {
+          const monto = Math.abs(deb);
+          const id = `gal-${fecha}-${monto}-${i}`;
+          if (existentes.has(id)) return;
+          const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
+          const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
+          if (!esInterna) {
+            const cuitEnDesc = (lineas.find(l => /^(CU|NO)\s+\d{8,}/.test(l)) || '').replace(/\D/g,'');
+            const descNorm = norm(descripcion);
+            const match = facturas.find(f => {
+              if (f.importeTotal <= 0) return false;
+              const prov = proveedores.find(p=>p.id===f.proveedorId); if(!prov) return false;
+              const cuitMatch = cuitEnDesc && prov.cuit && prov.cuit === cuitEnDesc;
+              const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+                .filter(w=>w.length>3).some(w=>descNorm.includes(w));
+              return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(monto);
+            });
+            if (match) { mov.facturaId=match.id; autoVinculados++; }
+          }
+          newEgresos.push(mov);
+        } else if (cred > 0) {
+          const id = `gal-ing-${fecha}-${cred}-${i}`;
+          if (existentes.has(id)) return;
+          newIngresos.push({ id, fecha, monto: cred, descripcion, tipo, esIngreso: true });
         }
-        galiciaMovs.push(mov); added++;
       });
-      persistContable(); renderContable();
-      toast(`${added} movimientos Galicia importados${autoVinculados?` · ${autoVinculados} vinculados automáticamente`:''}`, 'success');
+
+      if (!newEgresos.length && !newIngresos.length) {
+        toast('No hay movimientos nuevos para importar', 'info'); return;
+      }
+
+      _galPendienteImport = { egresos: newEgresos, ingresos: newIngresos, autoVinculados };
+      const pesos2 = n => '$ ' + n.toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2});
+      const totalE = newEgresos.reduce((s,m)=>s+m.monto,0);
+      const totalI = newIngresos.reduce((s,m)=>s+m.monto,0);
+      const lines = [];
+      if (newEgresos.length) lines.push(`<strong>${newEgresos.length} egresos nuevos</strong> · ${pesos2(totalE)}${autoVinculados ? ` <span style="color:var(--accent)">(${autoVinculados} vinculados automáticamente)</span>` : ''}`);
+      if (newIngresos.length) lines.push(`<strong>${newIngresos.length} ingresos nuevos</strong> · <span style="color:var(--accent)">${pesos2(totalI)}</span>`);
+      document.getElementById('importGaliciaResumen').innerHTML = lines.join('<br>');
+      openModal('modalImportGalicia');
     } catch(err) { toast('Error: '+err.message,'error'); }
   };
   reader.readAsArrayBuffer(file);
+}
+
+function _confirmarImportGalicia() {
+  if (!_galPendienteImport) return;
+  const { egresos, ingresos, autoVinculados } = _galPendienteImport;
+  _galPendienteImport = null;
+  egresos.forEach(m => galiciaMovs.push(m));
+  ingresos.forEach(m => galiciaMovs.push(m));
+  closeModal('modalImportGalicia');
+  _persistGal(); renderContable();
+  const parts = [];
+  if (egresos.length) parts.push(`${egresos.length} egresos${autoVinculados?` · ${autoVinculados} vinculados`:''}`);
+  if (ingresos.length) parts.push(`${ingresos.length} ingresos`);
+  toast(`Galicia: ${parts.join(' · ')} importados`, 'success');
 }
 
 // ── IMPORT VENTAS ──
