@@ -6272,62 +6272,47 @@ function renderContable() {
     document.getElementById('secGaliciaIngresosBody').innerHTML =
       `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos Galicia para este período.</div>`;
   } else {
-    // Agrupar por tipo
     const _ingGrups = {};
     galIngPeriod.forEach(m => { const k = m.tipo||'Sin tipo'; (_ingGrups[k]||=[]).push(m); });
     const _ingKeys  = Object.keys(_ingGrups).sort((a,b) =>
       _ingGrups[b].reduce((s,m)=>s+m.monto,0) - _ingGrups[a].reduce((s,m)=>s+m.monto,0));
-    const _ingColors = ['#D1FAE5','#DBEAFE','#FEF3C7','#FCE7F3','#EDE9FE','#FFEDD5','#F0FDF4','#EFF6FF'];
-    const _ingLetterColors = ['#065F46','#1D4ED8','#92400E','#9D174D','#5B21B6','#C2410C','#166534','#1E40AF'];
 
-    const gridHtml = _ingKeys.map((key, ki) => {
-      const movs   = _ingGrups[key];
-      const total  = movs.reduce((s,m)=>s+m.monto,0);
-      const ci     = ki % _ingColors.length;
-      const isOpen = _galIngExpanded === key;
-      const letra  = key.trim()[0]?.toUpperCase() || '?';
-
-      const detalle = isOpen ? `
-        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
-          ${movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m => {
-            const otrosGrupos = _ingKeys.filter(k=>k!==key);
-            const moverOpts = otrosGrupos.map(k=>`<option value="${k.replace(/"/g,'&quot;')}">${k.slice(0,30)}</option>`).join('');
-            return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid ${_ingColors[ci]};font-size:12px">
-              <div style="flex:1;min-width:0">
-                <div style="color:var(--ink2);white-space:nowrap">${m.fecha}</div>
-                <div style="color:var(--ink3);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.descripcion||''}</div>
-              </div>
-              <div style="font-family:var(--mono);font-weight:700;color:var(--accent);flex-shrink:0">${pesos(m.monto)}</div>
-              <div style="display:flex;gap:4px;flex-shrink:0">
-                <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:10px;font-weight:700;color:var(--ink3)" title="→ Auditoría Hernán">H</button>
-                <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:10px;font-weight:700;color:var(--ink3)" title="→ Auditoría Laura">L</button>
-                ${otrosGrupos.length ? `<select onchange="_galIngMover('${m.id}',this.value);this.value=''"
-                  style="font-size:10px;border:1px solid var(--border);border-radius:6px;padding:1px 4px;background:var(--surface);color:var(--ink2);cursor:pointer;max-width:90px">
-                  <option value="">↗ Mover</option>${moverOpts}
-                </select>` : ''}
-                <button class="btn btn-ghost btn-sm" onclick="_borrarGal('${m.id}')" style="color:var(--danger);font-size:10px">✕</button>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>` : '';
-
-      return `<div style="background:${_ingColors[ci]};border-radius:14px;padding:14px;cursor:pointer" onclick="_galIngToggle('${key.replace(/'/g,"\\'")}')">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
-          <div style="width:36px;height:36px;border-radius:50%;background:${_ingLetterColors[ci]};color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${letra}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700;color:${_ingLetterColors[ci]};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${key}</div>
-            <div style="font-size:11px;color:var(--ink3)">${movs.length} movimiento${movs.length!==1?'s':''}</div>
-          </div>
-          <div style="font-family:var(--mono);font-weight:700;font-size:14px;color:${_ingLetterColors[ci]};flex-shrink:0">${pesos(total)}</div>
-          <div style="font-size:11px;color:var(--ink3)">${isOpen?'▲':'▼'}</div>
-        </div>
-        ${detalle}
-      </div>`;
+    const rows = _ingKeys.map(key => {
+      const movs  = _ingGrups[key];
+      const total = movs.reduce((s,m)=>s+m.monto,0);
+      const otrosGrupos = _ingKeys.filter(k=>k!==key);
+      const moverOpts = otrosGrupos.map(k=>`<option value="${k.replace(/"/g,'&quot;')}">${k}</option>`).join('');
+      const filas = movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
+        <tr>
+          <td style="color:var(--ink2);font-size:12px;white-space:nowrap;padding-left:16px">${m.fecha}</td>
+          <td style="font-size:12px;color:var(--ink3)">${m.descripcion||''}</td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--accent);font-weight:600">${pesos(m.monto)}</td>
+          <td style="display:flex;gap:4px;align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:11px;font-weight:700;color:var(--ink3)">H</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;color:var(--ink3)">L</button>
+            ${otrosGrupos.length?`<select onchange="_galIngMover('${m.id}',this.value);this.value=''" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:1px 4px;background:var(--surface);color:var(--ink2);max-width:100px"><option value="">↗ Mover</option>${moverOpts}</select>`:''}
+            <button class="btn btn-ghost btn-sm" onclick="_borrarGal('${m.id}')" style="color:var(--danger)">✕</button>
+          </td>
+        </tr>`).join('');
+      return `
+        <tr style="background:var(--surface2)">
+          <td colspan="3" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2);padding:8px 6px 4px">${key}</td>
+          <td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);padding:8px 6px 4px">${pesos(total)}</td>
+        </tr>${filas}`;
     }).join('');
 
     document.getElementById('secGaliciaIngresosBody').innerHTML =
-      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;padding:4px 0">${gridHtml}</div>`
-      + `<div style="font-size:12px;color:var(--ink3);text-align:right;margin-top:8px;font-family:var(--mono)">${galIngPeriod.length} ingresos · ${pesos(totalGalIng)}</div>`;
+      `<table><thead><tr>
+        <th style="white-space:nowrap;width:100px">Fecha</th>
+        <th>Descripción</th>
+        <th style="text-align:right">Monto</th>
+        <th></th>
+      </tr></thead><tbody>${rows}
+      <tr style="font-weight:600;background:var(--surface2)">
+        <td colspan="2">${galIngPeriod.length} ingreso${galIngPeriod.length!==1?'s':''}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--accent)">${pesos(totalGalIng)}</td>
+        <td></td>
+      </tr></tbody></table>`;
   }
 
   // ── BALANCE CARDS ──
