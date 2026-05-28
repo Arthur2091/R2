@@ -6654,10 +6654,12 @@ function _importMPcsv(lines) {
 
   // Formato A (viejo): date,time,concepto,detalle,medio_pago,estado,amount_ars
   // Formato B: fecha,hora,tipo,detalle,monto,...
-  // Formato C (nuevo): "fecha";"descripcion";"tipo";"contraparte_o_comercio";"monto";"estado";"medio_de_pago"
+  // Formato C: "fecha";"descripcion";"tipo";"contraparte_o_comercio";"monto";"estado";"medio_de_pago"
+  // Formato D: fecha;hora;tipo;descripcion;contraparte;medio_de_pago;estado;monto
   const iDate = headers.indexOf('fecha') >= 0 ? headers.indexOf('fecha') : headers.indexOf('date');
   const iAmt  = headers.indexOf('monto') >= 0 ? headers.indexOf('monto') : headers.indexOf('amount_ars');
   const iDet  = headers.indexOf('contraparte_o_comercio') >= 0 ? headers.indexOf('contraparte_o_comercio')
+              : headers.indexOf('contraparte') >= 0 ? headers.indexOf('contraparte')
               : headers.indexOf('detalle') >= 0 ? headers.indexOf('detalle') : -1;
   const iTipo = headers.indexOf('tipo') >= 0 ? headers.indexOf('tipo') : headers.indexOf('concepto');
   const iEst  = headers.indexOf('estado');
