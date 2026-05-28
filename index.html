@@ -6298,7 +6298,7 @@ function renderContable() {
         </tr>`).join('') : '';
 
       return `
-        <tr onclick="_galIngToggle('${key.replace(/'/g,"\\'")}\")" style="cursor:pointer;background:var(--surface2)">
+        <tr onclick="_galIngToggle(${JSON.stringify(key)})" style="cursor:pointer;background:var(--surface2)">
           <td colspan="2" style="font-size:13px;font-weight:600;padding:10px 8px">${isOpen?'▼':'▶'} ${key}</td>
           <td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--accent);padding:10px 8px">${pesos(total)}</td>
           <td style="color:var(--ink3);font-size:11px;padding:10px 8px">${movs.length} mov.</td>
