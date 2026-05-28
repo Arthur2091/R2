@@ -6206,14 +6206,14 @@ function renderContable() {
   document.getElementById('secGaliciaIngresosBody').innerHTML = !galIngPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos Galicia para este período.</div>`
     : `<table><thead><tr>
-        <th style="cursor:pointer;user-select:none" onclick="this.closest('table').querySelectorAll('tbody tr:not(:last-child)').forEach((r,i,a)=>{})">Fecha</th>
+        <th style="white-space:nowrap;width:100px">Fecha</th>
         <th>Descripción</th>
         <th style="text-align:right">Monto</th>
         <th></th>
       </tr></thead><tbody>
       ${galIngPeriod.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
         <tr>
-          <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
+          <td style="color:var(--ink2);font-size:12px;white-space:nowrap">${m.fecha}</td>
           <td style="font-size:13px">${m.descripcion||''}</td>
           <td style="text-align:right;font-family:var(--mono);color:var(--accent);font-weight:600">${pesos(m.monto)}</td>
           <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
