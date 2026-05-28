@@ -6629,24 +6629,34 @@ function _desvincularMP(mpId) {
 
 // ── IMPORT MP ──
 function _importMPcsv(lines) {
-  const headers = lines[0].split(',').map(h => h.trim());
+  // Detectar separador: si la primera línea tiene ";" usamos ese
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const parseRow = line => line.split(sep).map(f => f.trim().replace(/^"|"$/g, ''));
 
-  // Formato viejo: date,time,concepto,detalle,medio_pago,estado,amount_ars
-  const formatoViejo = headers.indexOf('date') >= 0 && headers.indexOf('amount_ars') >= 0;
-  // Formato nuevo: fecha,hora,tipo,detalle,monto,medio_de_pago,...,estado
-  const formatoNuevo = headers.indexOf('fecha') >= 0 && headers.indexOf('monto') >= 0;
+  const headers = parseRow(lines[0]).map(h => h.toLowerCase().trim());
 
-  if (!formatoViejo && !formatoNuevo) { toast('Formato MP no reconocido', 'error'); return; }
-
-  const iDate = formatoNuevo ? headers.indexOf('fecha')  : headers.indexOf('date');
-  const iAmt  = formatoNuevo ? headers.indexOf('monto')  : headers.indexOf('amount_ars');
-  const iDet  = headers.indexOf('detalle');
-  const iTipo = formatoNuevo ? headers.indexOf('tipo')   : headers.indexOf('concepto');
+  // Formato A (viejo): date,time,concepto,detalle,medio_pago,estado,amount_ars
+  // Formato B: fecha,hora,tipo,detalle,monto,...
+  // Formato C (nuevo): "fecha";"descripcion";"tipo";"contraparte_o_comercio";"monto";"estado";"medio_de_pago"
+  const iDate = headers.indexOf('fecha') >= 0 ? headers.indexOf('fecha') : headers.indexOf('date');
+  const iAmt  = headers.indexOf('monto') >= 0 ? headers.indexOf('monto') : headers.indexOf('amount_ars');
+  const iDet  = headers.indexOf('contraparte_o_comercio') >= 0 ? headers.indexOf('contraparte_o_comercio')
+              : headers.indexOf('detalle') >= 0 ? headers.indexOf('detalle') : -1;
+  const iTipo = headers.indexOf('tipo') >= 0 ? headers.indexOf('tipo') : headers.indexOf('concepto');
   const iEst  = headers.indexOf('estado');
 
+  if (iDate < 0 || iAmt < 0) { toast('Formato MP no reconocido', 'error'); return; }
+
   const toISO = s => {
-    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    // "27/05/2026 20:36" o "27/05/2026"
+    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : null;
+  };
+  const parseMonto = s => {
+    // Formato argentino "30.426,13" → 30426.13 | simple "30426.13"
+    const str = String(s).trim().replace(/\s/g,'');
+    if (str.includes(',')) return parseFloat(str.replace(/\./g,'').replace(',','.'));
+    return parseFloat(str);
   };
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const existentes = new Set(mpMovs.map(m => m.id));
@@ -6654,15 +6664,14 @@ function _importMPcsv(lines) {
 
   lines.slice(1).forEach((line, i) => {
     if (!line.trim()) return;
-    // Manejo básico de CSV (campos separados por coma, sin comillas complejas)
-    const r = line.split(',');
-    const monto = parseFloat(String(r[iAmt] || '').replace(/\s/g,''));
+    const r = parseRow(line);
+    const monto = parseMonto(r[iAmt]);
     if (!isFinite(monto) || monto <= 0) return;
     const fecha = toISO(r[iDate]);
     if (!fecha) return;
     const estado = iEst >= 0 ? String(r[iEst] || '').trim() : 'Aprobado';
     if (estado && !/aprobado/i.test(estado)) return;
-    const destino = String(r[iDet] || '').trim();
+    const destino = iDet >= 0 ? String(r[iDet] || '').trim() : '';
     const tipo    = iTipo >= 0 ? String(r[iTipo] || '').trim() : '';
     const id = `mp-${fecha}-${monto}-${i}`;
     if (existentes.has(id)) return;
@@ -6706,7 +6715,7 @@ function importMP(e) {
       const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result)).replace(/^﻿/, '');
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       const esCSV_viejo = lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0]);
-      const esCSV_nuevo = lines.length > 1 && /\bfecha\b/.test(lines[0]) && /\bmonto\b/.test(lines[0]);
+      const esCSV_nuevo = lines.length > 1 && /fecha/.test(lines[0]) && /monto/.test(lines[0]);
       if (esCSV_viejo || esCSV_nuevo) {
         _importMPcsv(lines);
         return;
