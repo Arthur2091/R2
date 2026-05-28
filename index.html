@@ -1001,6 +1001,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       Importar Forma de cobro
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importFormaCobro(event)">
     </label>
+    <label class="btn btn-outline" style="cursor:pointer">
+      Importar Ingresos MP
+      <input type="file" accept=".csv" style="display:none" onchange="importMPIng(event)">
+    </label>
     <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
     <button class="btn btn-outline" onclick="_autoVincularGastosFijosGal()">GF → Galicia</button>
     <button class="btn btn-outline" onclick="_consultarCuitsGalicia()">Consultar CUITs</button>
@@ -1091,6 +1095,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <div class="section-total" id="totalFormaCobro" style="color:var(--accent)"></div>
     </div>
     <div id="secFormaCobroBody" class="contable-section-body" style="display:none"></div>
+  </div>
+
+  <div class="contable-section" id="secMPIngresos">
+    <div class="contable-section-header" onclick="toggleSection('secMPIngresosBody')">
+      <h3>Ingresos — Mercado Pago</h3>
+      <div class="section-total" id="totalMPIngresos" style="color:var(--accent)"></div>
+    </div>
+    <div id="secMPIngresosBody" class="contable-section-body" style="display:none"></div>
   </div>
 
 </div>
@@ -5380,12 +5392,14 @@ let sueldos        = [];
 let otrosEgresos   = [];
 let gastosFijos    = [];
 let formaCobroMovs = [];
+let mpIngMovs      = [];
 let mpMovs       = [];
 let galiciaMovs  = [];
 let _sortMP     = { field: 'fecha', dir: -1 };
 let _sortGal    = { field: 'fecha', dir: -1 };
 let _sortGalIng = { field: 'fecha', dir: -1 };
 let _galIngExpanded = null;
+let _mpIngExpanded  = null;
 let _sortOtros  = { field: 'fecha', dir: -1 };
 let _sortSueldos = { field: 'empleado', dir: 1 };
 
@@ -5397,6 +5411,12 @@ function _persistMP() {
   _syncChip('syncing');
   _db.collection('data').doc('contable_mp').set({ items: mpMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp', e.message); _syncChip('error'); });
+}
+function _persistMPIng() {
+  if (!_fbLoaded) return;
+  _syncChip('syncing');
+  _db.collection('data').doc('contable_mp_ing').set({ items: mpIngMovs })
+    .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp_ing', e.message); _syncChip('error'); });
 }
 function _persistGal() {
   if (!_fbLoaded) return;
@@ -5431,7 +5451,7 @@ function persistContable() {
   Promise.all(writes).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
 }
 function hydrateContable() {
-  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
+  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; mpIngMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
 }
 
 function initContableView() {
@@ -6370,6 +6390,69 @@ function renderContable() {
         <td></td><td></td>
       </tr></tbody></table>`;
 
+  // ── INGRESOS MP ──
+  const mpIngPeriod = mpIngMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
+  const totalMPIng  = mpIngPeriod.reduce((s,m) => s + (m.monto||0), 0);
+  document.getElementById('totalMPIngresos').textContent = totalMPIng ? pesos(totalMPIng) : '';
+
+  if (!mpIngPeriod.length) {
+    document.getElementById('secMPIngresosBody').innerHTML =
+      `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos MP para este período. Usá "Importar Ingresos MP" arriba.</div>`;
+  } else {
+    const _mpGrups = {};
+    mpIngPeriod.forEach(m => { const k = m.tipo||'Sin tipo'; (_mpGrups[k]||=[]).push(m); });
+    const _mpKeys  = Object.keys(_mpGrups).sort((a,b) =>
+      _mpGrups[b].reduce((s,m)=>s+m.monto,0) - _mpGrups[a].reduce((s,m)=>s+m.monto,0));
+
+    window._mpIngKeys = _mpKeys;
+
+    const _mpLabel = k => ({
+      available_money: 'Dinero en cuenta', master: 'Mastercard', visa: 'Visa',
+      debin_transfer: 'Transferencia', cvu: 'CVU', credit_card: 'Tarjeta crédito',
+      debit_card: 'Tarjeta débito', account_money: 'Dinero en cuenta',
+    }[k] || k);
+
+    const secciones = _mpKeys.map((key, ki) => {
+      const movs   = _mpGrups[key];
+      const total  = movs.reduce((s,m)=>s+m.monto,0);
+      const isOpen = _mpIngExpanded === key;
+      const otros  = _mpKeys.filter(k=>k!==key);
+      const opts   = otros.map((k,oi)=>`<option value='${oi < ki ? oi : oi+1}'>${_mpLabel(k)}</option>`).join('');
+
+      const filas = isOpen ? movs.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
+        <tr>
+          <td style="color:var(--ink2);font-size:12px;white-space:nowrap">${m.fecha}</td>
+          <td style="font-size:13px">${m.descripcion||''}</td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--accent);font-weight:600">${pesos(m.monto)}</td>
+          <td style="display:flex;gap:4px;align-items:center">
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoMPIng('${m.id}','H')" style="font-size:11px;font-weight:700;color:var(--ink3)">H</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoMPIng('${m.id}','L')" style="font-size:11px;font-weight:700;color:var(--ink3)">L</button>
+            ${otros.length?`<select onchange="_mpIngMoverIdx('${m.id}',this.value);this.value=''" style="font-size:11px;border:1px solid var(--border);border-radius:6px;padding:2px 4px;background:var(--surface);color:var(--ink2);max-width:110px"><option value=''>↗ Mover a…</option>${opts}</select>`:''}
+            <button class="btn btn-ghost btn-sm" onclick="_borrarMPIng('${m.id}')" style="color:var(--danger)">✕</button>
+          </td>
+        </tr>`).join('') : '';
+
+      return `
+        <tr onclick="_mpIngToggle(${ki})" style="cursor:pointer;background:var(--surface2)">
+          <td colspan="2" style="font-size:13px;font-weight:600;padding:10px 8px">${isOpen?'▼':'▶'} ${_mpLabel(key)}</td>
+          <td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--accent);padding:10px 8px">${pesos(total)}</td>
+          <td style="color:var(--ink3);font-size:11px;padding:10px 8px">${movs.length} mov.</td>
+        </tr>${filas}`;
+    }).join('');
+
+    document.getElementById('secMPIngresosBody').innerHTML =
+      `<table><thead><tr>
+        <th colspan="2">Medio de pago</th>
+        <th style="text-align:right">Total</th>
+        <th></th>
+      </tr></thead><tbody>${secciones}
+      <tr style="font-weight:600;background:var(--surface2)">
+        <td colspan="2">${mpIngPeriod.length} ingreso${mpIngPeriod.length!==1?'s':''}</td>
+        <td style="text-align:right;font-family:var(--mono);color:var(--accent)">${pesos(totalMPIng)}</td>
+        <td></td>
+      </tr></tbody></table>`;
+  }
+
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
   const comprasAdeudadas = comprasPeriod.filter(f => !f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
@@ -6693,6 +6776,32 @@ function _setSortGal(field) {
 function _setSortGalIng(field) {
   _sortGalIng = _sortGalIng.field === field ? { field, dir: _sortGalIng.dir * -1 } : { field, dir: -1 };
   renderContable();
+}
+function _mpIngToggle(ki) {
+  const key = (window._mpIngKeys || [])[ki];
+  if (!key) return;
+  _mpIngExpanded = _mpIngExpanded === key ? null : key;
+  renderContable();
+}
+function _mpIngMoverIdx(id, idxStr) {
+  const idx = parseInt(idxStr);
+  const nuevoTipo = (window._mpIngKeys || [])[idx];
+  if (!nuevoTipo) return;
+  const m = mpIngMovs.find(x => x.id === id);
+  if (!m) return;
+  m.tipo = nuevoTipo;
+  _persistMPIng(); renderContable();
+}
+function _setGastoMPIng(id, val) {
+  const m = mpIngMovs.find(x => x.id === id);
+  if (!m) return;
+  m.gasto = val;
+  _persistMPIng(); renderContable();
+}
+function _borrarMPIng(id) {
+  if (!confirm('¿Eliminar?')) return;
+  mpIngMovs = mpIngMovs.filter(m => m.id !== id);
+  _persistMPIng(); renderContable();
 }
 function _galIngToggle(ki) {
   const key = (window._galIngKeys || [])[ki];
@@ -7441,6 +7550,38 @@ function _confirmarImportGalicia() {
   if (egresos.length) parts.push(`${egresos.length} egresos${autoVinculados?` · ${autoVinculados} vinculados`:''}`);
   if (ingresos.length) parts.push(`${ingresos.length} ingresos`);
   toast(`Galicia: ${parts.join(' · ')} importados`, 'success');
+}
+
+// ── IMPORT INGRESOS MP ──
+function importMPIng(e) {
+  const file = e.target.files[0]; if (!file) return; e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const lines = evt.target.result.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { toast('Archivo vacío o inválido', 'error'); return; }
+    const existing = new Set(mpIngMovs.map(m => m.id));
+    let added = 0;
+    lines.slice(1).forEach(line => {
+      const cols = line.split(';');
+      if (cols.length < 18) return;
+      const tipoTx = (cols[5]||'').trim();
+      const monto  = parseFloat((cols[8]||'').replace(',','.'));
+      if (tipoTx !== 'SETTLEMENT' || !(monto > 0)) return;
+      const id = (cols[3]||'').trim();
+      if (!id || existing.has(id)) return;
+      const fecha       = (cols[12]||'').trim();
+      const payMethod   = (cols[17]||'').trim();
+      const payer       = (cols[59]||'').replace(/^"+|"+$/g,'').trim();
+      const saleDetail  = (cols[34]||'').replace(/^"+|"+$/g,'').trim();
+      const descripcion = payer || saleDetail || '';
+      mpIngMovs.push({ id, fecha, monto, tipo: payMethod||'Sin tipo', descripcion, gasto: null });
+      existing.add(id);
+      added++;
+    });
+    if (added > 0) { _persistMPIng(); renderContable(); toast(`${added} ingresos MP importados`, 'success'); }
+    else toast('Sin ingresos nuevos para importar', 'info');
+  };
+  reader.readAsText(file, 'utf-8');
 }
 
 // ── IMPORT FORMA DE COBRO ──
@@ -9590,6 +9731,9 @@ async function _fbLoad() {
           break;
         case 'contable_mp':
           if (d.items?.length) mpMovs = d.items;
+          break;
+        case 'contable_mp_ing':
+          if (d.items?.length) mpIngMovs = d.items;
           break;
         case 'contable_gal':
           if (d.items?.length) {
