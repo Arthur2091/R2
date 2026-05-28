@@ -7165,7 +7165,8 @@ function importGalicia(e) {
       const iM = hdrs.findIndex(h=>/^movimiento$/i.test(h));
       const iD = hdrs.findIndex(h=>/débit/i.test(h));
       const iC = hdrs.findIndex(h=>/créd/i.test(h));
-      const existentes = new Set(galiciaMovs.map(m=>m.id));
+      const existentes    = new Set(galiciaMovs.map(m=>m.id));
+      const existentesCmp = new Set(galiciaMovs.map(m=>`${m.fecha}|${Math.round(m.monto)}|${(m.tipo||'').slice(0,30)}|${m.esIngreso?1:0}`));
       const newEgresos = [], newIngresos = [];
       let autoVinculados = 0;
       rows.slice(headerIdx+1).forEach((r,i) => {
@@ -7187,8 +7188,9 @@ function importGalicia(e) {
 
         if (deb < 0) {
           const monto = Math.abs(deb);
+          const cmpKey = `${fecha}|${Math.round(monto)}|${tipo.slice(0,30)}|0`;
           const id = `gal-${fecha}-${monto}-${i}`;
-          if (existentes.has(id)) return;
+          if (existentes.has(id) || existentesCmp.has(cmpKey)) return;
           const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
           const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
           if (!esInterna) {
@@ -7204,10 +7206,13 @@ function importGalicia(e) {
             });
             if (match) { mov.facturaId=match.id; autoVinculados++; }
           }
+          existentesCmp.add(cmpKey);
           newEgresos.push(mov);
         } else if (cred > 0) {
+          const cmpKey = `${fecha}|${Math.round(cred)}|${tipo.slice(0,30)}|1`;
           const id = `gal-ing-${fecha}-${cred}-${i}`;
-          if (existentes.has(id)) return;
+          if (existentes.has(id) || existentesCmp.has(cmpKey)) return;
+          existentesCmp.add(cmpKey);
           newIngresos.push({ id, fecha, monto: cred, descripcion, tipo, esIngreso: true });
         }
       });
@@ -9342,7 +9347,15 @@ async function _fbLoad() {
           if (d.items?.length) mpMovs = d.items;
           break;
         case 'contable_gal':
-          if (d.items?.length) galiciaMovs = d.items;
+          if (d.items?.length) {
+            const seen = new Set();
+            galiciaMovs = d.items.filter(m => {
+              const k = `${m.fecha}|${Math.round(m.monto)}|${(m.tipo||'').slice(0,30)}|${m.esIngreso?1:0}`;
+              if (seen.has(k)) return false;
+              seen.add(k); return true;
+            });
+            if (galiciaMovs.length !== d.items.length) _persistGal();
+          }
           break;
         case 'config':
           if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
