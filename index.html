@@ -991,7 +991,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" style="color:var(--accent);border-color:var(--accent);font-weight:700" onclick="_reAutoLinkContableManual()">🔗 Re-match por CUIT</button>
     <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
     <button class="btn btn-outline" onclick="_autoVincularGastosFijosMP()">GF → MP</button>
-    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoMP()">Borrar todo MP</button>
+    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarMPmes()">Borrar MP del mes</button>
     <label class="btn btn-outline" style="cursor:pointer">
       Importar Galicia
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event)">
@@ -999,7 +999,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
     <button class="btn btn-outline" onclick="_autoVincularGastosFijosGal()">GF → Galicia</button>
     <button class="btn btn-outline" onclick="_consultarCuitsGalicia()">Consultar CUITs</button>
-    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarTodoGalicia()">Borrar todo Galicia</button>
+    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarGalMes()">Borrar Galicia del mes</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
   </div>
@@ -6464,6 +6464,21 @@ function _applySort(arr, sort) {
     return va < vb ? sort.dir : va > vb ? -sort.dir : 0;
   });
 }
+function _periodoActual() {
+  const mes  = String(parseInt(document.getElementById('contableMes').value) + 1).padStart(2,'0');
+  const anio = document.getElementById('contableAnio').value;
+  return `${anio}-${mes}`;
+}
+function _borrarMPmes() {
+  const periodo = _periodoActual();
+  const del = mpMovs.filter(m => m.fecha && m.fecha.slice(0,7) === periodo);
+  if (!del.length) { toast('Sin movimientos MP en este período', 'info'); return; }
+  if (!confirm(`¿Borrar los ${del.length} movimientos MP de ${periodo}?`)) return;
+  mpMovs = mpMovs.filter(m => !m.fecha || m.fecha.slice(0,7) !== periodo);
+  persistContable();
+  renderContable();
+  toast(`Movimientos MP de ${periodo} eliminados`, 'success');
+}
 function _borrarTodoMP() {
   if (!mpMovs.length) return;
   if (!confirm(`¿Borrar los ${mpMovs.length} movimientos de MP?`)) return;
@@ -6860,6 +6875,15 @@ function _aplicarTodosCuits() {
 
 // ── GALICIA HELPERS ──
 function _borrarGal(id)         { galiciaMovs = galiciaMovs.filter(m => m.id !== id); persistContable(); renderContable(); }
+function _borrarGalMes() {
+  const periodo = _periodoActual();
+  const del = galiciaMovs.filter(m => m.fecha && m.fecha.slice(0,7) === periodo);
+  if (!del.length) { toast('Sin movimientos Galicia en este período', 'info'); return; }
+  if (!confirm(`¿Borrar los ${del.length} movimientos Galicia de ${periodo}?`)) return;
+  galiciaMovs = galiciaMovs.filter(m => !m.fecha || m.fecha.slice(0,7) !== periodo);
+  persistContable(); renderContable();
+  toast(`Movimientos Galicia de ${periodo} eliminados`, 'success');
+}
 function _borrarTodoGalicia()   { if (!galiciaMovs.length) return; if (!confirm(`¿Borrar los ${galiciaMovs.length} movimientos de Galicia?`)) return; galiciaMovs = []; persistContable(); renderContable(); toast('Movimientos Galicia eliminados','success'); }
 function _toggleInternaGal(id)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.esInterna=!m.esInterna; persistContable(); renderContable(); }
 function _setGastoGal(id,tipo)  { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; m.gasto = m.gasto===tipo ? null : tipo; persistContable(); renderContable(); }
