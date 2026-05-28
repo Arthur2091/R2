@@ -6103,7 +6103,7 @@ function renderContable() {
   // ── BANCO GALICIA ──
   const _esImpuestoGal = m => /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(m.descripcion||'');
   const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && !m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
-  const galIngPeriod   = galiciaMovs.filter(m => inPeriod(m.fecha) && m.esIngreso);
+  const galIngPeriod   = galiciaMovs.filter(m => inPeriod(m.fecha) && m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
   const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
@@ -6216,7 +6216,12 @@ function renderContable() {
           <td style="color:var(--ink2);font-size:12px;white-space:nowrap">${m.fecha}</td>
           <td style="font-size:13px">${m.descripcion||''}</td>
           <td style="text-align:right;font-family:var(--mono);color:var(--accent);font-weight:600">${pesos(m.monto)}</td>
-          <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
+          <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','H')" style="font-size:11px;font-weight:700;color:var(--ink3)" title="Auditoría Hernán">H</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','L')" style="font-size:11px;font-weight:700;color:var(--ink3)" title="Auditoría Laura">L</button>
+            <button class="btn btn-ghost btn-sm" onclick="_setGastoGal('${m.id}','D')" style="font-size:11px;font-weight:700;color:var(--ink3)" title="Dudoso">D</button>
+            <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button>
+          </td>
         </tr>`).join('')}
       <tr style="font-weight:600;background:var(--surface2)">
         <td colspan="2">${galIngPeriod.length} ingreso${galIngPeriod.length!==1?'s':''}</td>
