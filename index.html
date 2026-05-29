@@ -1002,8 +1002,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importFormaCobro(event)">
     </label>
     <label class="btn btn-outline" style="cursor:pointer">
-      Importar Ingresos MP
-      <input type="file" accept=".csv" style="display:none" onchange="importMPIng(event)">
+      Reporte MP
+      <input type="file" accept=".csv" style="display:none" onchange="importMPStandard(event)">
     </label>
     <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
     <button class="btn btn-outline" onclick="_autoVincularGastosFijosGal()">GF → Galicia</button>
@@ -1011,6 +1011,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarGalMes()">Borrar Galicia del mes</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
+    <button id="btnModoLocal" class="btn btn-outline" onclick="_toggleSyncPaused()">☁ Auto-sync ON</button>
+    <button class="btn btn-primary" onclick="_sincronizarTodo()">↑ Sincronizar</button>
   </div>
 
   <!-- Balance cards -->
@@ -1274,6 +1276,60 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalImportGalicia')">Cancelar</button>
       <button class="btn btn-primary" id="btnConfirmImportGal" onclick="_confirmarImportGalicia()">Importar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalEditarGF" class="overlay">
+  <div class="modal" style="max-width:480px">
+    <h2 id="modalEditarGFTitulo">Gasto fijo</h2>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Servicio / Concepto</label>
+        <input id="gfInputServicio" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Categoría</label>
+          <select id="gfInputCategoria" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box;background:var(--surface)">
+            <option>Servicios</option><option>Alquiler</option><option>Impuestos</option>
+            <option>Sindicato</option><option>Seguros y profesional</option><option>Otros</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Monto</label>
+          <input id="gfInputMonto" type="number" min="0" step="0.01" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Modo de pago</label>
+          <input id="gfInputModo" type="text" placeholder="transferencia, efectivo…" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Fecha de pago</label>
+          <input id="gfInputFechaPago" type="date" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:4px">Notas</label>
+        <input id="gfInputNotas" type="text" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);box-sizing:border-box">
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn btn-outline" onclick="closeModal('modalEditarGF')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_guardarGastoFijo()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modalImportMP" class="overlay">
+  <div class="modal" style="max-width:600px">
+    <h2>Importar Reporte MP</h2>
+    <div id="importMPResumen" style="margin:12px 0;font-size:14px;color:var(--ink2)"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalImportMP')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_confirmarImportMP()">Importar</button>
     </div>
   </div>
 </div>
@@ -2007,9 +2063,11 @@ let _matchPendientes = [];
 
 
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
-let _fbLoaded = false;
+let _fbLoaded    = false;
+let _syncPaused  = false;
 function persist() {
   if (!_fbLoaded) { console.warn('[persist] bloqueado: Firebase aún no cargó'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
   _syncChip('syncing');
   Promise.all([
     _fbWrite('insumos',       { items: insumos }),
@@ -5417,25 +5475,25 @@ const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","A
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 
 function _persistMP() {
-  if (!_fbLoaded) return;
+  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_mp').set({ items: mpMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp', e.message); _syncChip('error'); });
 }
 function _persistMPIng() {
-  if (!_fbLoaded) return;
+  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_mp_ing').set({ items: mpIngMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp_ing', e.message); _syncChip('error'); });
 }
 function _persistGal() {
-  if (!_fbLoaded) return;
+  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_gal').set({ items: galiciaMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_gal', e.message); _syncChip('error'); });
 }
 function _persistBase() {
-  if (!_fbLoaded) return;
+  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, formaCobroMovs, productosRubros })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable', e.message); _syncChip('error'); });
@@ -5443,6 +5501,7 @@ function _persistBase() {
 
 function persistContable() {
   if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
   _syncChip('syncing');
   const ventasPorMes = {};
   ventas.forEach(v => {
@@ -5833,14 +5892,15 @@ function _renderGastosFijosBody(items, periodo, pagado, adeudado, vinculadosIds 
     </div>
   </div>
   ${cats.map(cat => {
-    const list = byCat[cat].sort((a,b) => (b.monto||0) - (a.monto||0));
+    const list = byCat[cat];
     const totCat = list.reduce((s,g) => s + (Number(g.monto)||0), 0);
     return `<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;padding:4px 0;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between">
         <span>${cat}</span><span style="font-family:var(--mono);color:var(--ink2)">${pesos(totCat)}</span>
       </div>
       ${list.map(g => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;${g.pagado?'background:#F0FDF4;opacity:.85':vinculadosIds.has(g.id)?'background:#FAF5FF':'background:var(--surface)'};margin-bottom:4px">
+        <div draggable="true" data-gfid="${g.id}" ondragstart="_gfDragStart('${g.id}')" ondragover="event.preventDefault();_gfDragOverId='${g.id}'" ondrop="event.preventDefault();_gfDrop('${g.id}')" ondragend="_gfDragEnd()" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;${g.pagado?'background:#F0FDF4;opacity:.85':vinculadosIds.has(g.id)?'background:#FAF5FF':'background:var(--surface)'};margin-bottom:4px;transition:opacity .15s">
+          <span style="cursor:grab;color:var(--ink3);font-size:16px;flex-shrink:0;user-select:none;line-height:1" title="Arrastrar para reordenar">⠿</span>
           <button onclick="_toggleGastoFijoPagado('${g.id}')" title="${g.pagado?'Pagado':'Marcar pagado'}" style="background:${g.pagado?'#10B981':'transparent'};color:${g.pagado?'#fff':'var(--ink3)'};border:1.5px solid ${g.pagado?'#10B981':'var(--border)'};border-radius:6px;width:26px;height:26px;cursor:pointer;font-weight:700;flex-shrink:0">${g.pagado?'✓':''}</button>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:13px;${g.pagado?'text-decoration:line-through;color:var(--ink2)':''}">
@@ -5983,29 +6043,87 @@ function _borrarGastoFijo(id) {
   renderContable();
 }
 
-function _nuevoGastoFijo(periodoDefault) {
-  const servicio = prompt('Nombre del servicio / concepto:');
-  if (!servicio) return;
-  const montoStr = prompt('Monto:');
-  const monto = parseFloat(montoStr);
-  if (!isFinite(monto) || monto <= 0) { toast('Monto inválido', 'error'); return; }
-  const cat = prompt('Categoría (Servicios / Alquiler / Impuestos / Sindicato / Seguros y profesional / Otros):', 'Otros') || 'Otros';
-  gastosFijos.push({
-    id: crypto.randomUUID(), periodo: periodoDefault, servicio: servicio.trim(),
-    categoria: cat.trim(), monto, pagado: false, modo: 'transferencia', fechaPago: null, notas: ''
-  });
+let _gfEditando  = null;
+let _gfDragId    = null;
+let _gfDragOverId = null;
+
+function _gfDragStart(id) {
+  _gfDragId = id;
+  const el = document.querySelector(`[data-gfid="${id}"]`);
+  if (el) el.style.opacity = '0.4';
+}
+
+function _gfDragEnd() {
+  if (_gfDragId) {
+    const el = document.querySelector(`[data-gfid="${_gfDragId}"]`);
+    if (el) el.style.opacity = '';
+  }
+  _gfDragId = null;
+  _gfDragOverId = null;
+}
+
+function _gfDrop(targetId) {
+  if (!_gfDragId || _gfDragId === targetId) { _gfDragEnd(); return; }
+  const fromIdx = gastosFijos.findIndex(x => x.id === _gfDragId);
+  const toIdx   = gastosFijos.findIndex(x => x.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) { _gfDragEnd(); return; }
+  const [item] = gastosFijos.splice(fromIdx, 1);
+  gastosFijos.splice(toIdx, 0, item);
+  _gfDragId = null;
+  _gfDragOverId = null;
   _persistBase();
   renderContable();
+}
+
+function _nuevoGastoFijo(periodo) {
+  _gfEditando = { nuevo: true, periodo };
+  document.getElementById('modalEditarGFTitulo').textContent = 'Nuevo gasto fijo';
+  document.getElementById('gfInputServicio').value  = '';
+  document.getElementById('gfInputCategoria').value = 'Servicios';
+  document.getElementById('gfInputMonto').value     = '';
+  document.getElementById('gfInputModo').value      = 'transferencia';
+  document.getElementById('gfInputFechaPago').value = '';
+  document.getElementById('gfInputNotas').value     = '';
+  openModal('modalEditarGF');
+  setTimeout(() => document.getElementById('gfInputServicio').focus(), 50);
 }
 
 function _editarGastoFijo(id) {
   const g = gastosFijos.find(x => x.id === id);
   if (!g) return;
-  const nuevoMonto = prompt(`Monto de "${g.servicio}":`, g.monto);
-  if (nuevoMonto === null) return;
-  const n = parseFloat(nuevoMonto);
-  if (!isFinite(n) || n < 0) { toast('Monto inválido', 'error'); return; }
-  g.monto = n;
+  _gfEditando = { id };
+  document.getElementById('modalEditarGFTitulo').textContent = 'Editar gasto fijo';
+  document.getElementById('gfInputServicio').value  = g.servicio || '';
+  document.getElementById('gfInputCategoria').value = g.categoria || 'Otros';
+  document.getElementById('gfInputMonto').value     = g.monto ?? '';
+  document.getElementById('gfInputModo').value      = g.modo || '';
+  document.getElementById('gfInputFechaPago').value = g.fechaPago || '';
+  document.getElementById('gfInputNotas').value     = g.notas || '';
+  openModal('modalEditarGF');
+  setTimeout(() => document.getElementById('gfInputServicio').focus(), 50);
+}
+
+function _guardarGastoFijo() {
+  const servicio = document.getElementById('gfInputServicio').value.trim();
+  if (!servicio) { toast('El nombre no puede estar vacío', 'error'); return; }
+  const monto    = parseFloat(document.getElementById('gfInputMonto').value) || 0;
+  const cat      = document.getElementById('gfInputCategoria').value;
+  const modo     = document.getElementById('gfInputModo').value.trim();
+  const fechaPago = document.getElementById('gfInputFechaPago').value || null;
+  const notas    = document.getElementById('gfInputNotas').value.trim();
+
+  if (_gfEditando?.nuevo) {
+    gastosFijos.push({
+      id: crypto.randomUUID(), periodo: _gfEditando.periodo,
+      servicio, categoria: cat, monto, pagado: false, modo, fechaPago, notas
+    });
+  } else {
+    const g = gastosFijos.find(x => x.id === _gfEditando?.id);
+    if (!g) return;
+    g.servicio = servicio; g.categoria = cat; g.monto = monto;
+    g.modo = modo; g.fechaPago = fechaPago; g.notas = notas;
+  }
+  closeModal('modalEditarGF');
   _persistBase();
   renderContable();
 }
@@ -6407,7 +6525,7 @@ function renderContable() {
 
   if (!mpIngPeriod.length) {
     document.getElementById('secMPIngresosBody').innerHTML =
-      `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos MP para este período. Usá "Importar Ingresos MP" arriba.</div>`;
+      `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin ingresos MP para este período. Usá "Reporte MP" arriba.</div>`;
   } else {
     const _mpGrups = {};
     mpIngPeriod.forEach(m => { const k = m.tipo||'Sin tipo'; (_mpGrups[k]||=[]).push(m); });
@@ -6723,6 +6841,7 @@ function _matchProvPorMov(nombre, cuitNum) {
     if (porCuit) return porCuit;
   }
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const STOP = new Set(['buenos','aires','banco','galicia','argentina','transfer','terceros','sociedad','anonima','limitada','nacional','federal','capital','provincia','ciudad','republica','interna','externa','bancaria']);
   const nNorm = norm(nombre);
   if (nNorm.length < 4) return null;
   return proveedores.find(p => {
@@ -6730,8 +6849,10 @@ function _matchProvPorMov(nombre, cuitNum) {
     if (!pNorm || pNorm.length < 4) return false;
     if (nNorm.includes(pNorm)) return true;
     if (pNorm.includes(nNorm) && nNorm.length >= 5) return true;
-    const words = p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w => w.length > 4);
-    const hits  = words.filter(w => nNorm.includes(norm(w)));
+    const words = p.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+      .filter(w => w.length > 4 && !STOP.has(w));
+    if (!words.length) return false;
+    const hits = words.filter(w => nNorm.includes(norm(w)));
     return hits.length >= 2;
   }) || null;
 }
@@ -6974,8 +7095,14 @@ function _vincularMP(mpId, facturaId) {
   renderContable();
   toast('Retiro vinculado — no se suma a egresos MP', 'success');
 }
-function _buildGFOpciones(monto, periodoMov, actionPrefix) {
+function _buildGFOpciones(monto, periodoMov, actionPrefix, descripcion = '') {
   if (!gastosFijos.length) return `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin gastos fijos cargados</div>`;
+  const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,' ').trim();
+  const words = norm(descripcion).split(/\s+/).filter(w => w.length > 2);
+  const nameScore = g => {
+    const sNorm = norm(g.servicio);
+    return words.filter(w => sNorm.includes(w) || w.includes(sNorm)).length;
+  };
   const periodos = [...new Set(gastosFijos.map(g => g.periodo))].sort((a,b) => {
     if (a === periodoMov) return -1;
     if (b === periodoMov) return 1;
@@ -6983,14 +7110,24 @@ function _buildGFOpciones(monto, periodoMov, actionPrefix) {
   });
   return periodos.map(p => {
     const items = gastosFijos.filter(g => g.periodo === p)
-      .sort((a, b) => Math.abs(a.monto - monto) - Math.abs(b.monto - monto));
+      .sort((a, b) => {
+        const sa = nameScore(a), sb = nameScore(b);
+        if (sb !== sa) return sb - sa;
+        return Math.abs(a.monto - monto) - Math.abs(b.monto - monto);
+      });
     const esMisMes = p === periodoMov;
     return `<div style="font-size:11px;font-weight:700;color:${esMisMes?'var(--ink)':'var(--ink3)'};text-transform:uppercase;letter-spacing:.05em;padding:8px 2px 4px;${esMisMes?'':'margin-top:8px;border-top:1px solid var(--border)'}">${p}${esMisMes?' (mismo mes)':''}</div>`
       + items.map(g => {
-          const match = Math.round(g.monto) === Math.round(monto);
-          return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#5B21B6':''}" onclick="${actionPrefix},'${g.id}')">
+          const montoMatch = Math.round(g.monto) === Math.round(monto);
+          const nmatch     = nameScore(g) > 0;
+          const border     = nmatch ? 'border-color:#2D6A4F;border-width:2px' : montoMatch ? 'border-color:#5B21B6' : '';
+          const hints      = [
+            nmatch     ? `<span style="color:#2D6A4F;font-weight:700">✓ nombre</span>` : '',
+            montoMatch ? `<span style="color:#5B21B6;font-weight:700">monto exacto</span>` : '',
+          ].filter(Boolean).join(' · ');
+          return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${border}" onclick="${actionPrefix},'${g.id}')">
             <div style="font-weight:700;font-size:13px;color:var(--ink)">${g.servicio}</div>
-            <div style="font-size:11px;color:var(--ink2);margin-top:2px">${g.categoria||''} · ${pesos(g.monto)}${match?' · <span style="color:#5B21B6;font-weight:700">monto exacto</span>':''}</div>
+            <div style="font-size:11px;color:var(--ink2);margin-top:2px">${g.categoria||''} · ${pesos(g.monto)}${hints?' · '+hints:''}</div>
           </button>`;
         }).join('');
   }).join('');
@@ -6999,7 +7136,7 @@ function _abrirVincularGFMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
   const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
-  const opcionesHtml = _buildGFOpciones(m.monto, periodo, `_vincularGFMP('${mpId}'`);
+  const opcionesHtml = _buildGFOpciones(m.monto, periodo, `_vincularGFMP('${mpId}'`, m.destino || '');
   document.body.insertAdjacentHTML('beforeend', `
     <div class="overlay open" id="vincularGFMPModal" style="display:flex">
       <div class="modal" style="max-width:520px">
@@ -7136,12 +7273,11 @@ function importMP(e) {
       // que XLSX auto-convierta fechas DD/MM a serials de Excel)
       const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result)).replace(/^﻿/, '');
       const lines = text.split(/\r?\n/).filter(l => l.trim());
-      const esCSV_viejo = lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0]);
-      const esCSV_nuevo = lines.length > 1 && /fecha/.test(lines[0]) && /monto/.test(lines[0]);
-      if (esCSV_viejo || esCSV_nuevo) {
-        _importMPcsv(lines);
-        return;
-      }
+      const esCSV_viejo    = lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0]);
+      const esCSV_nuevo    = lines.length > 1 && /fecha/.test(lines[0]) && /monto/.test(lines[0]);
+      const esCSV_standard = lines.length > 1 && /TRANSACTION_DATE/i.test(lines[0]) && /TRANSACTION_TYPE/i.test(lines[0]);
+      if (esCSV_viejo || esCSV_nuevo) { _importMPcsv(lines); return; }
+      if (esCSV_standard)             { _importMPStandardLines(lines); return; }
 
       const wb   = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 });
       const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -7410,7 +7546,7 @@ function _abrirVincularGFGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
   const periodo = m.fecha ? m.fecha.slice(0, 7) : null;
-  const opcionesHtml = _buildGFOpciones(m.monto, periodo, `_vincularGFGal('${galId}'`);
+  const opcionesHtml = _buildGFOpciones(m.monto, periodo, `_vincularGFGal('${galId}'`, m.descripcion || '');
   document.body.insertAdjacentHTML('beforeend', `
     <div class="overlay open" id="vincularGFGalModal" style="display:flex">
       <div class="modal" style="max-width:520px">
@@ -7460,6 +7596,7 @@ function _autoVincularGalicia() {
 
 // ── IMPORT GALICIA ──
 let _galPendienteImport = null; // { egresos: [], ingresos: [], autoVinculados: number }
+let _mpPendienteImport  = null; // { ingresos: [], egresos: [], autoVinculados: number }
 
 function importGalicia(e) {
   const file = e.target.files[0]; if(!file) return; e.target.value='';
@@ -7562,36 +7699,106 @@ function _confirmarImportGalicia() {
   toast(`Galicia: ${parts.join(' · ')} importados`, 'success');
 }
 
-// ── IMPORT INGRESOS MP ──
-function importMPIng(e) {
+// ── IMPORT REPORTE MP STANDARD (CSV oficial MP — ingresos + egresos) ──
+function _importMPStandardLines(lines) {
+  const clean = s => String(s||'').replace(/^"+|"+$/g,'').trim();
+  const norm  = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+  const existIng = new Set(mpIngMovs.map(m => m.id));
+  const existEgr = new Set(mpMovs.map(m => m.id));
+  const newIngresos = [], newEgresos = [];
+  let autoVinculados = 0;
+
+  lines.slice(1).forEach(line => {
+    const cols = line.split(';');
+    if (cols.length < 20) return;
+
+    const id     = clean(cols[3]); if (!id) return;
+    const tipoTx = clean(cols[5]);
+    const amt    = parseFloat(clean(cols[6]).replace(',','.'));
+    if (!isFinite(amt)) return;
+
+    const fecha = clean(cols[12]);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+
+    const payMethod  = clean(cols[17]);
+    const saleDetail = clean(cols[34]);
+    const payerName  = clean(cols[59]);
+
+    if ((tipoTx === 'SETTLEMENT' || tipoTx === 'REFUND') && amt > 0) {
+      if (existIng.has(id)) return;
+      const descripcion = payerName || saleDetail || '';
+      const tipo = tipoTx === 'REFUND' ? 'Reintegro' : (payMethod || 'Sin tipo');
+      newIngresos.push({ id, fecha, monto: amt, tipo, descripcion, gasto: null });
+      existIng.add(id);
+
+    } else if (tipoTx === 'PAYOUTS' || (tipoTx === 'SETTLEMENT' && amt < 0)) {
+      if (existEgr.has(id)) return;
+      const monto    = Math.abs(amt);
+      const esRetiro = tipoTx === 'PAYOUTS';
+      const destino  = saleDetail || (esRetiro ? 'Retiro a banco' : '');
+      const tipo     = esRetiro ? 'Retiro' : 'Débito MP';
+      const mov = { id, fecha, monto, destino, tipo, categoria: '' };
+
+      if (!esRetiro) {
+        const titNorm = norm(destino);
+        const match = facturas.find(f => {
+          if (f.importeTotal <= 0) return false;
+          const prov = proveedores.find(p => p.id === f.proveedorId); if (!prov) return false;
+          const pNorm = norm(prov.nombre);
+          const nombreMatch = titNorm.includes(pNorm) || pNorm.includes(titNorm) ||
+            prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+              .filter(w => w.length > 3).some(w => titNorm.includes(w));
+          return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
+        });
+        if (match) { mov.facturaId = match.id; autoVinculados++; }
+      }
+
+      newEgresos.push(mov);
+      existEgr.add(id);
+    }
+  });
+
+  if (!newIngresos.length && !newEgresos.length) {
+    toast('Sin movimientos nuevos para importar', 'info'); return;
+  }
+
+  _mpPendienteImport = { ingresos: newIngresos, egresos: newEgresos, autoVinculados };
+  const p2 = n => '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const resumen = [];
+  if (newIngresos.length) resumen.push(`<strong>${newIngresos.length} ingresos nuevos</strong> · <span style="color:var(--accent)">${p2(newIngresos.reduce((s,m)=>s+m.monto,0))}</span>`);
+  if (newEgresos.length) {
+    const base = `<strong>${newEgresos.length} egresos nuevos</strong> · ${p2(newEgresos.reduce((s,m)=>s+m.monto,0))}`;
+    resumen.push(autoVinculados ? base + ` <span style="color:var(--accent)">(${autoVinculados} vinculados)</span>` : base);
+  }
+  document.getElementById('importMPResumen').innerHTML = resumen.join('<br>');
+  openModal('modalImportMP');
+}
+
+function importMPStandard(e) {
   const file = e.target.files[0]; if (!file) return; e.target.value = '';
   const reader = new FileReader();
-  reader.onload = evt => {
-    const lines = evt.target.result.split(/\r?\n/).filter(l => l.trim());
+  reader.onload = ev => {
+    const lines = ev.target.result.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) { toast('Archivo vacío o inválido', 'error'); return; }
-    const existing = new Set(mpIngMovs.map(m => m.id));
-    let added = 0;
-    lines.slice(1).forEach(line => {
-      const cols = line.split(';');
-      if (cols.length < 18) return;
-      const tipoTx = (cols[5]||'').trim();
-      const monto  = parseFloat((cols[8]||'').replace(',','.'));
-      if (tipoTx !== 'SETTLEMENT' || !(monto > 0)) return;
-      const id = (cols[3]||'').trim();
-      if (!id || existing.has(id)) return;
-      const fecha       = (cols[12]||'').trim();
-      const payMethod   = (cols[17]||'').trim();
-      const payer       = (cols[59]||'').replace(/^"+|"+$/g,'').trim();
-      const saleDetail  = (cols[34]||'').replace(/^"+|"+$/g,'').trim();
-      const descripcion = payer || saleDetail || '';
-      mpIngMovs.push({ id, fecha, monto, tipo: payMethod||'Sin tipo', descripcion, gasto: null });
-      existing.add(id);
-      added++;
-    });
-    if (added > 0) { _persistMPIng(); renderContable(); toast(`${added} ingresos MP importados`, 'success'); }
-    else toast('Sin ingresos nuevos para importar', 'info');
+    _importMPStandardLines(lines);
   };
   reader.readAsText(file, 'utf-8');
+}
+
+function _confirmarImportMP() {
+  if (!_mpPendienteImport) return;
+  const { ingresos, egresos, autoVinculados } = _mpPendienteImport;
+  _mpPendienteImport = null;
+  ingresos.forEach(m => mpIngMovs.push(m));
+  egresos.forEach(m => mpMovs.push(m));
+  closeModal('modalImportMP');
+  _persistMP(); _persistMPIng(); renderContable();
+  if (ingresos.length) _irAlPeriodoImportado(mpIngMovs);
+  const parts = [];
+  if (ingresos.length) parts.push(`${ingresos.length} ingresos`);
+  if (egresos.length) parts.push(`${egresos.length} egresos${autoVinculados ? ` · ${autoVinculados} vinculados` : ''}`);
+  toast(`Reporte MP: ${parts.join(' · ')} importados`, 'success');
 }
 
 // ── IMPORT FORMA DE COBRO ──
@@ -9686,13 +9893,53 @@ function _stopIdleWatcher() {
 function _syncChip(state) {
   const el = document.getElementById('syncChip');
   if (!el) return;
-  const map = { syncing: ['⟳ Guardando…','#FEF3C7','#92400E'], ok: ['✓ Sincronizado','#D1FAE5','#065F46'], error: ['⚠ Sin conexión','#FEE2E2','#991B1B'] };
+  const map = {
+    syncing: ['⟳ Guardando…','#FEF3C7','#92400E'],
+    ok:      ['✓ Sincronizado','#D1FAE5','#065F46'],
+    error:   ['⚠ Sin conexión','#FEE2E2','#991B1B'],
+    paused:  ['⏸ Modo local','#EDE9FE','#5B21B6'],
+  };
   const [text, bg, color] = map[state] || map.ok;
   el.textContent = text; el.style.background = bg; el.style.color = color; el.style.display = '';
   if (state === 'ok') setTimeout(() => { el.style.display = 'none'; }, 2500);
 }
 
+function _toggleSyncPaused() {
+  if (!_fbLoaded) { toast('Esperá que termine de cargar antes de activar modo local', 'info'); return; }
+  _syncPaused = !_syncPaused;
+  const btn = document.getElementById('btnModoLocal');
+  if (btn) {
+    btn.textContent    = _syncPaused ? '⏸ Modo local ON' : '☁ Auto-sync ON';
+    btn.style.color       = _syncPaused ? '#5B21B6' : '';
+    btn.style.borderColor = _syncPaused ? '#5B21B6' : '';
+  }
+  if (_syncPaused) _syncChip('paused');
+  else { const el = document.getElementById('syncChip'); if (el) el.style.display = 'none'; }
+}
+
+function _sincronizarTodo() {
+  if (!_fbLoaded) { toast('Firebase no está listo', 'error'); return; }
+  _syncChip('syncing');
+  const ventasPorMes = {};
+  ventas.forEach(v => {
+    const mes = (v.fecha || '').slice(0, 7).replace('-', '_') || 'sin_mes';
+    if (!ventasPorMes[mes]) ventasPorMes[mes] = [];
+    ventasPorMes[mes].push(v);
+  });
+  Promise.all([
+    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
+    _db.collection('data').doc('contable_mp_ing').set({ items: mpIngMovs }),
+    _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
+    ...Object.entries(ventasPorMes).map(([mes, items]) =>
+      _db.collection('data').doc(`contable_ventas_${mes}`).set({ items })
+    ),
+  ]).then(() => { _syncChip('ok'); toast('Sincronizado con la nube', 'success'); })
+    .catch(e => { console.warn('sync error', e.message); _syncChip('error'); toast('Error al sincronizar', 'error'); });
+}
+
 async function _fbWrite(docId, data) {
+  if (_syncPaused) { _syncChip('paused'); return; }
   try {
     await _db.collection('data').doc(docId).set(data, { merge: true });
   } catch(e) {
