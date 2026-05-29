@@ -11280,32 +11280,91 @@ function _depRenderPendientes(screen) {
   }).join('');
 }
 
+function _depMovsPorProv() {
+  const insumoAProv = {};
+  proveedores.forEach(prov => {
+    (prov.items || []).forEach(it => {
+      if (it.insumoId && !insumoAProv[it.insumoId]) insumoAProv[it.insumoId] = prov;
+    });
+  });
+  const grupos = {};
+  depositoMovs.forEach(m => {
+    let prov = null;
+    if (m.origen?.tipo === 'pedido') {
+      const ped = pedidosPendientes.find(p => p.id === m.origen.id);
+      if (ped) prov = proveedores.find(p => p.id === ped.proveedorId) || null;
+    }
+    if (!prov) prov = insumoAProv[m.insumoId] || null;
+    const key = prov ? prov.id : '__sin_prov__';
+    if (!grupos[key]) grupos[key] = { prov, movs: [] };
+    grupos[key].movs.push(m);
+  });
+  return Object.values(grupos).sort((a, b) => (a.prov?.nombre || 'z').localeCompare(b.prov?.nombre || 'z', 'es'));
+}
+
 function _depRenderMovs(screen) {
   if (!depositoMovs.length) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin movimientos</h3><p>El historial de ingresos y salidas va a aparecer acá.</p></div>`;
     return;
   }
-  const movs = [...depositoMovs].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 200);
-  screen.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-    <div style="display:grid;grid-template-columns:90px 1fr auto 100px 110px;gap:10px;padding:8px 12px;background:var(--surface2);font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:1px solid var(--border)">
-      <div>Tipo</div><div>Insumo</div><div style="text-align:right">Cant.</div><div>Estado</div><div>Fecha</div>
-    </div>` +
-    movs.map((m, i) => {
-      const ins = insumos.find(x => x.id === m.insumoId);
-      const nombre = ins?.nombre || '?';
-      const tipoTxt = m.tipo === 'ingreso'
-        ? `<span style="color:#065F46;font-weight:600">↑ Ingreso</span>`
-        : `<span style="color:#991B1B;font-weight:600">↓ Salida</span>`;
-      const estColor = m.estado === 'confirmado' ? '#065F46' : m.estado === 'pendiente' ? '#92400E' : '#6B6760';
-      const bg = i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
-      return `<div style="display:grid;grid-template-columns:90px 1fr auto 100px 110px;gap:10px;padding:8px 12px;background:${bg};font-size:12px;align-items:center;border-bottom:1px solid var(--border)">
-        <div>${tipoTxt}</div>
-        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nombre.replace(/"/g, '&quot;')}">${nombre}${m.motivo ? ` <span style="color:var(--ink3);font-size:11px">· ${m.motivo}</span>` : ''}</div>
-        <div style="text-align:right;font-family:var(--mono);font-weight:600">${m.cantidad}</div>
-        <div style="color:${estColor};font-size:11px;font-weight:600;text-transform:capitalize">${m.estado}</div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--ink3)">${_depFmtFecha(m.fecha)}</div>
-      </div>`;
+  const grupos = _depMovsPorProv();
+  screen.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">` +
+    grupos.map(({ prov, movs }) => {
+      const nombre = prov?.nombre || 'Sin proveedor';
+      const ultimo = [...movs].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
+      const pendientes = movs.filter(m => m.estado === 'pendiente').length;
+      return `<button onclick="_depAbrirMovsProv('${prov?.id || '__sin_prov__'}')"
+        style="background:var(--surface);border:1px solid ${pendientes ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s;width:100%"
+        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+        <div style="font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+          <div style="font-size:22px;font-weight:700;color:var(--accent);font-family:var(--mono)">${movs.length}</div>
+          <div style="font-size:11px;color:var(--ink3)">movimientos</div>
+        </div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:6px">${ultimo ? _depFmtFecha(ultimo.fecha) : ''}</div>
+        ${pendientes ? `<div style="margin-top:8px;font-size:11px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:6px;padding:3px 8px;display:inline-block">⚠ ${pendientes} pendiente${pendientes === 1 ? '' : 's'}</div>` : ''}
+      </button>`;
     }).join('') + `</div>`;
+}
+
+function _depAbrirMovsProv(provId) {
+  const grupos = _depMovsPorProv();
+  const grupo = grupos.find(g => (g.prov?.id || '__sin_prov__') === provId);
+  if (!grupo) return;
+  const nombre = grupo.prov?.nombre || 'Sin proveedor';
+  const movs = [...grupo.movs].sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+
+  const rows = movs.map((m, i) => {
+    const ins = insumos.find(x => x.id === m.insumoId);
+    const n = ins?.nombre || '?';
+    const ingreso = m.tipo === 'ingreso';
+    const estColor = m.estado === 'confirmado' ? '#065F46' : m.estado === 'pendiente' ? '#92400E' : 'var(--ink3)';
+    const bg = i % 2 === 0 ? 'transparent' : 'var(--surface2)';
+    return `<div style="display:grid;grid-template-columns:80px 1fr auto 90px;gap:10px;padding:8px 4px;background:${bg};font-size:12px;align-items:center;border-bottom:1px solid var(--border)">
+      <div style="color:${ingreso ? '#065F46' : '#991B1B'};font-weight:600">${ingreso ? '↑ Ingreso' : '↓ Salida'}</div>
+      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${n.replace(/"/g,'&quot;')}">${n}${m.motivo ? `<div style="font-size:10px;color:var(--ink3)">${m.motivo}</div>` : ''}</div>
+      <div style="text-align:right;font-family:var(--mono);font-weight:700">${m.cantidad}</div>
+      <div style="font-size:10px;color:${estColor};font-weight:600;text-transform:capitalize">${m.estado}<br><span style="color:var(--ink3);font-weight:400">${_depFmtFecha(m.fecha)}</span></div>
+    </div>`;
+  }).join('');
+
+  const existing = document.getElementById('modalDepMovsProv');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modalDepMovsProv" class="overlay open" style="display:flex" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <h2 style="margin:0">${nombre}</h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalDepMovsProv').remove()">✕</button>
+        </div>
+        <p class="modal-sub" style="margin-bottom:10px">${movs.length} movimientos · más reciente primero</p>
+        <div style="display:grid;grid-template-columns:80px 1fr auto 90px;gap:10px;padding:6px 4px;font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:2px solid var(--border)">
+          <div>Tipo</div><div>Insumo</div><div style="text-align:right">Cant.</div><div>Estado</div>
+        </div>
+        <div style="overflow-y:auto;flex:1">${rows}</div>
+      </div>
+    </div>`);
 }
 
 function _depAbrirIngreso(pedidoId, modo) {
