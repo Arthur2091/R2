@@ -116,6 +116,13 @@ nav { display: flex; gap: 2px; }
 .ped-row:hover .ped-row-remove { opacity:1; }
 .ped-row-remove:hover { color:var(--danger); background:var(--surface2); }
 .ped-card-actions { display:flex; gap:8px; margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
+.ped-sched-row { display:flex; align-items:center; gap:8px; padding:6px 0; }
+.ped-sched-input { font-family:var(--font); font-size:12px; border:1px solid var(--border); border-radius:7px; padding:3px 8px; color:var(--ink2); background:var(--surface2); cursor:pointer; flex:1; }
+.ped-sched-clear { background:none; border:none; cursor:pointer; font-size:14px; color:var(--ink3); padding:0 2px; line-height:1; }
+.btn-wa.sched-2d { background:#F97316; }
+.btn-wa.sched-2d:hover { background:#EA6D0C; }
+.btn-wa.sched-1d { background:#EF4444; }
+.btn-wa.sched-1d:hover { background:#DC2626; }
 .btn-wa { flex:1; background:#25D366; color:#fff; border:none; padding:10px 14px; border-radius:8px; font:600 13px var(--font); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:background .12s, opacity .12s; }
 .btn-wa:hover { background:#1ebe5d; }
 .btn-wa:disabled { opacity:0.4; cursor:default; background:var(--ink3); }
@@ -10956,11 +10963,42 @@ function renderPrecComp() {
 
 /* ── PEDIDOS ────────────────────────────────────────────────────── */
 
-let _pedQty       = JSON.parse(localStorage.getItem('pedidoQty') || '{}');
+let _pedQty        = JSON.parse(localStorage.getItem('pedidoQty') || '{}');
 let _pedProvForTel = null;
+let _schedDates    = {};
+const _pedDraftTimers = {};
 
-function _persistPed() {
+function _getDaysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+function setSchedDate(provId, date) {
+  if (date) {
+    _schedDates[provId] = date;
+    _db.collection('scheduledDates').doc(provId).set({ date }).catch(() => {});
+  } else {
+    delete _schedDates[provId];
+    _db.collection('scheduledDates').doc(provId).delete().catch(() => {});
+  }
+  renderPedidos();
+}
+
+function _persistPed(provId) {
   localStorage.setItem('pedidoQty', JSON.stringify(_pedQty));
+  if (provId !== undefined) {
+    clearTimeout(_pedDraftTimers[provId]);
+    _pedDraftTimers[provId] = setTimeout(() => {
+      const items = _pedQty[provId];
+      if (items && Object.keys(items).length > 0) {
+        _db.collection('draftPedidos').doc(provId).set({ items }).catch(() => {});
+      } else {
+        _db.collection('draftPedidos').doc(provId).delete().catch(() => {});
+      }
+    }, 600);
+  }
 }
 
 function _ultimoPrecio(provId, insumoId) {
@@ -11110,6 +11148,14 @@ function renderPedidos() {
           ? `<strong style="color:var(--accent)">${nInsumosVisibles}</strong> coincidencia${nInsumosVisibles === 1 ? '' : 's'}`
           : `<strong>${nInsumosVisibles}</strong> insumo${nInsumosVisibles === 1 ? '' : 's'} disponibles`);
 
+    const _days = _getDaysUntil(_schedDates[prov.id]);
+    const _schedClass = itemsConQty > 0 && _days !== null
+      ? (_days <= 1 ? 'sched-1d' : _days === 2 ? 'sched-2d' : '')
+      : '';
+    const _schedLbl = itemsConQty > 0 && _days !== null
+      ? (_days < 0 ? 'Vencido' : _days === 0 ? '¡Enviar hoy!' : _days === 1 ? 'Mañana' : _days === 2 ? 'Faltan 2 días' : null)
+      : null;
+
     cardsHtml += `<div class="ped-card ${itemsConQty > 0 ? 'has-qty' : ''}" onclick="openPedidoModal('${prov.id}')" style="cursor:pointer">
       <div class="ped-card-head">
         <div style="min-width:0;flex:1">
@@ -11119,12 +11165,17 @@ function renderPedidos() {
         ${itemsConQty > 0 ? `<span style="font-size:11px;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:999px;font-weight:700;white-space:nowrap">${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'}</span>` : ''}
       </div>
       <div style="font-size:12px;color:var(--ink2);padding:6px 2px">${insumosLabel}</div>
+      <div class="ped-sched-row" onclick="event.stopPropagation()">
+        <span style="font-size:13px;color:var(--ink3)">📅</span>
+        <input type="date" class="ped-sched-input" value="${_schedDates[prov.id]||''}" onchange="setSchedDate('${prov.id}',this.value)">
+        ${_schedDates[prov.id] ? `<button class="ped-sched-clear" onclick="event.stopPropagation();setSchedDate('${prov.id}','')">✕</button>` : ''}
+      </div>
       <div class="ped-card-actions">
         ${(() => {
           const hasTel = !!(prov.telefono || '').replace(/\D/g,'');
           if (itemsConQty > 0) {
-            const lbl = hasTel ? '📱 Pedir por WhatsApp' : '✓ Registrar pedido (presencial)';
-            return `<button class="btn-wa" onclick="event.stopPropagation();enviarPedidoWA('${prov.id}')">${lbl}</button>`;
+            const lbl = _schedLbl || (hasTel ? '📱 Pedir por WhatsApp' : '✓ Registrar pedido (presencial)');
+            return `<button class="btn-wa ${_schedClass}" onclick="event.stopPropagation();enviarPedidoWA('${prov.id}')">${lbl}</button>`;
           }
           if (nPend > 0) {
             return `<button class="btn-wa" onclick="event.stopPropagation();_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}</button>`;
@@ -11229,7 +11280,7 @@ function renderPedidoModalContent() {
 function pedInc(provId, insumoId) {
   _pedQty[provId] = _pedQty[provId] || {};
   _pedQty[provId][insumoId] = (_pedQty[provId][insumoId] || 0) + 1;
-  _persistPed();
+  _persistPed(provId);
   renderPedidos();
   if (_pedModalProvId === provId) renderPedidoModalContent();
 }
@@ -11239,7 +11290,7 @@ function pedDec(provId, insumoId) {
   const cur = _pedQty[provId][insumoId] || 0;
   if (cur <= 1) delete _pedQty[provId][insumoId];
   else _pedQty[provId][insumoId] = cur - 1;
-  _persistPed();
+  _persistPed(provId);
   renderPedidos();
   if (_pedModalProvId === provId) renderPedidoModalContent();
 }
@@ -11314,7 +11365,7 @@ function enviarPedidoWA(provId) {
 
   // RESET cantidades antes de abrir WA (por si el popup bloquea código posterior)
   delete _pedQty[provId];
-  _persistPed();
+  _persistPed(provId);
   if (_pedModalProvId === provId) closePedidoModal();
   renderPedidos();
 
@@ -12246,6 +12297,23 @@ function _bootApp() {
   renderProveedores();
   renderPedidos();
   _fbLoad().then(() => _depBadgeUpdate());
+  // Sync en tiempo real: cantidades de pedidos y fechas programadas
+  _db.collection('draftPedidos').onSnapshot(snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') { delete _pedQty[ch.doc.id]; }
+      else { _pedQty[ch.doc.id] = ch.doc.data().items || {}; }
+    });
+    localStorage.setItem('pedidoQty', JSON.stringify(_pedQty));
+    renderPedidos();
+    if (_pedModalProvId) renderPedidoModalContent();
+  }, () => {});
+  _db.collection('scheduledDates').onSnapshot(snap => {
+    snap.docChanges().forEach(ch => {
+      if (ch.type === 'removed') { delete _schedDates[ch.doc.id]; }
+      else { _schedDates[ch.doc.id] = ch.doc.data().date || null; }
+    });
+    renderPedidos();
+  }, () => {});
 }
 
 const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
