@@ -1858,6 +1858,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
     <input type="hidden" id="pEditId">
     <div class="modal-actions">
+      <button id="pDeleteBtn" class="btn btn-danger" onclick="eliminarProvDesdeModal()" style="margin-right:auto;display:none">Eliminar proveedor</button>
       <button class="btn btn-outline" onclick="closeModal('modalProveedor')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveProveedor()">Guardar</button>
     </div>
@@ -2877,6 +2878,7 @@ function openAddProvModal() {
   document.getElementById('modalProvTitle').textContent = 'Nuevo Proveedor';
   ['pNombre','pTelefono','pEmail','pCuit','pNotas','pEditId'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pPago').value = 'transferencia';
+  document.getElementById('pDeleteBtn').style.display = 'none';
   openModal('modalProveedor');
 }
 
@@ -2891,7 +2893,17 @@ function openEditProvModal(id) {
   document.getElementById('pNotas').value    = p.notas    || '';
   document.getElementById('pPago').value     = p.pago     || 'transferencia';
   document.getElementById('pEditId').value   = id;
+  document.getElementById('pDeleteBtn').style.display = '';
   openModal('modalProveedor');
+}
+
+function eliminarProvDesdeModal() {
+  const id = document.getElementById('pEditId').value;
+  const p = proveedores.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm(`¿Eliminás a "${p.nombre}"? Se borran también sus facturas y precios.`)) return;
+  closeModal('modalProveedor');
+  eliminarProveedor(id, p.nombre);
 }
 
 
@@ -3115,7 +3127,6 @@ function renderProveedores() {
             <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
               <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Datos del proveedor">⚙</button>
               <button class="btn btn-outline btn-sm" onclick="renombrarProveedor('${p.id}')" title="Renombrar">✎</button>
-              <button class="btn btn-danger btn-sm" onclick="eliminarProveedor('${p.id}','${(p.nombre||'').replace(/'/g, "\\'")}')" title="Eliminar">✕</button>
             </div>
           </div>
           ${(() => {
