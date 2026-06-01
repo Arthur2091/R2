@@ -184,6 +184,8 @@ select {
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { background: #b91c1c; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
+.prov-suggestion-chip { background:var(--surface2); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:12px; font-weight:600; cursor:pointer; color:var(--ink); transition:background .12s, border-color .12s; white-space:nowrap; }
+.prov-suggestion-chip:hover { background:var(--accent-light); border-color:var(--accent); color:var(--accent); }
 
 /* STATS BAR */
 .stats-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -929,6 +931,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         <button type="button" class="btn btn-sm btn-outline" onclick="_bAbrirNuevoProvDesdeBoleta()" style="white-space:nowrap;padding:4px 10px;font-size:12px">+ Nuevo</button>
       </div>
       <div id="boletaDetectedStatus" style="font-size:12px;margin-top:2px"></div>
+      <div id="boletaProvSuggestions" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px"></div>
       <div id="boletaManualProvWrap" style="display:none;margin-top:8px;display:none;gap:8px;align-items:center">
         <input id="boletaManualProv" type="text" placeholder="Nombre del proveedor" style="padding:6px 10px;border:1.5px solid var(--info);border-radius:8px;font:14px var(--font);background:var(--surface);outline:none;width:200px">
       </div>
@@ -4911,18 +4914,54 @@ function _bRefreshProvDatalist() {
   dl.innerHTML = proveedores.map(p => `<option value="${p.nombre.replace(/"/g,'&quot;')}">`).join('');
 }
 
+function _bProvScore(provNombre, val) {
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const nProv = norm(provNombre), nVal = norm(val);
+  if (!nVal) return 0;
+  if (nProv === nVal) return 100;
+  if (nProv.includes(nVal) || nVal.includes(nProv)) return 80;
+  const words = nVal.split(/\s+/).filter(w => w.length > 2);
+  let score = 0;
+  words.forEach(w => { if (nProv.includes(w)) score += 30; });
+  // Character overlap score
+  let overlap = 0;
+  for (let i = 0; i < Math.min(nVal.length, nProv.length); i++) {
+    if (nProv.includes(nVal[i])) overlap++;
+  }
+  score += Math.round((overlap / Math.max(nVal.length, 1)) * 20);
+  return score;
+}
+
+function _bSelectSuggestedProv(nombre) {
+  _bProvName = nombre;
+  const input = document.getElementById('boletaDetectedProv');
+  if (input) input.value = nombre;
+  _bCheckPedidoPendiente();
+  _bMarkProvField();
+}
+
 function _bMarkProvField() {
   const input  = document.getElementById('boletaDetectedProv');
   const status = document.getElementById('boletaDetectedStatus');
+  const sugg   = document.getElementById('boletaProvSuggestions');
   if (!input || !status) return;
   const val = (_bProvName || '').trim();
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  const hideSugg = () => { if (sugg) sugg.style.display = 'none'; };
+
   if (!val) {
     input.style.border = '2px solid #F59E0B';
     input.style.background = '#FEF3C7';
-    status.innerHTML = `<span style="color:#92400E;font-weight:600">⚠️ La IA no detectó el proveedor — escribilo a mano o clickeá "+ Nuevo"</span>`;
+    status.innerHTML = `<span style="color:#92400E;font-weight:600">⚠️ La IA no detectó el proveedor — seleccioná uno:</span>`;
+    if (sugg && proveedores.length) {
+      const sorted = [...proveedores].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      sugg.style.display = 'flex';
+      sugg.innerHTML = sorted.map(p => `<button class="prov-suggestion-chip" onclick="_bSelectSuggestedProv('${p.nombre.replace(/'/g,"\\'")}')">  ${p.nombre}</button>`).join('');
+    }
     return;
   }
-  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+
   const found = proveedores.find(p => norm(p.nombre).includes(norm(val)) || norm(val).includes(norm(p.nombre)));
   if (found) {
     if (_bProvName !== found.nombre) {
@@ -4932,10 +4971,22 @@ function _bMarkProvField() {
     input.style.border = '1px solid #10B981';
     input.style.background = '#F0FDF4';
     status.innerHTML = `<span style="color:#065F46">✓ Vinculado a proveedor del sistema: <strong>${found.nombre}</strong></span>`;
+    hideSugg();
   } else {
     input.style.border = '1.5px solid var(--info)';
     input.style.background = 'var(--surface)';
-    status.innerHTML = `<span style="color:#1D4ED8">✦ Se va a dar de alta como nuevo proveedor</span>`;
+    // Mostrar sugerencias similares
+    const scored = proveedores
+      .map(p => ({ p, score: _bProvScore(p.nombre, val) }))
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+    if (sugg && scored.length) {
+      sugg.style.display = 'flex';
+      sugg.innerHTML = `<span style="font-size:11px;color:var(--ink3);align-self:center;margin-right:2px">¿Querés decir?</span>` +
+        scored.map(({p}) => `<button class="prov-suggestion-chip" onclick="_bSelectSuggestedProv('${p.nombre.replace(/'/g,"\\'")}')">  ${p.nombre}</button>`).join('');
+    } else hideSugg();
+    status.innerHTML = `<span style="color:#1D4ED8">✦ No encontrado — seleccioná uno abajo o se creará como nuevo</span>`;
   }
 }
 
