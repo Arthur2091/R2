@@ -2073,6 +2073,7 @@ let _matchMap        = {};
 let _matchPendientes = [];
 
 
+
 /* ── PERSISTENCE ────────────────────────────────────────────────── */
 let _fbLoaded    = false;
 let _syncPaused  = false;
@@ -2122,6 +2123,7 @@ function _importarDatosLegacy(input) {
   reader.readAsText(file);
   input.value = '';
 }
+
 
 /* ── NAVIGATION ─────────────────────────────────────────────────── */
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -2227,6 +2229,7 @@ function toast(msg, type = '', duration = 3000) {
   clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 }
+
 
 /* ── IMPORT ─────────────────────────────────────────────────────── */
 function onDrop(e) {
@@ -2873,6 +2876,7 @@ function _renderInsumosDetalle(provId) {
     </div>
     ${rowsHtml}`;
 }
+
 
 /* ── PROVEEDORES ────────────────────────────────────────────────── */
 let _activeProvId = null;
@@ -4783,6 +4787,7 @@ function saveEditFactura() {
   renderProveedorFacturas(provId, 'fact');
 }
 
+
 /* ── BOLETAS ────────────────────────────────────────────────────── */
 let _bImg64 = null, _bImgMime = null, _bFile = null;
 let _bItems = [], _bProvId = null, _bProvName = null;
@@ -5544,6 +5549,7 @@ function eliminarFactura(facturaId, provId) {
 
 function renderBoletaHistorial() {}
 
+
 /* ── CONTABLE ───────────────────────────────────────────────────── */
 // Extra state
 let ventas       = [];
@@ -5652,6 +5658,7 @@ function pesos(n) {
   if (!n && n !== 0) return '—';
   return '$' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
+
 
 /* PRODUCTOS */
 const MESES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -5908,6 +5915,7 @@ function renderProductosRubro(key, rubro) {
 }
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
+
 
 function _seedGFMayo2026() {
   ['2026-03','2026-04','2026-05'].forEach(PERIODO => _seedGFPeriodo(PERIODO));
@@ -6218,6 +6226,7 @@ function _guardarGastoFijo() {
   _persistBase();
   renderContable();
 }
+
 
 function renderContable() {
   const mes  = parseInt(document.getElementById('contableMes').value);
@@ -6711,6 +6720,7 @@ function renderContable() {
       <div class="sub">${resultado >= 0 ? 'Ganancia' : 'Pérdida'} del período</div>
     </div>`;
 }
+
 
 function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
@@ -7436,6 +7446,7 @@ function importMP(e) {
 }
 
 // ── CUIT LOOKUP ──
+
 async function _fetchCuit(cuit) { return null; } // proxies externos bloqueados — usar lookup manual
 
 async function _consultarCuitsGalicia() {
@@ -8145,6 +8156,7 @@ function deleteEgreso(id) {
   renderContable();
 }
 
+
 /* ── PRESENTACION / COSTO ───────────────────────────────────────── */
 function _fmtPres(ins) {
   if (!ins.presQty || !ins.presUnit) return '—';
@@ -8216,6 +8228,8 @@ function persistRecetas() {
   _syncChip('syncing');
   _fbWrite('recetas', { items: recetas }).then(() => _syncChip('ok')).catch(() => {});
 }
+
+
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
 async function importarInsumosExcel(input) {
@@ -8684,6 +8698,7 @@ function _finalizarImportRecetas() {
   toast(`${created} recetas importadas${updated?', '+updated+' actualizadas':''}${nNuevos?', '+nNuevos+' insumos creados':''}`, 'success');
 }
 
+
 /* ── CONFIG COSTOS GLOBALES ─────────────────────────────────────── */
 function _cfgMargen()  { return parseFloat(localStorage.getItem('cons_margen_obj') || '0') || 0; }
 function _cfgExtras()  { return parseFloat(localStorage.getItem('cons_costos_extra') || '0') || 0; }
@@ -8879,6 +8894,7 @@ function saveConfigCostos() {
   toast('Configuración guardada', 'success');
   if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
 }
+
 
 /* ── EDITAR RECETA ──────────────────────────────────────────────── */
 let _customRubros = JSON.parse(localStorage.getItem('cons_rubros') || '[]');
@@ -9774,6 +9790,7 @@ function limpiarRecetas() {
   toast('Recetas eliminadas');
 }
 
+
 /* ── CONSOLIDADO FINANCIERO ─────────────────────────────────────── */
 function verConsolidado() {
   const mes  = parseInt(document.getElementById('contableMes').value);
@@ -9913,6 +9930,7 @@ function verConsolidado() {
 
   openModal('modalConsolidado');
 }
+
 
 /* ── FIREBASE ───────────────────────────────────────────────────── */
 const _fbApp = firebase.initializeApp({
@@ -10197,6 +10215,7 @@ function importarDatos(input) {
   };
   reader.readAsText(file);
 }
+
 
 /* ── PRECIOS — TABLERO ──────────────────────────────────────────── */
 
@@ -11045,6 +11064,7 @@ function renderPrecComp() {
   screen.innerHTML = cards || `<div class="empty-state"><h3>Sin matches</h3><p>Cargá listas de precios y matcheá los ítems con tus insumos de boletas para verlos acá.</p></div>`;
 }
 
+
 /* ── PEDIDOS ────────────────────────────────────────────────────── */
 
 let _pedQty        = {};
@@ -11481,6 +11501,7 @@ function limpiarTodosPedidos() {
   renderPedidos();
 }
 
+
 /* ── DEPÓSITO ───────────────────────────────────────────────────── */
 
 // Usuario actual (placeholder hasta tener login multi-rol)
@@ -11911,6 +11932,7 @@ async function _depBorrarTodo() {
   toast('Depósito borrado', 'success');
 }
 
+
 /* ── IMPORTADOR RECETAS V2 ──────────────────────────────────────── */
 let _impWb = null;
 let _impParsed = [];   // recetas parseadas con campos extra: _idx, _tipo, _skip
@@ -12158,6 +12180,7 @@ function _impConfirmarImport() {
   toast(`${created} creadas, ${updated} actualizadas`, 'success');
 }
 
+
 /* ── PRODUCCIÓN ─────────────────────────────────────────────────── */
 
 function _prodUsuario() { return localStorage.getItem('cons_user') || 'Barra'; }
@@ -12368,6 +12391,7 @@ function _prodConfirmarRegistro() {
   toast(msg, recetaFab ? 'success' : 'error');
 }
 
+
 /* ── INIT ───────────────────────────────────────────────────────── */
 let _bootedOnce = false;
 function _bootApp() {
@@ -12511,6 +12535,7 @@ function _mostrarPantallaSinPermisos() {
   }
   el.classList.add('active');
 }
+
 
 /* ── PANEL USUARIOS (solo admin) ───────────────────────────────── */
 
