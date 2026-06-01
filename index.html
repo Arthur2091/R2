@@ -10179,20 +10179,23 @@ function importarDatos(input) {
   reader.onload = e => {
     try {
       const d = JSON.parse(e.target.result);
-      if (d.insumos)         { insumos = d.insumos;               localStorage.setItem('cons_insumos',     JSON.stringify(insumos)); }
-      if (d.proveedores)     { proveedores = d.proveedores;       localStorage.setItem('cons_proveedores', JSON.stringify(proveedores)); }
-      if (d.precios)         { precios = d.precios;               localStorage.setItem('cons_precios',     JSON.stringify(precios)); }
-      if (d.facturas)        { facturas = d.facturas;             localStorage.setItem('cons_facturas',    JSON.stringify(facturas)); }
-      if (d.recetas)         { recetas = d.recetas;               localStorage.setItem('cons_recetas',     JSON.stringify(recetas)); }
-      if (d.ventas)          { ventas = d.ventas;                 localStorage.setItem('cons_ventas',      JSON.stringify(ventas)); }
-      if (d.sueldos)         { sueldos = d.sueldos;               localStorage.setItem('cons_sueldos',     JSON.stringify(sueldos)); }
-      if (d.otrosEgresos)    { otrosEgresos = d.otrosEgresos;     localStorage.setItem('cons_otros',       JSON.stringify(otrosEgresos)); }
-      if (d.productosRubros) { productosRubros = d.productosRubros; localStorage.setItem('cons_prod_rubros', JSON.stringify(productosRubros)); }
-      if (d.rubros)          { _customRubros = d.rubros;          localStorage.setItem('cons_rubros',      JSON.stringify(_customRubros)); }
-      if (d.margen_obj)      { localStorage.setItem('cons_margen_obj',   d.margen_obj); }
-      if (d.costos_extra)    { localStorage.setItem('cons_costos_extra', d.costos_extra); }
+      if (d.insumos)         insumos         = d.insumos;
+      if (d.proveedores)     proveedores     = d.proveedores;
+      if (d.precios)         precios         = d.precios;
+      if (d.facturas)        facturas        = d.facturas;
+      if (d.recetas)         recetas         = d.recetas;
+      if (d.ventas)          ventas          = d.ventas;
+      if (d.sueldos)         sueldos         = d.sueldos;
+      if (d.otrosEgresos)    otrosEgresos    = d.otrosEgresos;
+      if (d.productosRubros) productosRubros = d.productosRubros;
+      if (d.rubros)          _customRubros   = d.rubros;
+      if (d.margen_obj)      localStorage.setItem('cons_margen_obj',   d.margen_obj);
+      if (d.costos_extra)    localStorage.setItem('cons_costos_extra', d.costos_extra);
+      persist();
+      persistContable();
+      persistRecetas();
       renderInsumos(); renderProveedores(); renderRecetas(); renderContable(); _actualizarBannerVencimientos();
-      toast('Backup restaurado', 'success');
+      toast('Backup restaurado y sincronizado con Firebase', 'success');
     } catch { toast('Error al leer el archivo', 'error'); }
   };
   reader.readAsText(file);
