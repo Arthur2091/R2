@@ -10041,7 +10041,6 @@ async function _fbWrite(docId, data) {
 }
 
 async function _fbLoad() {
-  _syncChip('syncing');
   try {
     const snap = await _db.collection('data').get();
     snap.forEach(doc => {
@@ -10113,10 +10112,8 @@ async function _fbLoad() {
     if (bannerApikey && getApiKey()) bannerApikey.style.display = 'none';
     if (_bItems.length) _bRenderItems();
     _fbLoaded = true;
-    _syncChip('ok');
   } catch(e) {
     console.warn('Firebase load error:', e);
-    _syncChip('error');
     toast('Error al conectar con la base de datos. Recargá la página antes de tocar nada.', 'error');
   }
 }
