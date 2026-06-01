@@ -3051,6 +3051,7 @@ function savePeriod() {
   localStorage.setItem('cons_anio', document.getElementById('contableAnio').value);
 }
 
+
 function renderProveedores() {
   _pendViewMode = null;
   const screen = document.getElementById('proveedoresScreen');
@@ -3304,6 +3305,7 @@ function guardarAltaInsumoManual() {
   toast(`${insumoNuevo ? `Insumo "${ins.nombre}" creado y agregado` : `Insumo agregado`} a ${prov.nombre}`, 'success');
 }
 
+
 function openNuevoProvModal() {
   document.getElementById('nuevoProvNombre').value = '';
   document.getElementById('nuevoProvTel').value = '';
@@ -3434,6 +3436,7 @@ function detectarDuplicadosProveedores() {
   renderProveedores();
   toast(`${duplicados.length} grupo${duplicados.length > 1 ? 's' : ''} unificado${duplicados.length > 1 ? 's' : ''}`, 'success');
 }
+
 
 function renderProveedorFacturas(provId, subtab) {
   const screen = document.getElementById('proveedoresScreen');
@@ -3783,6 +3786,7 @@ function _actualizarBadgePendientes() {
   const n = pedidosPendientes.filter(p => p.estado === 'pendiente' || p.estado === 'esperando_boleta' || p.estado === 'vinculado').length;
   btn.innerHTML = `Pedidos pendientes${n ? ` <span style="background:var(--accent);color:#fff;font-size:11px;padding:1px 8px;border-radius:999px;margin-left:4px;font-weight:700">${n}</span>` : ''}`;
 }
+
 
 function renderPendientesGlobal() {
   _pendViewMode = 'global';
@@ -4260,6 +4264,7 @@ const _jaccard = (a, b) => {
   return union ? inter / union : 0;
 };
 
+
 function buscarDuplicados() {
   if (insumos.length < 2) { toast('No hay suficientes insumos para comparar', 'warn'); return; }
   _dupPares = [];
@@ -4501,6 +4506,7 @@ function _revisionConfirmar() {
   persist(); renderInsumos(); renderProveedores();
   if (creados) toast(`${creados} insumo${creados !== 1 ? 's' : ''} dado${creados !== 1 ? 's' : ''} de alta`, 'success');
 }
+
 
 function renderFacturaDetalle(facturaId, provId) {
   const screen = document.getElementById('proveedoresScreen');
@@ -4786,6 +4792,7 @@ function saveEditFactura() {
   toast('Boleta actualizada', 'success');
   renderProveedorFacturas(provId, 'fact');
 }
+
 
 
 /* ── BOLETAS ────────────────────────────────────────────────────── */
