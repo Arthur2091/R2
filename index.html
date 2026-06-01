@@ -11047,7 +11047,7 @@ function renderPrecComp() {
 
 /* ── PEDIDOS ────────────────────────────────────────────────────── */
 
-let _pedQty        = JSON.parse(localStorage.getItem('pedidoQty') || '{}');
+let _pedQty        = {};
 let _pedProvForTel = null;
 let _schedDates    = {};
 const _pedDraftTimers = {};
@@ -11071,7 +11071,6 @@ function setSchedDate(provId, date) {
 }
 
 function _persistPed(provId) {
-  localStorage.setItem('pedidoQty', JSON.stringify(_pedQty));
   if (provId !== undefined) {
     clearTimeout(_pedDraftTimers[provId]);
     _pedDraftTimers[provId] = setTimeout(() => {
@@ -12381,13 +12380,11 @@ function _bootApp() {
   renderProveedores();
   renderPedidos();
   _fbLoad().then(() => _depBadgeUpdate());
-  // Sync en tiempo real: cantidades de pedidos y fechas programadas
   _db.collection('draftPedidos').onSnapshot(snap => {
     snap.docChanges().forEach(ch => {
       if (ch.type === 'removed') { delete _pedQty[ch.doc.id]; }
       else { _pedQty[ch.doc.id] = ch.doc.data().items || {}; }
     });
-    localStorage.setItem('pedidoQty', JSON.stringify(_pedQty));
     renderPedidos();
     if (_pedModalProvId) renderPedidoModalContent();
   }, () => {});
