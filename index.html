@@ -4864,20 +4864,42 @@ async function _bProcesarCola(idx, ok, errs) {
   _bProcesarCola(idx + 1, ok + 1, errs);
 }
 
+function _compressImage(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else       { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', 0.85);
+      resolve(compressed.split(',')[1]);
+    };
+    img.src = dataUrl;
+  });
+}
+
 function _bCargar(file) {
   _bFile = file.name; _bImgMime = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'image/jpeg');
   const isPdf = _bImgMime === 'application/pdf' || /\.pdf$/i.test(file.name);
   const reader = new FileReader();
-  reader.onload = ev => {
-    _bImg64 = ev.target.result.split(',')[1];
+  reader.onload = async ev => {
     if (isPdf) {
+      _bImg64 = ev.target.result.split(',')[1];
       document.getElementById('boletaPhotoWrap').innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;color:var(--ink2);text-align:center;gap:8px">
         <div style="font-size:48px">📄</div>
         <div style="font-weight:600;color:var(--ink)">${file.name}</div>
         <div style="font-size:12px">PDF · ${(file.size / 1024).toFixed(0)} KB</div>
       </div>`;
     } else {
-      document.getElementById('boletaPhotoWrap').innerHTML = `<img src="${ev.target.result}" alt="boleta">`;
+      _bImg64 = await _compressImage(ev.target.result);
+      _bImgMime = 'image/jpeg';
+      document.getElementById('boletaPhotoWrap').innerHTML = `<img src="data:image/jpeg;base64,${_bImg64}" alt="boleta">`;
     }
     document.getElementById('btnExtraer').disabled = false;
     document.getElementById('btnConfirmar').style.display = 'none';
@@ -5098,7 +5120,7 @@ async function _bCallIA(b64, mime) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 8192,
+      model: 'claude-haiku-4-5-20251001', max_tokens: 1500,
       messages: [{ role: 'user', content: [ block, { type: 'text', text: _BPROMPT } ]}]
     }),
   });
@@ -10443,7 +10465,7 @@ async function _lpCallIA(payloadContent) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6', max_tokens: 16000,
+      model: 'claude-haiku-4-5-20251001', max_tokens: 8000,
       messages: [{ role: 'user', content: payloadContent }]
     })
   });
