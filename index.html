@@ -990,6 +990,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <select id="contableAnio"></select>
     <button class="btn btn-outline" onclick="savePeriod();renderContable()">Actualizar</button>
     <button class="btn btn-primary" onclick="verConsolidado()">Ver consolidado</button>
+    <button class="btn btn-outline" onclick="abrirTableroProveedores()" style="font-weight:700">📊 Tablero</button>
     <div style="flex:1"></div>
     <label class="btn btn-outline" style="cursor:pointer">
       Importar ventas Excel
@@ -8339,6 +8340,126 @@ function persistRecetas() {
 }
 
 
+
+/* ── TABLERO COMPARATIVO ─────────────────────────────────────── */
+function abrirTableroProveedores() {
+  const mesesSet = new Set();
+  facturas.forEach(f => { if ((f.fecha||'').length >= 7) mesesSet.add(f.fecha.slice(0, 7)); });
+  ventas.forEach(v => { if ((v.fecha||'').length >= 7) mesesSet.add(v.fecha.slice(0, 7)); });
+  if (!mesesSet.size) { toast('Sin datos para mostrar', 'info'); return; }
+
+  const meses = [...mesesSet].filter(m => /^\d{4}-\d{2}$/.test(m)).sort().slice(-12);
+
+  const ventasMes = {};
+  ventas.forEach(v => {
+    const k = (v.fecha || '').slice(0, 7);
+    if (meses.includes(k)) ventasMes[k] = (ventasMes[k] || 0) + (Number(v.total) || 0);
+  });
+
+  const comprasProv = {};
+  facturas.forEach(f => {
+    const k = (f.fecha || '').slice(0, 7);
+    if (!k || !f.proveedorId || !meses.includes(k)) return;
+    if (!comprasProv[f.proveedorId]) comprasProv[f.proveedorId] = {};
+    comprasProv[f.proveedorId][k] = (comprasProv[f.proveedorId][k] || 0) + (Number(f.importeTotal) || 0);
+  });
+
+  const provsConData = proveedores
+    .filter(p => comprasProv[p.id])
+    .sort((a, b) =>
+      Object.values(comprasProv[b.id]).reduce((s, v) => s + v, 0) -
+      Object.values(comprasProv[a.id]).reduce((s, v) => s + v, 0)
+    );
+
+  const totalComprasMes = {};
+  meses.forEach(m => {
+    totalComprasMes[m] = provsConData.reduce((s, p) => s + (comprasProv[p.id]?.[m] || 0), 0);
+  });
+
+  const MESES_ABR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmtMes = m => { const [y,mo] = m.split('-'); return `${MESES_ABR[+mo-1]}<br><small>'${y.slice(2)}</small>`; };
+  const fmtK   = n => {
+    if (!n) return '<span style="color:var(--ink3)">—</span>';
+    if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+    if (n >= 1000) return '$' + Math.round(n/1000) + 'k';
+    return '$' + Math.round(n);
+  };
+  const fcColor = pct => pct == null ? 'var(--ink3)' : pct < 25 ? '#10B981' : pct < 35 ? '#D97706' : '#EF4444';
+
+  const STICKY_LEFT = 'position:sticky;left:0;z-index:1';
+  const TH_BASE = 'padding:10px 14px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2);white-space:nowrap;border-bottom:2px solid var(--border)';
+  const TD_BASE = 'padding:8px 14px;text-align:right;font-size:13px;font-family:var(--mono);white-space:nowrap;border-bottom:1px solid var(--border)';
+
+  const headerRow = `<tr>
+    <th style="${TH_BASE};text-align:left;${STICKY_LEFT};background:#FFF;min-width:170px;z-index:3">Proveedor</th>
+    ${meses.map(m => `<th style="${TH_BASE}">${fmtMes(m)}</th>`).join('')}
+    <th style="${TH_BASE};color:var(--ink)">Total</th>
+  </tr>`;
+
+  const ventasRowBg = '#F0FDF4';
+  const ventasRow = `<tr style="background:${ventasRowBg}">
+    <td style="${TD_BASE};text-align:left;font-weight:700;font-size:13px;color:#065F46;border-bottom:2px solid var(--border);${STICKY_LEFT};background:${ventasRowBg}">📈 Ventas</td>
+    ${meses.map(m => `<td style="${TD_BASE};color:#065F46;font-weight:700;border-bottom:2px solid var(--border)">${fmtK(ventasMes[m])}</td>`).join('')}
+    <td style="${TD_BASE};color:#065F46;font-weight:700;border-bottom:2px solid var(--border)">${fmtK(Object.values(ventasMes).reduce((s,v)=>s+v,0))}</td>
+  </tr>`;
+
+  const provRows = provsConData.map(p => {
+    const rowTotal = meses.reduce((s, m) => s + (comprasProv[p.id]?.[m] || 0), 0);
+    return `<tr>
+      <td style="${TD_BASE};text-align:left;font-size:13px;font-weight:600;color:var(--ink);${STICKY_LEFT};background:var(--surface)">${p.nombre}</td>
+      ${meses.map(m => `<td style="${TD_BASE}">${fmtK(comprasProv[p.id]?.[m])}</td>`).join('')}
+      <td style="${TD_BASE};font-weight:700">${fmtK(rowTotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const comprasRowBg = '#FFF5F5';
+  const totalComprasRow = `<tr style="background:${comprasRowBg}">
+    <td style="${TD_BASE};text-align:left;font-weight:700;font-size:13px;color:var(--danger);border-top:2px solid var(--border);border-bottom:0;${STICKY_LEFT};background:${comprasRowBg}">Total Compras</td>
+    ${meses.map(m => `<td style="${TD_BASE};color:var(--danger);font-weight:700;border-top:2px solid var(--border);border-bottom:0">${fmtK(totalComprasMes[m])}</td>`).join('')}
+    <td style="${TD_BASE};color:var(--danger);font-weight:700;border-top:2px solid var(--border);border-bottom:0">${fmtK(Object.values(totalComprasMes).reduce((s,v)=>s+v,0))}</td>
+  </tr>`;
+
+  const fcRowBg = 'var(--surface2)';
+  const foodCostRow = `<tr style="background:${fcRowBg}">
+    <td style="${TD_BASE};text-align:left;font-weight:700;font-size:12px;color:var(--ink2);border-bottom:0;${STICKY_LEFT};background:${fcRowBg}">Food cost %</td>
+    ${meses.map(m => {
+      const pct = ventasMes[m] ? Math.round((totalComprasMes[m]||0) / ventasMes[m] * 100) : null;
+      return `<td style="${TD_BASE};color:${fcColor(pct)};font-weight:700;border-bottom:0">${pct != null ? pct + '%' : '—'}</td>`;
+    }).join('')}
+    <td style="${TD_BASE};border-bottom:0"></td>
+  </tr>`;
+
+  document.getElementById('_tableroModal')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="_tableroModal" style="display:flex;align-items:flex-start;padding:16px;overflow:auto">
+      <div style="background:#FFF;border-radius:var(--radius);width:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.18);max-height:calc(100vh - 32px)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;font-size:18px;font-weight:700">Tablero — Proveedores por mes</h2>
+            <p style="margin:4px 0 0;font-size:13px;color:var(--ink2)">Gasto mensual por proveedor vs ventas · Últimos ${meses.length} meses con datos</p>
+          </div>
+          <button onclick="document.getElementById('_tableroModal').remove()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 16px;cursor:pointer;font:600 14px var(--font);color:var(--ink2)">✕ Cerrar</button>
+        </div>
+        <div style="overflow:auto;flex:1">
+          <table style="border-collapse:collapse;width:max-content;min-width:100%">
+            <thead style="position:sticky;top:0;z-index:4;background:#FFF">
+              ${headerRow}
+              ${ventasRow}
+            </thead>
+            <tbody>${provRows}</tbody>
+            <tfoot style="position:sticky;bottom:0;z-index:4">
+              ${totalComprasRow}
+              ${foodCostRow}
+            </tfoot>
+          </table>
+        </div>
+        <div style="padding:10px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--ink3);flex-shrink:0;display:flex;gap:16px;flex-wrap:wrap">
+          <span>Food cost: <strong style="color:#10B981">&lt;25% bueno</strong> · <strong style="color:#D97706">25–35% normal</strong> · <strong style="color:#EF4444">&gt;35% alto</strong></span>
+          <span>Importes abreviados: $1k = $1.000 · $1M = $1.000.000</span>
+        </div>
+      </div>
+    </div>`);
+}
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
 async function importarInsumosExcel(input) {
