@@ -12632,6 +12632,21 @@ function _aplicarPermisosUI(user) {
   }
 }
 
+// Evitar que seleccionar texto dispare navegación en elementos clickeables
+{
+  let _selAtMouseDown = '';
+  document.addEventListener('mousedown', () => {
+    _selAtMouseDown = window.getSelection().toString();
+  }, true);
+  document.addEventListener('click', e => {
+    const sel = window.getSelection().toString();
+    if (sel.length > 0 && sel !== _selAtMouseDown) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  }, true);
+}
+
 function _mostrarPantallaSinPermisos() {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   let el = document.getElementById('viewSinPermisos');
