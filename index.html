@@ -5155,6 +5155,17 @@ UNIDAD DE COMPRA vs CONTENIDO (MUY IMPORTANTE):
 - Aunque la boleta diga "360 huevos x $138,88" — INTERPRETÁ que es 1 cajón de 360, NO 360 unidades sueltas.
 - Heurística: si la cantidad supera 50 y la unidad es genérica ("un", "u", sin unidad), probablemente sea el contenido de UN PACK. Convertí a 1 pack/cajón/bolsa con peso_por_unidad = la cantidad original, y precio_unitario = precio_total.
 
+COLUMNAS DE FACTURAS CON PESO (muy común en proveedores de alimentos argentinos):
+Algunas facturas tienen columnas: Cant. | Presentación | Vol./Kg. | IVA | Descuentos | Unitario | Subtotal
+- "Cant." = cantidad de unidades compradas → campo "cantidad"
+- "Presentación" = descripción del envase (ignorar, no es precio ni cantidad)
+- "Vol./Kg." = peso real de lo comprado en kg → campo "peso_por_unidad", campo "unidad_peso" = "kg"
+- "Unitario" = precio POR KG (no por unidad) → campo "precio_unitario"
+- "Subtotal" = precio total del renglón → campo "precio_total"
+- Verificación: precio_unitario × Vol./Kg. × cantidad ≈ precio_total
+- Ejemplo: "1 un | 6.29 | 21% | 13.913,68 | 87.516,92" → cantidad:1, unidad:"un", peso_por_unidad:6.29, unidad_peso:"kg", precio_unitario:13913.68, precio_total:87516.92
+- NUNCA uses el código de artículo (número al inicio de la fila, ej: 813, 1330) como precio o cantidad.
+
 PROVEEDOR — REGLA CRÍTICA ARGENTINA:
 - Las facturas argentinas tienen impreso "ARCA" o "AFIP" como organismo de control fiscal. ARCA/AFIP NO es el proveedor — ignoralos completamente.
 - El proveedor es la empresa o persona que EMITE la factura (el vendedor). Suele aparecer como razón social, nombre comercial, o "CUIT: XX-XXXXXXXX-X" junto al nombre de la empresa.
