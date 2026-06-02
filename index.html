@@ -2069,6 +2069,8 @@ let _prodSubtab       = 'cocina';
 let _lpExtraido       = null;
 let _lpProvIdSel      = null;
 let _currentVerRecetaId = null;
+let _navStack = [];
+let _navSkipPush = false;
 let _pendingRecetas  = [];
 let _matchMap        = {};
 let _matchPendientes = [];
@@ -9600,6 +9602,7 @@ function _setRecetaTipo(tipo) {
 }
 
 function renderRecetas() {
+  _navStack = [];
   _currentVerRecetaId = null;
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
@@ -9879,7 +9882,21 @@ function _calcCostoRecetaUnd(rid, _visited) {
   return total / (r.rinde || 1);
 }
 
+function _navBack() {
+  const prev = _navStack.pop();
+  if (!prev || prev.type === 'lista') { renderRecetas(); return; }
+  _navSkipPush = true;
+  verReceta(prev.id);
+  _navSkipPush = false;
+}
+
 function verReceta(recetaId) {
+  if (!_navSkipPush) {
+    _navStack.push(_currentVerRecetaId
+      ? { type: 'receta', id: _currentVerRecetaId }
+      : { type: 'lista' }
+    );
+  }
   _currentVerRecetaId = recetaId;
   const r = recetas.find(r => r.id === recetaId);
   if (!r) return;
@@ -9992,8 +10009,13 @@ function verReceta(recetaId) {
       </details>`;
   }
 
+  const _prevEntry = _navStack[_navStack.length - 1];
+  const _backLabel = _prevEntry?.type === 'receta'
+    ? `← ${recetas.find(x => x.id === _prevEntry.id)?.nombre || 'Atrás'}`
+    : '← Recetas';
+
   document.getElementById('recetasScreen').innerHTML = `
-    <button class="btn btn-outline" style="margin-bottom:16px" onclick="renderRecetas()">← Recetas</button>
+    <button class="btn btn-outline" style="margin-bottom:16px" onclick="_navBack()">` + _backLabel + `</button>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div>
         <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
