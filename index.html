@@ -5155,6 +5155,14 @@ UNIDAD DE COMPRA vs CONTENIDO (MUY IMPORTANTE):
 - Aunque la boleta diga "360 huevos x $138,88" — INTERPRETÁ que es 1 cajón de 360, NO 360 unidades sueltas.
 - Heurística: si la cantidad supera 50 y la unidad es genérica ("un", "u", sin unidad), probablemente sea el contenido de UN PACK. Convertí a 1 pack/cajón/bolsa con peso_por_unidad = la cantidad original, y precio_unitario = precio_total.
 
+PRECIO TOTAL DEL ÍTEM — REGLA CRÍTICA:
+- "precio_total" debe ser SIEMPRE el precio final CON IVA incluido del renglón.
+- Si la factura tiene columna "Subtotal c/IVA" → usar ese valor como precio_total.
+- Si la factura tiene "Subtotal" sin IVA y "Alícuota IVA" separados → calcular precio_total = Subtotal × (1 + IVA/100).
+- Si la factura tiene una sola columna de importe → usar ese valor.
+- NUNCA usar el subtotal sin IVA como precio_total cuando existe el subtotal con IVA.
+- El peso en el nombre del producto (ej: "x25 Kg", "x5L", "x2.75KG") indica peso_por_unidad — extraerlo y eliminarlo del nombre si distorsiona la descripción.
+
 COLUMNAS DE FACTURAS CON PESO (muy común en proveedores de alimentos argentinos):
 Algunas facturas tienen columnas: Cant. | Presentación | Vol./Kg. | IVA | Descuentos | Unitario | Subtotal
 - "Cant." = cantidad de unidades compradas → campo "cantidad"
@@ -5185,7 +5193,7 @@ async function _bCallIA(b64, mime) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001', max_tokens: 1500,
+      model: 'claude-sonnet-4-6', max_tokens: 2000,
       messages: [{ role: 'user', content: [ block, { type: 'text', text: _BPROMPT } ]}]
     }),
   });
