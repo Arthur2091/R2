@@ -6186,27 +6186,72 @@ function _moverProductosSeleccionados(key) {
   renderProductosRubro(key, '__sin__');
 }
 
-function _renderDecisiones() {
+function _aplicarRangoDecisiones() {
+  const desde = document.getElementById('decDesde')?.value || '';
+  const hasta = document.getElementById('decHasta')?.value || '';
+  _renderDecisiones(desde, hasta);
+}
+function _presetDecisiones(dias) {
+  const todasFechas = ventas.map(v => v.fecha||'').filter(Boolean).sort();
+  const max = todasFechas[todasFechas.length - 1] || new Date().toISOString().slice(0,10);
+  let desde;
+  if (dias === 0) {
+    desde = todasFechas[0] || max;
+  } else {
+    const d = new Date(max + 'T00:00:00');
+    d.setDate(d.getDate() - dias + 1);
+    desde = d.toISOString().slice(0, 10);
+  }
+  _renderDecisiones(desde, max);
+}
+function _renderDecisiones(desde, hasta) {
   const screen = document.getElementById('productosScreen');
+
+  // Rango por defecto: último mes con datos
+  const todasFechas = ventas.map(v => v.fecha||'').filter(Boolean).sort();
+  const fechaMin = todasFechas[0] || '';
+  const fechaMax = todasFechas[todasFechas.length - 1] || '';
+  if (!desde) desde = fechaMax ? fechaMax.slice(0,7) + '-01' : '';
+  if (!hasta) hasta = fechaMax || '';
 
   const tabBar = `
     <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
       <button onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Resumen</button>
       <button style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">📊 Decisiones</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.25rem">
+      <span style="font-size:.85rem;font-weight:600;color:var(--ink2)">Período:</span>
+      <input type="date" id="decDesde" value="${desde}" min="${fechaMin}" max="${fechaMax}"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
+      <span style="color:var(--ink3);font-size:.85rem">→</span>
+      <input type="date" id="decHasta" value="${hasta}" min="${fechaMin}" max="${fechaMax}"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
+      <button onclick="_aplicarRangoDecisiones()" class="btn btn-primary" style="padding:6px 16px;font-size:13px">Aplicar</button>
+      <div style="display:flex;gap:.4rem;margin-left:auto;flex-wrap:wrap">
+        <button onclick="_presetDecisiones(7)"   class="btn btn-outline" style="font-size:11px;padding:4px 10px">7d</button>
+        <button onclick="_presetDecisiones(30)"  class="btn btn-outline" style="font-size:11px;padding:4px 10px">30d</button>
+        <button onclick="_presetDecisiones(90)"  class="btn btn-outline" style="font-size:11px;padding:4px 10px">90d</button>
+        <button onclick="_presetDecisiones(0)"   class="btn btn-outline" style="font-size:11px;padding:4px 10px">Todo</button>
+      </div>
     </div>`;
+
+  // ── Filtrar ventas por rango ──
+  const ventasFiltradas = ventas.filter(v => {
+    const f = v.fecha || '';
+    return f >= desde && f <= hasta;
+  });
 
   // ── Datos base ──
   const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const todosRubros = [...RUBROS_LIST, ..._customRubros];
 
-  // Semanas ISO: agrupar ventas por semana
   const ventasPorSemana = {};
-  const ventasPorDia    = {}; // rubro → día(0-6) → unidades
-  const ventasPorMes6   = {}; // rubro → mes → total
-  const ultimaFechaStr  = ventas.reduce((m, v) => v.fecha > m ? v.fecha : m, '');
+  const ventasPorDia    = {};
+  const ventasPorMes6   = {};
+  const ultimaFechaStr  = ventasFiltradas.reduce((m, v) => v.fecha > m ? v.fecha : m, '');
   const ultimaFecha     = ultimaFechaStr ? new Date(ultimaFechaStr + 'T00:00:00') : new Date();
 
-  ventas.forEach(v => {
+  ventasFiltradas.forEach(v => {
     const nombre = String(v.producto || '').trim();
     if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
     const rubro = productosRubros[nombre] || '__sin__';
@@ -6298,13 +6343,13 @@ function _renderDecisiones() {
     : `<p style="color:var(--ink3);padding:12px 0">Sin datos suficientes para calcular tendencia por día.</p>`;
 
   // ── 3. Sin movimiento ──
-  const productosConVentas = new Set(ventas.map(v => String(v.producto||'').trim()).filter(Boolean));
+  const productosConVentas = new Set(ventasFiltradas.map(v => String(v.producto||'').trim()).filter(Boolean));
   const limite14 = new Date(ultimaFecha); limite14.setDate(limite14.getDate() - 14);
   const ventasRecientes = new Set(
-    ventas.filter(v => v.fecha >= limite14.toISOString().slice(0,10)).map(v => String(v.producto||'').trim())
+    ventasFiltradas.filter(v => v.fecha >= limite14.toISOString().slice(0,10)).map(v => String(v.producto||'').trim())
   );
   const ultimaVentaPor = {};
-  ventas.forEach(v => {
+  ventasFiltradas.forEach(v => {
     const n = String(v.producto||'').trim(); if (!n) return;
     if (!ultimaVentaPor[n] || v.fecha > ultimaVentaPor[n]) ultimaVentaPor[n] = v.fecha;
   });
@@ -6338,7 +6383,7 @@ function _renderDecisiones() {
   const rentabilidad = [];
   const precioPromPor = {};
   const cuentaPor = {};
-  ventas.forEach(v => {
+  ventasFiltradas.forEach(v => {
     const n = String(v.producto||'').trim(); if (!n) return;
     const u = Number(v.unidades)||0; const t = Number(v.total)||0;
     if (!u) return;
@@ -6387,7 +6432,7 @@ function _renderDecisiones() {
     : `<p style="color:var(--ink3);padding:12px 0">Sin recetas cargadas con costos para calcular rentabilidad.</p>`;
 
   // ── 5. Comparación de rubros ──
-  const meses6 = [...new Set(ventas.map(v => (v.fecha||'').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m)))].sort().slice(-6);
+  const meses6 = [...new Set(ventasFiltradas.map(v => (v.fecha||'').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m)))].sort();
   const rubrosConMeses = todosRubros.filter(r => ventasPorMes6[r]);
   const MESES_ABR2 = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmtMes2 = m => { const [,mo] = m.split('-'); return MESES_ABR2[+mo-1]; };
