@@ -6285,36 +6285,47 @@ function _renderDecisiones(desde, hasta) {
   const ultimaSem = semanas[semanas.length - 1] || '';
   const prevSems  = semanas.slice(-5, -1); // 4 semanas previas
 
-  const alertas = [];
+  const alertasCaida = [], alertasSubida = [];
   Object.entries(ventasPorSemana).forEach(([nombre, porSem]) => {
-    const ultVal  = porSem[ultimaSem] || 0;
+    const ultVal   = porSem[ultimaSem] || 0;
     const prevVals = prevSems.map(s => porSem[s] || 0);
-    const prom    = prevVals.length ? prevVals.reduce((a, b) => a + b, 0) / prevVals.length : 0;
-    if (prom > 0 && ultVal < prom * 0.7) {
+    const prom     = prevVals.length ? prevVals.reduce((a, b) => a + b, 0) / prevVals.length : 0;
+    if (!prom) return;
+    if (ultVal < prom * 0.7) {
       const caida = Math.round((1 - ultVal / prom) * 100);
-      alertas.push({ nombre, rubro: productosRubros[nombre] || 'Sin cat.', ultVal, prom: Math.round(prom * 10) / 10, caida });
+      alertasCaida.push({ nombre, rubro: productosRubros[nombre] || 'Sin cat.', ultVal, prom: Math.round(prom * 10) / 10, pct: caida });
+    } else if (ultVal > prom * 1.3) {
+      const subida = Math.round((ultVal / prom - 1) * 100);
+      alertasSubida.push({ nombre, rubro: productosRubros[nombre] || 'Sin cat.', ultVal, prom: Math.round(prom * 10) / 10, pct: subida });
     }
   });
-  alertas.sort((a, b) => b.caida - a.caida);
+  alertasCaida.sort((a, b) => b.pct - a.pct);
+  alertasSubida.sort((a, b) => b.pct - a.pct);
 
-  const alertasHtml = alertas.length
+  const _tablaAlertas = (lista, esSubida) => lista.length
     ? `<table style="border-collapse:collapse;width:100%">
         <thead><tr style="background:var(--surface2)">
           <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Producto</th>
           <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
           <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Últ. semana</th>
           <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Prom. 4s</th>
-          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Caída</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">${esSubida ? 'Subida' : 'Caída'}</th>
         </tr></thead><tbody>
-        ${alertas.map(a => `<tr style="border-bottom:1px solid var(--border)">
+        ${lista.map(a => `<tr style="border-bottom:1px solid var(--border)">
           <td style="padding:8px 12px;font-weight:600;font-size:13px">${a.nombre}</td>
           <td style="padding:8px 12px;font-size:12px;color:var(--ink2)">${a.rubro}</td>
           <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px">${a.ultVal}</td>
           <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--ink2)">${a.prom}</td>
-          <td style="padding:8px 12px;text-align:right;font-weight:700;color:#DC2626">↓ ${a.caida}%</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:${esSubida?'#065F46':'#DC2626'}">${esSubida?'↑':'↓'} ${a.pct}%</td>
         </tr>`).join('')}
       </tbody></table>`
-    : `<p style="color:#10B981;font-weight:600;padding:12px 0">✓ Sin alertas esta semana — todos los productos estables</p>`;
+    : `<p style="color:${esSubida?'var(--ink3)':'#10B981'};font-weight:600;padding:8px 0">${esSubida ? 'Sin productos con subida significativa.' : '✓ Sin caídas esta semana.'}</p>`;
+
+  const alertasHtml = `
+    <div style="font-size:12px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">↓ Caída &gt;30%</div>
+    ${_tablaAlertas(alertasCaida, false)}
+    <div style="font-size:12px;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">↑ Subida &gt;30%</div>
+    ${_tablaAlertas(alertasSubida, true)}`;
 
   // ── 2. Mejores días ──
   const rubrosConDias = todosRubros.filter(r => ventasPorDia[r]);
@@ -6481,7 +6492,7 @@ function _renderDecisiones(desde, hasta) {
       <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">Basado en ${ventas.length.toLocaleString('es-AR')} registros de ventas</div>
     </div>
     <div style="margin-top:1.25rem">
-      ${sec('alertas','Alertas de caída','⚠️','#DC2626', alertasHtml, true)}
+      ${sec('alertas','Alertas de caída y subida','⚠️','#DC2626', alertasHtml, true)}
       ${sec('dias','Mejores días para vender','📅','#1D4ED8', diasHtml)}
       ${sec('sinmov','Productos sin movimiento','🛑','#92400E', sinMovHtml)}
       ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
