@@ -11226,7 +11226,23 @@ function _calcCostoRecetaUnd(rid, _visited) {
 
 function _navBack() {
   const prev = _navStack.pop();
-  if (!prev || prev.type === 'lista') { renderRecetas(); return; }
+  if (!prev || prev.type === 'lista') {
+    renderRecetas();
+    if (prev?.openSections?.length || prev?.scrollY) {
+      requestAnimationFrame(() => {
+        (prev.openSections || []).forEach(label => {
+          document.querySelectorAll('.rubro-section-header').forEach(h => {
+            if (h.querySelector('.rubro-label')?.textContent?.trim() === label) {
+              h.nextElementSibling?.classList.add('open');
+              h.querySelector('.rubro-toggle')?.classList.add('open');
+            }
+          });
+        });
+        if (prev.scrollY) window.scrollTo(0, prev.scrollY);
+      });
+    }
+    return;
+  }
   _navSkipPush = true;
   verReceta(prev.id);
   _navSkipPush = false;
@@ -11251,10 +11267,14 @@ function _reRenderReceta(id) {
 
 function verReceta(recetaId) {
   if (!_navSkipPush) {
-    _navStack.push(_currentVerRecetaId
-      ? { type: 'receta', id: _currentVerRecetaId }
-      : { type: 'lista' }
-    );
+    if (_currentVerRecetaId) {
+      _navStack.push({ type: 'receta', id: _currentVerRecetaId });
+    } else {
+      const openSections = [...document.querySelectorAll('.rubro-body.open')]
+        .map(el => el.previousElementSibling?.querySelector('.rubro-label')?.textContent?.trim())
+        .filter(Boolean);
+      _navStack.push({ type: 'lista', scrollY: window.scrollY, openSections });
+    }
   }
   _currentVerRecetaId = recetaId;
   const r = recetas.find(r => r.id === recetaId);
