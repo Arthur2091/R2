@@ -9894,6 +9894,15 @@ function _navBack() {
   _navSkipPush = false;
 }
 
+function _setMargenReceta(recetaId, valor) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  const n = parseFloat(valor);
+  r.margenObjetivo = (isFinite(n) && n > 0 && n < 100) ? n : null;
+  persistRecetas();
+  _reRenderReceta(recetaId);
+}
+
 function _reRenderReceta(id) {
   const scrollY = window.scrollY;
   _navSkipPush = true;
@@ -10037,7 +10046,17 @@ function verReceta(recetaId) {
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
         ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo/und · rinde ${rinde}</div><div style="font-weight:700;font-size:1.1rem">$${costoUnd.toFixed(2)}</div></div>`:''}
-        ${costoUnd>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Sugerido (${margenObj}% margen)</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd, r).toFixed(2)}</div></div>`:''}
+        ${costoUnd>0?`<div style="text-align:right">
+          <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Precio sugerido</div>
+          <div style="font-weight:700;font-size:1.1rem;color:var(--info)">$${_precioSugerido(costoUnd, r).toFixed(2)}</div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;margin-top:5px">
+            <span style="font-size:11px;color:var(--ink3)">margen</span>
+            <input type="number" min="1" max="99" step="1" value="${margenObj}"
+              style="width:50px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;font:600 12px var(--mono);text-align:center;background:var(--surface);outline:none"
+              onchange="_setMargenReceta('${r.id}',this.value)">
+            <span style="font-size:11px;color:var(--ink3)">%</span>
+          </div>
+        </div>`:''}
         ${real
           ? `<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta · ${realMesTxt}</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)" title="${real.unidades}u vendidas · total $${real.total.toLocaleString('es-AR',{maximumFractionDigits:0})}">$${real.promedio.toFixed(0)}</div></div>`
           : `<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:500;font-size:1.1rem;color:var(--ink3)">—</div></div>`}
