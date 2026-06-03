@@ -2651,7 +2651,7 @@ function saveInsumo() {
   persist();
   closeModal('modalInsumo');
   toast('Insumo guardado', 'success');
-  if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
+  if (_currentVerRecetaId) _reRenderReceta(_currentVerRecetaId);
   else renderInsumos();
 }
 
@@ -9229,7 +9229,7 @@ function _recetaUsarPrecioReal(recetaId) {
   r.precioVenta = Math.round(real.promedio);
   persistRecetas();
   toast(`Precio actualizado a $${r.precioVenta}`, 'success');
-  verReceta(recetaId);
+  _reRenderReceta(recetaId);
 }
 
 function _precioVentaReal(receta) {
@@ -9280,7 +9280,7 @@ function saveConfigCostos() {
   _fbWrite('config', { rubros: _customRubros, margen_obj: m, costos_extra: e }).catch(() => {});
   closeModal('modalConfigCostos');
   toast('Configuración guardada', 'success');
-  if (_currentVerRecetaId) verReceta(_currentVerRecetaId);
+  if (_currentVerRecetaId) _reRenderReceta(_currentVerRecetaId);
 }
 
 
@@ -9560,7 +9560,11 @@ function saveEditReceta() {
   persistRecetas();
   closeModal('modalEditReceta');
   toast(recetaId ? 'Receta actualizada' : 'Receta creada', 'success');
-  renderRecetas();
+  if (recetaId && _currentVerRecetaId) {
+    _reRenderReceta(recetaId);
+  } else {
+    renderRecetas();
+  }
 }
 
 const CAT_TO_RUBRO = {
@@ -9890,6 +9894,12 @@ function _navBack() {
   _navSkipPush = false;
 }
 
+function _reRenderReceta(id) {
+  _navSkipPush = true;
+  verReceta(id);
+  _navSkipPush = false;
+}
+
 function verReceta(recetaId) {
   if (!_navSkipPush) {
     _navStack.push(_currentVerRecetaId
@@ -10127,7 +10137,7 @@ function _vincularIngReceta(recetaId, ii, subRecetaId) {
   ing.insumoId  = null;
   ing.recetaId  = subRecetaId;
   persistRecetas();
-  verReceta(recetaId);
+  _reRenderReceta(recetaId);
   const sub = recetas.find(r => r.id === subRecetaId);
   toast(`Vinculado a receta "${sub?.nombre}"`, 'success');
 }
@@ -10163,7 +10173,7 @@ function _vincularIng(recetaId, ii, insumoId) {
   ing.insumoId = insumoId;
   ing.recetaId = null;
   persistRecetas();
-  verReceta(recetaId);
+  _reRenderReceta(recetaId);
   const ins = insumos.find(i => i.id === insumoId);
   toast(`"${ing.nombreOriginal}" vinculado a "${ins?.nombre}"`, 'success');
 }
@@ -10180,7 +10190,7 @@ function _desvincularIng(recetaId, ii) {
   });
 
   persistRecetas();
-  verReceta(recetaId);
+  _reRenderReceta(recetaId);
 }
 
 function eliminarReceta(id) {
