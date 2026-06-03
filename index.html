@@ -11239,9 +11239,11 @@ function _normCarta(s) {
 function _cartaMatchScore(a, b) {
   const na = _normCarta(a), nb = _normCarta(b);
   if (na === nb) return 1;
-  if (na.includes(nb) || nb.includes(na)) return 0.85;
-  const toks = s => new Set(s.split(' ').filter(t => t.length > 2));
+  if (nb.length >= 5 && na.includes(nb)) return 0.85;
+  if (na.length >= 5 && nb.includes(na)) return 0.85;
+  const toks = s => new Set(s.split(' ').filter(t => t.length > 3));
   const ta = toks(na), tb = toks(nb);
+  if (!ta.size || !tb.size) return 0;
   let common = 0; ta.forEach(t => tb.has(t) && common++);
   const union = ta.size + tb.size - common;
   return union > 0 ? common / union : 0;
