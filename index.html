@@ -11169,7 +11169,7 @@ function _ocultarReceta(id) {
   if (!r) return;
   r.oculta = true;
   persistRecetas();
-  renderRecetas();
+  _renderRecetasPreservando();
 }
 
 function _restaurarReceta(id) {
