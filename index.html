@@ -807,8 +807,11 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div id="provTelModal" class="overlay">
     <div class="modal" style="max-width:460px">
       <h2>Datos del proveedor</h2>
-      <p class="modal-sub" id="provTelNombre" style="margin-bottom:14px"></p>
       <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Nombre</label>
+          <input id="provTelNombreInput" type="text" placeholder="Nombre del proveedor" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+        </div>
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Teléfono (con código de área)</label>
           <input id="provTelInput" type="tel" placeholder="11 1234 5678" style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
@@ -3429,7 +3432,6 @@ function renderProveedores() {
             </div>
             <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
               <button class="btn btn-outline btn-sm" onclick="openProvTelModal('${p.id}')" title="Datos del proveedor">⚙</button>
-              <button class="btn btn-outline btn-sm" onclick="renombrarProveedor('${p.id}')" title="Renombrar">✎</button>
             </div>
           </div>
           ${(() => {
@@ -13187,7 +13189,7 @@ function pedDec(provId, insumoId) {
 function openProvTelModal(provId) {
   _pedProvForTel = provId;
   const prov = proveedores.find(p => p.id === provId);
-  document.getElementById('provTelNombre').textContent = prov?.nombre || '';
+  document.getElementById('provTelNombreInput').value = prov?.nombre || '';
   document.getElementById('provTelInput').value = prov?.telefono || '';
   document.getElementById('provCondPagoInput').value = prov?.condicionPago || '';
   document.getElementById('provDiasPagoInput').value = (prov?.diasPago != null) ? prov.diasPago : '';
@@ -13204,15 +13206,34 @@ function guardarTelProv() {
   if (!_pedProvForTel) return;
   const prov = proveedores.find(p => p.id === _pedProvForTel);
   if (!prov) return;
+
+  const nuevoNombre = document.getElementById('provTelNombreInput').value.trim();
+  if (!nuevoNombre) { toast('El nombre no puede estar vacío', 'error'); return; }
+  if (nuevoNombre !== prov.nombre) {
+    const conflicto = proveedores.find(p => p.id !== prov.id && _normProv(p.nombre) === _normProv(nuevoNombre));
+    if (conflicto) {
+      if (!confirm(`Ya existe "${conflicto.nombre}". ¿Fusionar "${prov.nombre}" en "${conflicto.nombre}"?`)) return;
+      _mergeProvPair(conflicto.id, prov.id);
+      persist(); renderProveedores();
+      toast('Proveedores fusionados', 'success');
+      closeProvTelModal();
+      return;
+    }
+    (prov.aliases = prov.aliases || []).push(prov.nombre);
+    prov.nombre = nuevoNombre;
+  }
+
   prov.telefono = document.getElementById('provTelInput').value.trim();
   prov.condicionPago = document.getElementById('provCondPagoInput').value || null;
   const dias = parseInt(document.getElementById('provDiasPagoInput').value, 10);
   prov.diasPago = isFinite(dias) && dias >= 0 ? dias : null;
   persist();
   closeProvTelModal();
+  renderProveedores();
   renderPedidos();
   if (_pendViewMode === 'global') renderPendientesGlobal();
   _actualizarBannerVencimientos();
+  toast('Proveedor actualizado', 'success');
 }
 
 function enviarPedidoWA(provId) {
