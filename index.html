@@ -2081,8 +2081,8 @@ let _matchPendientes = [];
 let _fbLoaded    = false;
 let _syncPaused  = false;
 function persist() {
-  if (!_fbLoaded) { console.warn('[persist] bloqueado: Firebase aún no cargó'); return; }
   if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(persist); _syncChip('syncing'); return; }
   _syncChip('syncing');
   Promise.all([
     _fbWrite('insumos',       { items: insumos }),
@@ -5727,34 +5727,46 @@ let _sortSueldos = { field: 'empleado', dir: 1 };
 const _RUBROS_DEFAULT = {"Agrandar CAFE":"Cafetería","ALFAJOR":"Pastelería","ALFAJOR COCO":"Pastelería","Americano Doble":"Cafetería","apple crumble":"Pastelería","Avo Croissant":"Desayunos y Meriendas","Avocado Toast":"Desayunos y Meriendas","Boloñesa":"Pastas","Brownie":"Pastelería","Brunch Para 2":"Desayunos y Meriendas","Budin Arandanochoco":"Pastelería","Budin Banana choco":"Pastelería","budin limon amap":"Pastelería","Cafe GRAMOL COLOMBIA":"Cafetería","CAFE GRANO BR":"Cafetería","CAFE MOLIDO BR":"Cafetería","CAFE MOLIDO COL":"Cafetería","Capu Avel G":"Cafetería","Capu Avel M":"Cafetería","Capu Caram G":"Cafetería","Capu Caram M":"Cafetería","Capu Vai G":"Cafetería","Capu Vai M":"Cafetería","Capuccino G":"Cafetería","Capuccino M":"Cafetería","Cheese F. Rojos":"Pastelería","Chocolate Caliente":"Cafetería","Cold Brew":"Cafetería","Combo Anakin":"Sandwich","Combo Chewie":"Sandwich","Combo EP 2":"Sandwich","Combo EP 3":"Sandwich","Combo EP 5":"Sandwich","Combo EP 6":"Sandwich","Combo Han Solo":"Desayunos y Meriendas","Combo Keto":"Ensaladas","Combo Leia":"Desayunos y Meriendas","Combo Luke":"Desayunos y Meriendas","Combo Obi-Wan":"Desayunos y Meriendas","Combo Padme":"Desayunos y Meriendas","Combo Qui-Gon":"Desayunos y Meriendas","Combo Rei":"Desayunos y Meriendas","Combo Yoda":"Desayunos y Meriendas","cookie doble choco":"Pastelería","COOKIE FRAMBUESA":"Pastelería","Cookie Nutella":"Pastelería","Cookie Red Velvet":"Pastelería","Cookie Toddy":"Pastelería","Cortado Chico":"Cafetería","Cortado Doble":"Cafetería","Cortado Jarrito":"Cafetería","Croissant":"Desayunos y Meriendas","Croissant Crudo":"Desayunos y Meriendas","Croissant JQ":"Desayunos y Meriendas","Croque Monsieur":"Desayunos y Meriendas","Doble Espresso":"Cafetería","Ens. BB-8":"Ensaladas","Ens. C3PO KETO":"Ensaladas","Ens. R2-D2":"Ensaladas","Episodio 2":"Sandwich","Episodio 3":"Sandwich","Episodio 5":"Sandwich","Episodio 6":"Sandwich","Espresso Largo  Americano S.":"Cafetería","Espresso single":"Cafetería","Exprimido Naranja":"Cafetería","Extra Aderezo Caesar":"Ensaladas","Extra huevo":"Ensaladas","EXTRA PALTA":"Ensaladas","Extra PAN":"Pastas","Extra PESTO":"Pastas","Extra Pollo":"Pastas","Extra QUESITO":"Pastas","Extra SHOT":"Cafetería","Extra Syrup":"Cafetería","Flat Frio G":"Cafetería","Flat White":"Cafetería","Flat White GRANDE":"Cafetería","French Toast Dulce":"Desayunos y Meriendas","French Toast salada":"Cafetería","Huevos Revueltos":"Desayunos y Meriendas","Iced Capu Syrup":"Cafetería","Iced Capuccino":"Cafetería","Iced Coffee":"Cafetería","Iced Tea":"Cafetería","Lagrima chica":"Cafetería","Lagrima G":"Cafetería","LAGRIMA JARRITO":"Cafetería","Lagrima M":"Cafetería","Latte G":"Cafetería","Latte G  Budin":"Desayunos y Meriendas","Latte G  Roll de canela":"Desayunos y Meriendas","Latte G  Torta":"Desayunos y Meriendas","Latte M":"Cafetería","Leche Almendra Lic":"Cafetería","Leche Almendras":"Cafetería","Lemon Pie":"Pastelería","Licuado en AGUA":"Cafetería","Licuado en LECHE":"Cafetería","LIMONADA + BUDIN LIMON":"Desayunos y Meriendas","LIMONADA EN JARRA":"Cafetería","Limonada MenJen":"Cafetería","lungo jarrito":"Cafetería","Lungo o Cafeciito":"Cafetería","Macaron":"Pastelería","MDD raviol calabaza":"Menú del Día","MDD Sand Vitel":"Menú del Día","MDD SUMMER SALAD":"Menú del Día","MDD wrap crispy":"Menú del Día","MediaLuna JQx1":"Desayunos y Meriendas","MediaLuna JQx2":"Desayunos y Meriendas","Medialuna Manteca":"Desayunos y Meriendas","MENU 1":"Pastas","Mocaccino G":"Cafetería","Mocaccino M":"Cafetería","Omelette JQ":"Desayunos y Meriendas","Papas Fritas":"Sandwich","Parisienne":"Pastas","Pesto Lovers":"Pastas","Pink  Rosa":"Pastas","PP":"Pastas","Promo Latte 1Luna":"Desayunos y Meriendas","Promo Latte 2Lunas":"Desayunos y Meriendas","Red Velvet Entera 10porc":"Pastelería","ROLL CANELA":"Desayunos y Meriendas","Scarparo":"Pastas","Scon de Queso":"Desayunos y Meriendas","Scon Queso Caliente":"Desayunos y Meriendas","Sfogliatella":"Desayunos y Meriendas","Submarino":"Cafetería","Tarta T-6 Cebolla":"Tartas","Torta Bruce":"Pastelería","Tarta X-Wing":"Tartas","Tarta AT-AT Walker":"Tartas","Te Inti":"Cafetería","TIRAMISU":"Pastelería","Torta Marquise":"Pastelería","Torta Red Velvet":"Pastelería","Tostadas Blancas":"Desayunos y Meriendas","Tostadas Negras":"Desayunos y Meriendas","Tostado KETO":"Desayunos y Meriendas","Tostado Pan Blanco":"Desayunos y Meriendas","Tostado Pan Negro":"Desayunos y Meriendas","Triangulo DDL":"Pastelería","Trifle Yogur Granola":"Cafetería","Wrap Caesar":"Wraps","Wrap Criollo":"Wraps","Wrap Falafel":"Wraps","Wrap Veggie":"Wraps"};
 let productosRubros = {}; // { 'Nombre producto': 'Rubro' }
 
+// Cola de escrituras pendientes mientras Firebase no cargó
+const _pendingWrites = new Set();
+function _flushPendingWrites() {
+  if (!_pendingWrites.size) return;
+  const fns = [..._pendingWrites]; _pendingWrites.clear();
+  fns.forEach(fn => fn());
+}
+
 function _persistMP() {
-  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(_persistMP); _syncChip('syncing'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_mp').set({ items: mpMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp', e.message); _syncChip('error'); });
 }
 function _persistMPIng() {
-  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(_persistMPIng); _syncChip('syncing'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_mp_ing').set({ items: mpIngMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_mp_ing', e.message); _syncChip('error'); });
 }
 function _persistGal() {
-  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(_persistGal); _syncChip('syncing'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable_gal').set({ items: galiciaMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_gal', e.message); _syncChip('error'); });
 }
 function _persistBase() {
-  if (!_fbLoaded || _syncPaused) { if (_syncPaused) _syncChip('paused'); return; }
+  if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(_persistBase); _syncChip('syncing'); return; }
   _syncChip('syncing');
   _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, formaCobroMovs, productosRubros })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable', e.message); _syncChip('error'); });
 }
 
 function persistContable() {
-  if (!_fbLoaded) { console.warn('[persistContable] bloqueado: Firebase aún no cargó'); return; }
   if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(persistContable); _syncChip('syncing'); return; }
   _syncChip('syncing');
   const ventasPorMes = {};
   ventas.forEach(v => {
@@ -10729,6 +10741,7 @@ async function _fbLoad() {
     if (bannerApikey && getApiKey()) bannerApikey.style.display = 'none';
     if (_bItems.length) _bRenderItems();
     _fbLoaded = true;
+    _flushPendingWrites();
   } catch(e) {
     console.warn('Firebase load error:', e);
     toast('Error al conectar con la base de datos. Recargá la página antes de tocar nada.', 'error');
