@@ -11112,12 +11112,12 @@ function renderRecetas() {
             <span class="receta-grupo-label" style="color:${s.color}">${g}</span>
             <span class="receta-grupo-count">${byGrupo[g].length} receta${byGrupo[g].length!==1?'s':''}</span>
           </div>
-          <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r)).join('')}</div>
+          <div class="recetas-grid">${[...byGrupo[g]].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => renderCard(r)).join('')}</div>
         </div>`;
     }).join('');
 
     const sinGrupoHtml = sinGrupo.length
-      ? `<div class="recetas-grid">${sinGrupo.map(r => renderCardConSelector(r)).join('')}</div>`
+      ? `<div class="recetas-grid">${[...sinGrupo].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => renderCardConSelector(r)).join('')}</div>`
       : '';
 
     return `<div class="rubro-section" style="border-color:${s.bg}">
