@@ -5936,7 +5936,13 @@ function renderProductos() {
     </div>`;
   }).join('');
 
-  screen.innerHTML = `
+  const tabBar = `
+    <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
+      <button id="prodTabResumen" onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">Resumen</button>
+      <button id="prodTabDecisiones" onclick="_renderDecisiones()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">📊 Decisiones</button>
+    </div>`;
+
+  screen.innerHTML = tabBar + `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem;margin-bottom:1.5rem">
       <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink3);margin-bottom:.75rem">Ventas por mes</div>
       ${comparativoHtml}
@@ -6178,6 +6184,264 @@ function _moverProductosSeleccionados(key) {
   checks.forEach(cb => asignarRubro(cb.dataset.nombre, rubro));
   toast(`${checks.length} producto${checks.length !== 1 ? 's' : ''} movido${checks.length !== 1 ? 's' : ''} a ${rubro}`, 'success');
   renderProductosRubro(key, '__sin__');
+}
+
+function _renderDecisiones() {
+  const screen = document.getElementById('productosScreen');
+
+  const tabBar = `
+    <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
+      <button onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Resumen</button>
+      <button style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">📊 Decisiones</button>
+    </div>`;
+
+  // ── Datos base ──
+  const DIAS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const todosRubros = [...RUBROS_LIST, ..._customRubros];
+
+  // Semanas ISO: agrupar ventas por semana
+  const ventasPorSemana = {};
+  const ventasPorDia    = {}; // rubro → día(0-6) → unidades
+  const ventasPorMes6   = {}; // rubro → mes → total
+  const ultimaFechaStr  = ventas.reduce((m, v) => v.fecha > m ? v.fecha : m, '');
+  const ultimaFecha     = ultimaFechaStr ? new Date(ultimaFechaStr + 'T00:00:00') : new Date();
+
+  ventas.forEach(v => {
+    const nombre = String(v.producto || '').trim();
+    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
+    const rubro = productosRubros[nombre] || '__sin__';
+    const unds  = Number(v.unidades) || 0;
+    const tot   = Number(v.total) || 0;
+    const fecha = v.fecha || '';
+    if (!fecha || fecha.length < 10) return;
+
+    // semana (lunes como inicio)
+    const d = new Date(fecha + 'T00:00:00');
+    const dow = d.getDay(); // 0=dom
+    const lunes = new Date(d); lunes.setDate(d.getDate() - ((dow + 6) % 7));
+    const semKey = lunes.toISOString().slice(0, 10);
+    if (!ventasPorSemana[nombre]) ventasPorSemana[nombre] = {};
+    ventasPorSemana[nombre][semKey] = (ventasPorSemana[nombre][semKey] || 0) + unds;
+
+    // día de semana por rubro
+    if (rubro !== '__sin__') {
+      if (!ventasPorDia[rubro]) ventasPorDia[rubro] = Array(7).fill(0);
+      ventasPorDia[rubro][dow] += unds;
+    }
+
+    // mes por rubro (últimos 6 meses)
+    const mes = fecha.slice(0, 7);
+    if (!ventasPorMes6[rubro]) ventasPorMes6[rubro] = {};
+    ventasPorMes6[rubro][mes] = (ventasPorMes6[rubro][mes] || 0) + tot;
+  });
+
+  // ── 1. Alertas de caída ──
+  const semanas = [...new Set(Object.values(ventasPorSemana).flatMap(s => Object.keys(s)))].sort();
+  const ultimaSem = semanas[semanas.length - 1] || '';
+  const prevSems  = semanas.slice(-5, -1); // 4 semanas previas
+
+  const alertas = [];
+  Object.entries(ventasPorSemana).forEach(([nombre, porSem]) => {
+    const ultVal  = porSem[ultimaSem] || 0;
+    const prevVals = prevSems.map(s => porSem[s] || 0);
+    const prom    = prevVals.length ? prevVals.reduce((a, b) => a + b, 0) / prevVals.length : 0;
+    if (prom > 0 && ultVal < prom * 0.7) {
+      const caida = Math.round((1 - ultVal / prom) * 100);
+      alertas.push({ nombre, rubro: productosRubros[nombre] || 'Sin cat.', ultVal, prom: Math.round(prom * 10) / 10, caida });
+    }
+  });
+  alertas.sort((a, b) => b.caida - a.caida);
+
+  const alertasHtml = alertas.length
+    ? `<table style="border-collapse:collapse;width:100%">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Producto</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Últ. semana</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Prom. 4s</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Caída</th>
+        </tr></thead><tbody>
+        ${alertas.map(a => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 12px;font-weight:600;font-size:13px">${a.nombre}</td>
+          <td style="padding:8px 12px;font-size:12px;color:var(--ink2)">${a.rubro}</td>
+          <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px">${a.ultVal}</td>
+          <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px;color:var(--ink2)">${a.prom}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:#DC2626">↓ ${a.caida}%</td>
+        </tr>`).join('')}
+      </tbody></table>`
+    : `<p style="color:#10B981;font-weight:600;padding:12px 0">✓ Sin alertas esta semana — todos los productos estables</p>`;
+
+  // ── 2. Mejores días ──
+  const rubrosConDias = todosRubros.filter(r => ventasPorDia[r]);
+  const diasHtml = rubrosConDias.length ? `
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%">
+      <thead><tr style="background:var(--surface2)">
+        <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
+        ${DIAS.map(d => `<th style="padding:8px 12px;text-align:center;font-size:12px;font-weight:700;color:var(--ink2)">${d}</th>`).join('')}
+      </tr></thead><tbody>
+      ${rubrosConDias.map(r => {
+        const dias = ventasPorDia[r];
+        const max  = Math.max(...dias);
+        const min  = Math.min(...dias.filter(x => x > 0)) || 0;
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 12px;font-weight:600;font-size:13px">${r}</td>
+          ${dias.map(v => {
+            const pct  = max > 0 ? v / max : 0;
+            const bg   = v === 0 ? 'transparent' : v === max ? '#065F46' : pct > 0.6 ? '#10B981' : pct > 0.3 ? '#6EE7B7' : '#D1FAE5';
+            const col  = v === max ? '#fff' : '#1A1814';
+            return `<td style="padding:8px 12px;text-align:center;font-family:var(--mono);font-size:13px;background:${bg};color:${col};font-weight:${v===max?700:400}">${v||'—'}</td>`;
+          }).join('')}
+        </tr>`;
+      }).join('')}
+    </tbody></table></div>`
+    : `<p style="color:var(--ink3);padding:12px 0">Sin datos suficientes para calcular tendencia por día.</p>`;
+
+  // ── 3. Sin movimiento ──
+  const productosConVentas = new Set(ventas.map(v => String(v.producto||'').trim()).filter(Boolean));
+  const limite14 = new Date(ultimaFecha); limite14.setDate(limite14.getDate() - 14);
+  const ventasRecientes = new Set(
+    ventas.filter(v => v.fecha >= limite14.toISOString().slice(0,10)).map(v => String(v.producto||'').trim())
+  );
+  const ultimaVentaPor = {};
+  ventas.forEach(v => {
+    const n = String(v.producto||'').trim(); if (!n) return;
+    if (!ultimaVentaPor[n] || v.fecha > ultimaVentaPor[n]) ultimaVentaPor[n] = v.fecha;
+  });
+  const sinMov = [...productosConVentas]
+    .filter(n => !ventasRecientes.has(n) && !EXCLUIR_PROD.includes(n.toLowerCase()))
+    .map(n => {
+      const ultima = ultimaVentaPor[n] || '';
+      const dias   = ultima ? Math.round((ultimaFecha - new Date(ultima+'T00:00:00')) / 86400000) : '?';
+      return { nombre: n, rubro: productosRubros[n] || 'Sin cat.', ultima, dias };
+    })
+    .sort((a, b) => (b.dias||0) - (a.dias||0));
+
+  const sinMovHtml = sinMov.length
+    ? `<table style="border-collapse:collapse;width:100%">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Producto</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Última venta</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Días sin vender</th>
+        </tr></thead><tbody>
+        ${sinMov.map(p => `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 12px;font-weight:600;font-size:13px">${p.nombre}</td>
+          <td style="padding:8px 12px;font-size:12px;color:var(--ink2)">${p.rubro}</td>
+          <td style="padding:8px 12px;text-align:right;font-size:12px;color:var(--ink2)">${p.ultima||'—'}</td>
+          <td style="padding:8px 12px;text-align:right;font-weight:700;color:${p.dias>30?'#DC2626':p.dias>14?'#F59E0B':'var(--ink)'}">${p.dias} días</td>
+        </tr>`).join('')}
+      </tbody></table>`
+    : `<p style="color:#10B981;font-weight:600;padding:12px 0">✓ Todos los productos se vendieron en los últimos 14 días</p>`;
+
+  // ── 4. Rentabilidad ──
+  const rentabilidad = [];
+  const precioPromPor = {};
+  const cuentaPor = {};
+  ventas.forEach(v => {
+    const n = String(v.producto||'').trim(); if (!n) return;
+    const u = Number(v.unidades)||0; const t = Number(v.total)||0;
+    if (!u) return;
+    if (!precioPromPor[n]) { precioPromPor[n] = 0; cuentaPor[n] = 0; }
+    precioPromPor[n] += t; cuentaPor[n] += u;
+  });
+  const precioUnitPor = {};
+  Object.keys(precioPromPor).forEach(n => { precioUnitPor[n] = cuentaPor[n] ? precioPromPor[n] / cuentaPor[n] : 0; });
+
+  recetas.forEach(rec => {
+    const nombre = rec.nombre || '';
+    const precioVenta = precioUnitPor[nombre] || Object.entries(precioUnitPor).find(([k]) => k.toLowerCase() === nombre.toLowerCase())?.[1] || 0;
+    if (!precioVenta) return;
+    const costoReceta = (rec.ingredientes || rec.items || []).reduce((s, ing) => {
+      const ins = insumos.find(x => (x.nombre||'').toLowerCase() === (ing.insumo||ing.nombre||'').toLowerCase());
+      const precio = ins ? (Number(ins.precio) || Number(ins.precioUnitario) || 0) : 0;
+      return s + precio * (Number(ing.cantidad) || 0);
+    }, 0);
+    if (!costoReceta) return;
+    const margen = Math.round((precioVenta - costoReceta) / precioVenta * 100);
+    rentabilidad.push({ nombre, rubro: productosRubros[nombre] || 'Sin cat.', costo: Math.round(costoReceta), precio: Math.round(precioVenta), margen });
+  });
+  rentabilidad.sort((a, b) => b.margen - a.margen);
+
+  const rentHtml = rentabilidad.length
+    ? `<table style="border-collapse:collapse;width:100%">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Producto</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Costo</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Precio venta</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">Margen</th>
+        </tr></thead><tbody>
+        ${rentabilidad.map(p => {
+          const col = p.margen >= 60 ? '#065F46' : p.margen >= 40 ? '#92400E' : '#991B1B';
+          const bg  = p.margen >= 60 ? '#D1FAE5' : p.margen >= 40 ? '#FEF3C7' : '#FEE2E2';
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px 12px;font-weight:600;font-size:13px">${p.nombre}</td>
+            <td style="padding:8px 12px;font-size:12px;color:var(--ink2)">${p.rubro}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px">${pesos(p.costo)}</td>
+            <td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px">${pesos(p.precio)}</td>
+            <td style="padding:8px 12px;text-align:right;font-weight:700;background:${bg};color:${col}">${p.margen}%</td>
+          </tr>`;
+        }).join('')}
+      </tbody></table>`
+    : `<p style="color:var(--ink3);padding:12px 0">Sin recetas cargadas con costos para calcular rentabilidad.</p>`;
+
+  // ── 5. Comparación de rubros ──
+  const meses6 = [...new Set(ventas.map(v => (v.fecha||'').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m)))].sort().slice(-6);
+  const rubrosConMeses = todosRubros.filter(r => ventasPorMes6[r]);
+  const MESES_ABR2 = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const fmtMes2 = m => { const [,mo] = m.split('-'); return MESES_ABR2[+mo-1]; };
+  const fmtK2 = n => n >= 1000000 ? '$'+(n/1000000).toFixed(1)+'M' : n >= 1000 ? '$'+Math.round(n/1000)+'k' : n ? '$'+Math.round(n) : '—';
+
+  const rubrosHtml2 = rubrosConMeses.length ? `
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%">
+      <thead><tr style="background:var(--surface2)">
+        <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:700;color:var(--ink2)">Categoría</th>
+        ${meses6.map(m => `<th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2)">${fmtMes2(m)}</th>`).join('')}
+      </tr></thead><tbody>
+      ${rubrosConMeses.map(r => {
+        const vals = meses6.map(m => ventasPorMes6[r]?.[m] || 0);
+        const max  = Math.max(...vals);
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 12px;font-weight:600;font-size:13px">${r}</td>
+          ${vals.map(v => `<td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px;${v===max&&v>0?'background:#D1FAE5;color:#065F46;font-weight:700':v===0?'color:var(--ink3)':''}">${fmtK2(v)}</td>`).join('')}
+        </tr>`;
+      }).join('')}
+      <tr style="font-weight:700;background:var(--surface2)">
+        <td style="padding:8px 12px;font-size:13px">Total</td>
+        ${meses6.map(m => {
+          const tot = rubrosConMeses.reduce((s,r) => s + (ventasPorMes6[r]?.[m]||0), 0);
+          return `<td style="padding:8px 12px;text-align:right;font-family:var(--mono);font-size:13px">${fmtK2(tot)}</td>`;
+        }).join('')}
+      </tr>
+    </tbody></table></div>`
+    : `<p style="color:var(--ink3);padding:12px 0">Sin datos de rubros para comparar.</p>`;
+
+  // ── Render acordeón ──
+  const sec = (id, titulo, icono, color, contenido, abierto = false) => `
+    <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.75rem">
+      <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.querySelector('span.arr').textContent=this.nextElementSibling.style.display==='none'?'▸':'▾'"
+        style="width:100%;background:var(--surface);border:none;padding:.9rem 1.1rem;display:flex;align-items:center;gap:.6rem;cursor:pointer;text-align:left">
+        <span style="font-size:1.1rem">${icono}</span>
+        <span style="font-weight:700;font-size:.95rem;color:${color};flex:1">${titulo}</span>
+        <span class="arr" style="color:var(--ink3);font-size:.85rem">${abierto?'▾':'▸'}</span>
+      </button>
+      <div style="display:${abierto?'block':'none'};padding:1rem 1.1rem;overflow-x:auto">${contenido}</div>
+    </div>`;
+
+  screen.innerHTML = tabBar + `
+    <div style="margin-bottom:.5rem">
+      <div style="font-size:1.1rem;font-weight:700">Tablero de Decisiones</div>
+      <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">Basado en ${ventas.length.toLocaleString('es-AR')} registros de ventas</div>
+    </div>
+    <div style="margin-top:1.25rem">
+      ${sec('alertas','Alertas de caída','⚠️','#DC2626', alertasHtml, true)}
+      ${sec('dias','Mejores días para vender','📅','#1D4ED8', diasHtml)}
+      ${sec('sinmov','Productos sin movimiento','🛑','#92400E', sinMovHtml)}
+      ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
+      ${sec('rubros','Comparación de rubros','📊','var(--ink)', rubrosHtml2)}
+    </div>`;
 }
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
