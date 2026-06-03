@@ -11071,19 +11071,13 @@ function renderRecetas() {
     const mapeados = ings.filter(i => i.insumoId).length;
     const rubroVal = RUBRO_ORDER.includes(r.rubro) ? r.rubro : '';
     const opts     = `${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
-    return `<div class="receta-card">
-      <div class="receta-card-header" onclick="verReceta('${r.id}')">
+    return `<div class="receta-card" onclick="verReceta('${r.id}')">
+      <div class="receta-card-header">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
         <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
-      </div>
-      <div style="padding:8px 18px 12px;border-top:1px solid var(--border)">
-        <select onclick="event.stopPropagation()" onchange="_cambiarRubroReceta('${r.id}',this.value)"
-          style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--ink);font-family:var(--font);cursor:pointer">
-          ${opts}
-        </select>
       </div>
     </div>`;
   };
@@ -11112,10 +11106,6 @@ function renderRecetas() {
           <div class="receta-grupo-header">
             <span class="receta-grupo-label" style="color:${s.color}">${g}</span>
             <span class="receta-grupo-count">${byGrupo[g].length} receta${byGrupo[g].length!==1?'s':''}</span>
-            <select onclick="event.stopPropagation()" onchange="_cambiarRubroGrupo('${safeG}', this.value)"
-              style="font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid ${isSin?'#F59E0B':'var(--border)'};background:${isSin?'#FFFBEB':'var(--surface2)'};color:${isSin?'#92400E':'var(--ink)'};font-family:var(--font);cursor:pointer;font-weight:${isSin?'600':'400'}">
-              ${opts}
-            </select>
           </div>
           <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r)).join('')}</div>
         </div>`;
