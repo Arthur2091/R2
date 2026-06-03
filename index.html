@@ -1456,6 +1456,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Revisar recetas detectadas</h2>
     <p class="modal-sub" style="flex-shrink:0">Las marcadas en <span style="color:var(--accent);font-weight:600">verde</span> matchean con productos vendidos. Elegí el tipo de cada una y desmarcá las que no quieras importar.</p>
+    <input id="impRevisorSearch" type="text" placeholder="Buscar receta…" oninput="_impRevisorFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none;background:var(--surface)">
     <div id="impRevisorScreen" style="overflow-y:auto;flex:1;margin-top:10px"></div>
     <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
       <button class="btn btn-outline" onclick="closeModal('modalImpRevisor')">Cancelar</button>
@@ -10093,9 +10094,7 @@ function _parseExcelRecetas(wb) {
                 }
                 i++;
               }
-              if (ingredientes.length > 0) {
-                parsed.push({ nombre: subNombre, grupo: grupoNombre, rubro: _catToRubro(sheetName), rinde, rindeUnidad, precioVenta, ingredientes });
-              }
+              parsed.push({ nombre: subNombre, grupo: grupoNombre, rubro: _catToRubro(sheetName), rinde, rindeUnidad, precioVenta, ingredientes });
             } else { i++; }
           }
         } else { i++; }
@@ -13958,8 +13957,23 @@ function _impAbrirRevisor() {
       ${items.map(filaHtml).join('')}
     </div>`).join('');
 
+  document.getElementById('impRevisorSearch').value = '';
   document.getElementById('impRevisorScreen').innerHTML = html;
   openModal('modalImpRevisor');
+}
+
+function _impRevisorFiltrar() {
+  const q = document.getElementById('impRevisorSearch').value.toLowerCase().trim();
+  document.querySelectorAll('#impRevisorScreen [data-imp-row]').forEach(el => {
+    const nombre = el.querySelector('[style*="font-weight:600"]')?.textContent?.toLowerCase() || '';
+    el.style.display = (!q || nombre.includes(q)) ? '' : 'none';
+  });
+  // Mostrar/ocultar headers de grupo si todos sus hijos están ocultos
+  document.querySelectorAll('#impRevisorScreen > div').forEach(grupo => {
+    const filas = grupo.querySelectorAll('[data-imp-row]');
+    const alguoVisible = [...filas].some(f => f.style.display !== 'none');
+    grupo.style.display = alguoVisible ? '' : 'none';
+  });
 }
 
 function _impSetTipo(idx, tipo) {
