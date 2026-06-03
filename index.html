@@ -1647,6 +1647,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
     <button class="dep-subtab dep-subtab-active" data-receta-tipo="venta" onclick="_setRecetaTipo('venta')">🛒 Recetas de venta</button>
     <button class="dep-subtab" data-receta-tipo="fabricacion" onclick="_setRecetaTipo('fabricacion')">🏭 Recetas de fabricación</button>
+    <button class="dep-subtab" id="tabRecetasBaja" data-receta-tipo="baja" onclick="_setRecetaTipo('baja')" style="margin-left:auto;color:var(--ink3)">🗄️ Dadas de baja</button>
   </div>
   <div class="toolbar">
     <input id="searchRecetas" class="search-input" type="text" placeholder="Buscar receta…" oninput="renderRecetas()">
@@ -10948,6 +10949,30 @@ function renderRecetas() {
   _currentVerRecetaId = null;
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
+  // Tab "Dadas de baja"
+  if (_recetaTipo === 'baja') {
+    const ocultas = recetas.filter(r => r.oculta && (!search || r.nombre.toLowerCase().includes(search)));
+    document.getElementById('recetaRubroFilters').innerHTML = '';
+    document.getElementById('statsRecetas').innerHTML = `<div class="stat-chip"><strong>${ocultas.length}</strong> recetas dadas de baja</div>`;
+    if (!ocultas.length) {
+      document.getElementById('recetasScreen').innerHTML = `<div class="empty-state"><h3>Sin recetas dadas de baja</h3></div>`;
+    } else {
+      document.getElementById('recetasScreen').innerHTML = `<div class="recetas-grid">
+        ${ocultas.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => `
+          <div class="receta-card" style="opacity:.65">
+            <div class="receta-card-header">
+              <div style="flex:1">
+                <div class="receta-card-title" style="color:var(--ink2)">${r.nombre}</div>
+                <div class="receta-card-meta">${r.rubro || '—'} · ${r.tipo === 'fabricacion' ? '🏭' : '🛒'}</div>
+              </div>
+              <button onclick="_restaurarReceta('${r.id}')" style="background:none;border:1px solid var(--border);cursor:pointer;padding:3px 10px;border-radius:6px;color:var(--ink2);font-size:12px;white-space:nowrap;flex-shrink:0">Restaurar</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+    }
+    return;
+  }
+
   // Filtro primario por tipo (venta/fabricacion). Si la receta no tiene tipo, se asume 'venta' (legacy).
   const visible = recetas.filter(r =>
     !r.oculta &&
@@ -11063,8 +11088,6 @@ function renderRecetas() {
     </div>`;
   };
 
-  const ocultas = recetas.filter(r => r.oculta && ((r.tipo || 'venta') === _recetaTipo));
-
   document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
     const rs    = byRubro[rubro];
     const isSin = rubro === '__sin__';
@@ -11113,31 +11136,7 @@ function renderRecetas() {
       </div>
       <div class="rubro-body">${gruposHtml}${sinGrupoHtml}</div>
     </div>`;
-  }).join('') + (ocultas.length ? `
-    <div class="rubro-section" style="border-color:#F3F4F6;margin-top:24px">
-      <div class="rubro-section-header" style="background:#F3F4F6" onclick="_toggleRubroSection(this)">
-        <div class="rubro-icon" style="background:rgba(255,255,255,0.6);color:#6B7280">🗄️</div>
-        <div class="rubro-info">
-          <span class="rubro-label" style="color:#6B7280">Recetas dadas de baja</span>
-          <span class="rubro-badge" style="color:#9CA3AF">${ocultas.length} receta${ocultas.length!==1?'s':''}</span>
-        </div>
-        <span class="rubro-toggle" style="color:#9CA3AF">▶</span>
-      </div>
-      <div class="rubro-body">
-        <div class="recetas-grid">
-          ${ocultas.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => `
-            <div class="receta-card" style="opacity:.6">
-              <div class="receta-card-header">
-                <div style="flex:1">
-                  <div class="receta-card-title" style="color:var(--ink2)">${r.nombre}</div>
-                  <div class="receta-card-meta">${r.rubro || '—'}</div>
-                </div>
-                <button onclick="_restaurarReceta('${r.id}')" title="Restaurar" style="background:none;border:1px solid var(--border);cursor:pointer;padding:3px 8px;border-radius:6px;color:var(--ink2);font-size:11px;white-space:nowrap;flex-shrink:0">Restaurar</button>
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>` : '');
+  }).join('');
 }
 
 function byRubroCount(rubro, lista) {
