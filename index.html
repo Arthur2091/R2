@@ -6917,10 +6917,53 @@ function _editarDestinoMP(id) {
 }
 function _guardarDestinoMP(id) {
   const m = mpMovs.find(x => x.id === id); if (!m) return;
-  m.destino = document.getElementById('editDestinoMPInput').value.trim();
+  const oldDesc = m.destino || '';
+  const newDesc = document.getElementById('editDestinoMPInput').value.trim();
   document.getElementById('editDestinoMPModal')?.remove();
+  m.destino = newDesc;
   _persistMP(); renderContable();
   toast('Descripción actualizada', 'success');
+  _ofrecerBulkDesc(id, oldDesc, newDesc);
+}
+
+function _ofrecerBulkDesc(origenId, oldDesc, newDesc) {
+  if (!oldDesc || oldDesc === newDesc) return;
+  const matchesGal = galiciaMovs.filter(x => x.id !== origenId && (x.descripcion||'').includes(oldDesc));
+  const matchesMP  = mpMovs.filter(x => x.id !== origenId && (x.destino||'').includes(oldDesc));
+  const total = matchesGal.length + matchesMP.length;
+  if (!total) return;
+  document.getElementById('_bulkDescModal')?.remove();
+  window._bulkDescData = { oldDesc, newDesc, matchesGal: matchesGal.map(x=>x.id), matchesMP: matchesMP.map(x=>x.id) };
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="_bulkDescModal" style="display:flex">
+      <div class="modal" style="max-width:440px">
+        <h2>Aplicar a todas</h2>
+        <p style="font-size:14px;color:var(--ink2);margin-top:8px">Hay <strong>${total}</strong> transferencia${total!==1?'s':''} más que contienen <em>"${oldDesc}"</em>.<br>¿Aplicar el mismo cambio a todas?</p>
+        <div class="modal-actions" style="margin-top:16px">
+          <button class="btn btn-outline" onclick="document.getElementById('_bulkDescModal').remove()">Solo esta</button>
+          <button class="btn btn-primary" onclick="_aplicarBulkDesc()">Aplicar a las ${total}</button>
+        </div>
+      </div>
+    </div>`);
+  _makeDraggable(document.getElementById('_bulkDescModal'));
+}
+
+function _aplicarBulkDesc() {
+  document.getElementById('_bulkDescModal')?.remove();
+  const { oldDesc, newDesc, matchesGal, matchesMP } = window._bulkDescData || {};
+  if (!oldDesc) return;
+  matchesGal.forEach(id => {
+    const m = galiciaMovs.find(x => x.id === id);
+    if (m) m.descripcion = (m.descripcion||'').split(oldDesc).join(newDesc);
+  });
+  matchesMP.forEach(id => {
+    const m = mpMovs.find(x => x.id === id);
+    if (m) m.destino = (m.destino||'').split(oldDesc).join(newDesc);
+  });
+  if (matchesGal.length) _persistGal();
+  if (matchesMP.length) _persistMP();
+  renderContable();
+  toast(`Actualizado en ${matchesGal.length + matchesMP.length} transferencias`, 'success');
 }
 function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
@@ -7806,10 +7849,13 @@ function _editarDescGal(id) {
 }
 function _guardarDescGal(id) {
   const m = galiciaMovs.find(x => x.id === id); if (!m) return;
-  m.descripcion = document.getElementById('editDescGalInput').value.trim();
+  const oldDesc = m.descripcion || '';
+  const newDesc = document.getElementById('editDescGalInput').value.trim();
   document.getElementById('editDescGalModal')?.remove();
+  m.descripcion = newDesc;
   _persistGal(); renderContable();
   toast('Descripción actualizada', 'success');
+  _ofrecerBulkDesc(id, oldDesc, newDesc);
 }
 function _borrarGal(id)         { galiciaMovs = galiciaMovs.filter(m => m.id !== id); _persistGal(); renderContable(); }
 function _borrarGalMes() {
