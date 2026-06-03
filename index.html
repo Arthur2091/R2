@@ -3548,7 +3548,7 @@ function renderProveedorFacturas(provId, subtab) {
                 </div>
               </div>
               <div style="font-size:.82rem;color:var(--ink2)">
-                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems${estado.venc && !f.pagado ? ` · vence ${estado.venc}` : ''}${f.pagado && f.fechaPago ? ` · pagada el ${f.fechaPago}` : ''}
+                ${f.fecha}${f.hora ? ' · ' + f.hora : ''} · ${f.items.length} ítems${estado.venc && !f.pagado ? ` · vence ${estado.venc}` : ''}${f.pagado && f.fechaPago ? ` · pagada el ${f.fechaPago}` : ''}${f.pagado && f.medioPago ? ` · ${{mp:'🟦 Mercado Pago',galicia:'🏦 Galicia',kripon:'💳 Kripon',efectivo:'💵 Efectivo'}[f.medioPago]||f.medioPago}` : ''}
               </div>
             </div>
             ${btnPagar}
@@ -6503,7 +6503,7 @@ function renderContable() {
 
   // ── MERCADO PAGO ──
   const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
-  const mpGastos    = mpPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const mpGastos    = mpPeriod.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_L   = mpGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -6523,20 +6523,23 @@ function renderContable() {
         }).join('')}
         <th></th></tr></thead><tbody>
         ${_applySort(mpPeriod, _sortMP).map(m=>{
-          const vinculado  = !!m.facturaId;
+          const vinculado  = !!(m.facturaIds?.length);
           const interna    = !!m.esInterna;
           const gfVinc     = !!m.gastoFijoId;
           const sueldoVinc = !!m.sueldoId;
           const excluido   = vinculado || interna || gfVinc || sueldoVinc;
-          const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
-          const provVinc   = facVinc   ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
+          const facVincs   = vinculado ? facturas.filter(f => m.facturaIds.includes(f.id)) : [];
+          const facVinc    = facVincs[0] || null;
+          const provVinc   = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
           const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
                            : gfVinc ? 'background:#FAF5FF'
                            : sueldoVinc ? 'background:#ECFDF5'
                            : m.gasto === 'H' ? 'background:#FFF7ED' : m.gasto === 'L' ? 'background:#F0F9FF' : m.gasto === 'D' ? 'background:#FEFCE8' : '';
           const badge      = vinculado
-            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
+            ? (facVincs.length > 1
+                ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${facVincs.length} facturas</span>`
+                : `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`)
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
@@ -6566,13 +6569,13 @@ function renderContable() {
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${m.destino} ${badge} ${provBadge}</td>
             <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
-            <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
+            <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" onclick="_editarDestinoMP('${m.id}')" style="font-size:11px;color:var(--ink3)" title="Editar descripción">✎</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarMP('${m.id}')">✕</button></td>
           </tr>`;
         }).join('')}
         <tr style="font-weight:600;background:var(--surface2)">
           <td colspan="2">
             ${mpPeriod.length} movimiento${mpPeriod.length!==1?'s':''}
-            ${mpPeriod.some(m=>m.facturaId)?' · '+mpPeriod.filter(m=>m.facturaId).length+' vinculados':''}
+            ${mpPeriod.some(m=>m.facturaIds?.length)?' · '+mpPeriod.filter(m=>m.facturaIds?.length).length+' vinculados':''}
             ${totalMP_H ? ` · <span style="color:#9A3412">H: ${pesos(totalMP_H)}</span>` : ''}
             ${totalMP_L ? ` · <span style="color:#0C4A6E">L: ${pesos(totalMP_L)}</span>` : ''}
           </td>
@@ -6587,7 +6590,7 @@ function renderContable() {
   const galIngPeriod   = galiciaMovs.filter(m => inPeriod(m.fecha) && m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
   const galMovsPeriod  = galPeriod.filter(m => !_esImpuestoGal(m));
-  const galGastos      = galPeriod.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const galGastos      = galPeriod.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalGal       = galGastos.reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_H     = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_L     = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
@@ -6597,12 +6600,13 @@ function renderContable() {
   const elGL = document.getElementById('totalGal_L'); elGL.textContent = `L: ${pesos(totalGal_L)}`; elGL.style.display = totalGal_L ? '' : 'none';
 
   const _renderGalRow = m => {
-          const vinculado  = !!m.facturaId;
+          const vinculado  = !!(m.facturaIds?.length);
           const interna    = !!m.esInterna;
           const gfVinc     = !!m.gastoFijoId;
           const sueldoVinc = !!m.sueldoId;
           const excluido   = vinculado || interna || gfVinc || sueldoVinc;
-          const facVinc    = vinculado ? facturas.find(f => f.id === m.facturaId) : null;
+          const facVincs   = vinculado ? facturas.filter(f => m.facturaIds.includes(f.id)) : [];
+          const facVinc    = facVincs[0] || null;
           const provVinc   = facVinc ? (proveedores.find(p => p.id === facVinc.proveedorId)?.nombre || '') : '';
           const gfNombre   = gfVinc ? (gastosFijos.find(g => g.id === m.gastoFijoId)?.servicio || 'GF') : '';
           const rowBg      = vinculado ? 'background:#F0FDF4' : interna ? 'background:#F1F5F9'
@@ -6610,7 +6614,9 @@ function renderContable() {
                            : sueldoVinc ? 'background:#ECFDF5'
                            : m.gasto==='H' ? 'background:#FFF7ED' : m.gasto==='L' ? 'background:#F0F9FF' : m.gasto==='D' ? 'background:#FEFCE8' : '';
           const badge      = vinculado
-            ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`
+            ? (facVincs.length > 1
+                ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${facVincs.length} facturas</span>`
+                : `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">✓ ${provVinc}${facVinc?.nroBoleta?' · N°'+facVinc.nroBoleta:''}</span>`)
             : interna ? `<span style="font-size:11px;background:#E2E8F0;color:#475569;padding:2px 8px;border-radius:999px;font-weight:700">↔ Interna</span>`
             : gfVinc ? `<span style="font-size:11px;background:#EDE9FE;color:#5B21B6;padding:2px 8px;border-radius:999px;font-weight:700">GF · ${gfNombre}</span>`
             : sueldoVinc ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-weight:700">👤 ${sueldos.find(s=>s.id===m.sueldoId)?.empleado||'Sueldo'}</span>`
@@ -6645,7 +6651,7 @@ function renderContable() {
             <td style="color:var(--ink2);font-size:12px">${m.fecha}</td>
             <td style="font-size:13px;${excluido?'color:var(--ink3)':''}">${descHtml} ${badge} ${provBadge}</td>
             <td style="text-align:right;font-family:var(--mono);${excluido?'text-decoration:line-through;color:var(--ink3)':''}">${pesos(m.monto)}</td>
-            <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
+            <td style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">${accionGasto}${accion}<button class="btn btn-ghost btn-sm" onclick="_editarDescGal('${m.id}')" style="font-size:11px;color:var(--ink3)" title="Editar descripción">✎</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarGal('${m.id}')">✕</button></td>
           </tr>`;
   };
 
@@ -6666,7 +6672,7 @@ function renderContable() {
         <tr style="font-weight:600;background:var(--surface2)">
           <td colspan="2">
             ${movs.length} movimiento${movs.length!==1?'s':''}
-            ${movs.some(m=>m.facturaId)?' · '+movs.filter(m=>m.facturaId).length+' vinculados':''}
+            ${movs.some(m=>m.facturaIds?.length)?' · '+movs.filter(m=>m.facturaIds?.length).length+' vinculados':''}
             ${!esImpuestos && totalH ? ` · <span style="color:#9A3412">H: ${pesos(totalH)}</span>` : ''}
             ${!esImpuestos && totalL ? ` · <span style="color:#0C4A6E">L: ${pesos(totalL)}</span>` : ''}
           </td>
@@ -6878,6 +6884,32 @@ function renderContable() {
 }
 
 
+function _editarDestinoMP(id) {
+  const m = mpMovs.find(x => x.id === id); if (!m) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="editDestinoMPModal" style="display:flex">
+      <div class="modal" style="max-width:480px">
+        <h2>Editar descripción</h2>
+        <p class="modal-sub">${m.fecha} · ${pesos(m.monto)}</p>
+        <input id="editDestinoMPInput" class="input" style="margin-top:12px;width:100%" value="${(m.destino||'').replace(/"/g,'&quot;')}">
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('editDestinoMPModal').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="_guardarDestinoMP('${id}')">Guardar</button>
+        </div>
+      </div>
+    </div>`);
+  const inp = document.getElementById('editDestinoMPInput');
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') _guardarDestinoMP(id); if (e.key === 'Escape') document.getElementById('editDestinoMPModal')?.remove(); });
+  _makeDraggable(document.getElementById('editDestinoMPModal'));
+}
+function _guardarDestinoMP(id) {
+  const m = mpMovs.find(x => x.id === id); if (!m) return;
+  m.destino = document.getElementById('editDestinoMPInput').value.trim();
+  document.getElementById('editDestinoMPModal')?.remove();
+  _persistMP(); renderContable();
+  toast('Descripción actualizada', 'success');
+}
 function _borrarMP(id) {
   mpMovs = mpMovs.filter(m => m.id !== id);
   _persistMP();
@@ -6887,7 +6919,7 @@ function _autoVincularMP() {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   let vinculados = 0;
   mpMovs.forEach(m => {
-    if (m.facturaId || m.esInterna) return;
+    if (m.facturaIds?.length || m.esInterna) return;
     // Tomar solo la parte antes del " — " (el titular, no el banco)
     const titular = (m.destino || '').split(/\s*—\s*/)[0];
     const titNorm = norm(titular);
@@ -6902,7 +6934,7 @@ function _autoVincularMP() {
           .filter(w => w.length > 3).some(w => titNorm.includes(w));
       return nombreMatch && Math.round(f.importeTotal) === Math.round(m.monto);
     });
-    if (match) { m.facturaId = match.id; vinculados++; }
+    if (match) { m.facturaIds = [match.id]; vinculados++; }
   });
   if (!vinculados) { toast('No se encontraron coincidencias nuevas', 'info'); return; }
   _persistMP();
@@ -6913,7 +6945,7 @@ function _autoVincularGastosFijosMP() {
   const periodoStr = (() => { const s = document.getElementById('contablePeriodo'); return s ? s.value : null; })();
   let vinculados = 0;
   mpMovs.forEach(m => {
-    if (m.facturaId || m.esInterna || m.gastoFijoId) return;
+    if (m.facturaIds?.length || m.esInterna || m.gastoFijoId) return;
     const mPeriodo = m.fecha ? m.fecha.slice(0, 7) : null;
     if (!mPeriodo) return;
     const match = gastosFijos.find(g => g.periodo === mPeriodo && Math.round(g.monto) === Math.round(m.monto));
@@ -6927,7 +6959,7 @@ function _autoVincularGastosFijosMP() {
 function _autoVincularGastosFijosGal() {
   let vinculados = 0;
   galiciaMovs.forEach(m => {
-    if (m.facturaId || m.esInterna || m.gastoFijoId) return;
+    if (m.facturaIds?.length || m.esInterna || m.gastoFijoId) return;
     const mPeriodo = m.fecha ? m.fecha.slice(0, 7) : null;
     if (!mPeriodo) return;
     const match = gastosFijos.find(g => g.periodo === mPeriodo && Math.round(g.monto) === Math.round(m.monto));
@@ -6969,8 +7001,8 @@ function _abrirVincularExtractoGF(gfId) {
       <div style="font-size:11px;color:var(--ink2);margin-top:2px">${mov.fecha} · ${pesos(mov.monto)}${match?' · <span style="color:#5B21B6;font-weight:700">monto exacto</span>':''}</div>
     </button>`;
   };
-  const libresMP  = mpMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
-  const libresGal = galiciaMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const libresMP  = mpMovs.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
+  const libresGal = galiciaMovs.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const todos = [
     ...libresMP.map(m  => ({ mov: m,  source: 'mp'  })),
     ...libresGal.map(m => ({ mov: m,  source: 'gal' }))
@@ -7117,8 +7149,8 @@ function _matchProvPorMov(nombre, cuitNum) {
   }) || null;
 }
 function _montoPagadoFactura(facturaId) {
-  const sumMP  = mpMovs.filter(m => m.facturaId === facturaId).reduce((s, m) => s + (m.monto || 0), 0);
-  const sumGal = galiciaMovs.filter(m => m.facturaId === facturaId).reduce((s, m) => s + (m.monto || 0), 0);
+  const sumMP  = mpMovs.filter(m => m.facturaIds?.includes(facturaId)).reduce((s, m) => s + (m.monto || 0), 0);
+  const sumGal = galiciaMovs.filter(m => m.facturaIds?.includes(facturaId)).reduce((s, m) => s + (m.monto || 0), 0);
   return sumMP + sumGal;
 }
 function _reAutoLinkContableManual() {
@@ -7129,9 +7161,9 @@ function _reAutoLinkContable() {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   let vinculados = 0;
   const todosMovs = [
-    ...mpMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
+    ...mpMovs.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
       .map(m => ({ src: 'mp', mov: m, desc: m.destino || '', cuitRaw: (m.destino||'').match(/\d{10,11}/)?.[0] || null })),
-    ...galiciaMovs.filter(m => !m.facturaId && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
+    ...galiciaMovs.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId)
       .map(m => {
         const cuitMatch = m.descripcion.match(/(?:CU|NO)\s+(\d{8,11})/);
         return { src: 'gal', mov: m, desc: m.descripcion || '', cuitRaw: cuitMatch ? cuitMatch[1] : null };
@@ -7151,7 +7183,7 @@ function _reAutoLinkContable() {
       const restante = f.importeTotal - pagado;
       return Math.round(f.importeTotal) === Math.round(mov.monto) || (restante > 0 && Math.round(restante) === Math.round(mov.monto));
     });
-    if (match) { mov.facturaId = match.id; vinculados++; }
+    if (match) { mov.facturaIds = [match.id]; vinculados++; }
   });
   if (vinculados) { _persistMP(); _persistGal(); renderContable(); }
   return vinculados;
@@ -7291,6 +7323,35 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
       return b.fecha.localeCompare(a.fecha);
     });
 
+  const selected = new Set();
+
+  const _updateFooter = () => {
+    const total = [...selected].reduce((s, id) => {
+      const f = facturas.find(x => x.id === id);
+      return s + (f?.importeTotal || 0);
+    }, 0);
+    const diff = total - monto;
+    const diffStr = diff === 0
+      ? '<span style="color:#10B981;font-weight:700">✓ Coincide exacto</span>'
+      : diff > 0
+        ? `<span style="color:#DC2626">+${pesos(diff)} de más</span>`
+        : `<span style="color:#F59E0B">${pesos(-diff)} pendiente</span>`;
+    const footer = document.getElementById(`${modalId}_footer`);
+    if (footer) footer.innerHTML = selected.size
+      ? `Seleccionado: <strong>${pesos(total)}</strong> / ${pesos(monto)} · ${diffStr}`
+      : '';
+    const btn = document.getElementById(`${modalId}_btnOk`);
+    if (btn) btn.disabled = selected.size === 0;
+  };
+
+  const _toggle = fId => {
+    if (selected.has(fId)) selected.delete(fId); else selected.add(fId);
+    const list = document.getElementById(`${modalId}_list`);
+    const searchVal = document.getElementById(`${modalId}_search`)?.value || '';
+    if (list) list.innerHTML = _renderItems(searchVal);
+    _updateFooter();
+  };
+
   const _renderItems = q => {
     const qn = norm(q);
     const lista = qn ? facsOrdenadas.filter(f => {
@@ -7298,22 +7359,19 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
       return norm(prov).includes(qn) || (f.nroBoleta||'').toLowerCase().includes(q.toLowerCase());
     }) : facsOrdenadas;
     return lista.map(f => {
-      const prov    = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
-      const match   = !qn && _provMatch(proveedores.find(p=>p.id===f.proveedorId)||{nombre:''});
-      const pagado  = _montoPagadoFactura(f.id);
+      const prov     = proveedores.find(p=>p.id===f.proveedorId)?.nombre||'Sin proveedor';
+      const match    = !qn && _provMatch(proveedores.find(p=>p.id===f.proveedorId)||{nombre:''});
+      const pagado   = _montoPagadoFactura(f.id);
       const restante = f.importeTotal - pagado;
       const parcialHtml = pagado > 0
-        ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">ya pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
-      const mpLabels = { mp:'Mercado Pago', galicia:'Transferencia Galicia', kripon:'Kripon', efectivo:'Efectivo' };
-      const mpBadge = f.medioPago
-        ? `<span style="font-size:10px;background:#EDE9FE;color:#5B21B6;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:4px">${mpLabels[f.medioPago]||f.medioPago}</span>`
-        : '';
+        ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:999px;margin-left:4px">pagado ${pesos(pagado)} · resta ${pesos(restante)}</span>` : '';
+      const isSelected = selected.has(f.id);
       const fechaDisplay = f.fecha ? f.fecha.split('-').reverse().join('/') : '—';
-      return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${match?'border-color:#10B981;background:#F0FDF4':''}"
-        onclick="document.getElementById('${modalId}')._onSelect('${f.id}')">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      return `<button class="btn btn-outline" style="text-align:left;padding:10px 14px;width:100%;${isSelected?'border-color:#10B981;background:#F0FDF4':match?'border-color:#10B981':''}"
+        onclick="document.getElementById('${modalId}')._toggle('${f.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
           <span style="font-weight:700;font-size:13px;color:var(--ink)">${prov}</span>
-          ${mpBadge}
+          ${isSelected ? '<span style="font-size:16px;color:#10B981">✓</span>' : ''}
         </div>
         <div style="display:flex;align-items:baseline;gap:14px;margin-top:5px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:16px;font-family:var(--mono);color:var(--accent)">${pesos(f.importeTotal)}</span>
@@ -7337,17 +7395,20 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
         <input type="search" id="${modalId}_search" placeholder="Buscar proveedor o N° boleta…" autocomplete="off"
           oninput="document.getElementById('${modalId}_list').innerHTML=document.getElementById('${modalId}')._render(this.value)"
           style="width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-top:12px;box-sizing:border-box">
-        <div id="${modalId}_list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:380px;overflow-y:auto">
+        <div id="${modalId}_list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:320px;overflow-y:auto">
           ${_renderItems(_provNombreMatch)}
         </div>
-        <div class="modal-actions" style="margin-top:14px">
+        <div id="${modalId}_footer" style="margin-top:10px;font-size:13px;color:var(--ink2);min-height:20px"></div>
+        <div class="modal-actions" style="margin-top:10px">
           <button class="btn btn-outline" onclick="document.getElementById('${modalId}').remove()">Cancelar</button>
+          <button class="btn btn-primary" id="${modalId}_btnOk" disabled onclick="document.getElementById('${modalId}')._confirm()">Vincular</button>
         </div>
       </div>
     </div>`);
   const el = document.getElementById(modalId);
-  el._render   = _renderItems;
-  el._onSelect = fId => { el.remove(); onSelect(fId); };
+  el._render  = _renderItems;
+  el._toggle  = _toggle;
+  el._confirm = () => { el.remove(); onSelect([...selected]); };
   _makeDraggable(el);
   if (_provNombreMatch) {
     const inp = document.getElementById(`${modalId}_search`);
@@ -7357,17 +7418,17 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
 function _abrirVincularMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
-  _abrirVincularBoletaModal({ desc: m.destino, fecha: m.fecha, monto: m.monto, modalId: 'vincularMPModal', onSelect: fId => _vincularMP(mpId, fId) });
+  _abrirVincularBoletaModal({ desc: m.destino, fecha: m.fecha, monto: m.monto, modalId: 'vincularMPModal', onSelect: fIds => _vincularMP(mpId, fIds) });
 }
 
-function _vincularMP(mpId, facturaId) {
+function _vincularMP(mpId, facturaIds) {
   document.getElementById('vincularMPModal')?.remove();
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
-  m.facturaId = facturaId;
+  m.facturaIds = facturaIds;
   _persistMP();
   renderContable();
-  toast('Retiro vinculado — no se suma a egresos MP', 'success');
+  toast(`Vinculado a ${facturaIds.length > 1 ? facturaIds.length + ' facturas' : 'factura'}`, 'success');
 }
 function _buildGFOpciones(monto, periodoMov, actionPrefix, descripcion = '') {
   if (!gastosFijos.length) return `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin gastos fijos cargados</div>`;
@@ -7440,7 +7501,7 @@ function _vincularGFMP(mpId, gfId) {
 function _desvincularMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
-  delete m.facturaId;
+  delete m.facturaIds;
   _persistMP();
   renderContable();
   toast('Retiro desvinculado', 'info');
@@ -7512,7 +7573,7 @@ function _importMPcsv(lines) {
             .filter(w => w.length > 3).some(w => titNorm.includes(w));
         return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
       });
-      if (match) { mov.facturaId = match.id; autoVinculados++; }
+      if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
     }
 
     mpMovs.push(mov);
@@ -7603,7 +7664,7 @@ function importMP(e) {
                 .filter(w => w.length > 3).some(w => titNorm.includes(w));
             return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
           });
-          if (match) { mov.facturaId = match.id; autoVinculados++; }
+          if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
         }
 
         mpMovs.push(mov);
@@ -7692,6 +7753,32 @@ function _aplicarTodosCuits() {
 }
 
 // ── GALICIA HELPERS ──
+function _editarDescGal(id) {
+  const m = galiciaMovs.find(x => x.id === id); if (!m) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay open" id="editDescGalModal" style="display:flex">
+      <div class="modal" style="max-width:480px">
+        <h2>Editar descripción</h2>
+        <p class="modal-sub">${m.fecha} · ${pesos(m.monto)}</p>
+        <input id="editDescGalInput" class="input" style="margin-top:12px;width:100%" value="${(m.descripcion||'').replace(/"/g,'&quot;')}">
+        <div class="modal-actions" style="margin-top:14px">
+          <button class="btn btn-outline" onclick="document.getElementById('editDescGalModal').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="_guardarDescGal('${id}')">Guardar</button>
+        </div>
+      </div>
+    </div>`);
+  const inp = document.getElementById('editDescGalInput');
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') _guardarDescGal(id); if (e.key === 'Escape') document.getElementById('editDescGalModal')?.remove(); });
+  _makeDraggable(document.getElementById('editDescGalModal'));
+}
+function _guardarDescGal(id) {
+  const m = galiciaMovs.find(x => x.id === id); if (!m) return;
+  m.descripcion = document.getElementById('editDescGalInput').value.trim();
+  document.getElementById('editDescGalModal')?.remove();
+  _persistGal(); renderContable();
+  toast('Descripción actualizada', 'success');
+}
 function _borrarGal(id)         { galiciaMovs = galiciaMovs.filter(m => m.id !== id); _persistGal(); renderContable(); }
 function _borrarGalMes() {
   const periodo = _periodoActual();
@@ -7806,17 +7893,17 @@ function renderAuditoria() {
          ${_colHtml(movD, 'Dudoso',  '#FEFCE8', '#FEF08A', '#713F12', '#713F12')}
        </div>`;
 }
-function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; delete m.facturaId; _persistGal(); renderContable(); toast('Desvinculado','info'); }
+function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; delete m.facturaIds; _persistGal(); renderContable(); toast('Desvinculado','info'); }
 function _abrirVincularGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
-  _abrirVincularBoletaModal({ desc: m.descripcion, fecha: m.fecha, monto: m.monto, modalId: 'vincularGalModal', onSelect: fId => _vincularGal(galId, fId) });
+  _abrirVincularBoletaModal({ desc: m.descripcion, fecha: m.fecha, monto: m.monto, modalId: 'vincularGalModal', onSelect: fIds => _vincularGal(galId, fIds) });
 }
-function _vincularGal(galId, facturaId) {
+function _vincularGal(galId, facturaIds) {
   document.getElementById('vincularGalModal')?.remove();
   const m = galiciaMovs.find(x=>x.id===galId); if(!m) return;
-  m.facturaId = facturaId; _persistGal(); renderContable();
-  toast('Vinculado a factura','success');
+  m.facturaIds = facturaIds; _persistGal(); renderContable();
+  toast(`Vinculado a ${facturaIds.length > 1 ? facturaIds.length + ' facturas' : 'factura'}`, 'success');
 }
 function _abrirVincularGFGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
@@ -7853,7 +7940,7 @@ function _autoVincularGalicia() {
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   let vinculados = 0;
   galiciaMovs.forEach(m => {
-    if (m.facturaId || m.esInterna) return;
+    if (m.facturaIds?.length || m.esInterna) return;
     const descNorm = norm(m.descripcion);
     const cuitEnDesc = (m.descripcion||'').match(/(?:CU|NO)\s+(\d{8,})/)?.[1] || '';
     const match = facturas.find(f => {
@@ -7864,7 +7951,7 @@ function _autoVincularGalicia() {
         .filter(w=>w.length>3).some(w=>descNorm.includes(w));
       return (cuitMatch || nombreMatch) && Math.round(f.importeTotal) === Math.round(m.monto);
     });
-    if (match) { m.facturaId = match.id; vinculados++; }
+    if (match) { m.facturaIds = [match.id]; vinculados++; }
   });
   if (!vinculados) { toast('No se encontraron coincidencias nuevas','info'); return; }
   _persistGal(); renderContable();
@@ -7931,7 +8018,7 @@ function importGalicia(e) {
                 .filter(w=>w.length>3).some(w=>descNorm.includes(w));
               return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(monto);
             });
-            if (match) { mov.facturaId=match.id; autoVinculados++; }
+            if (match) { mov.facturaIds=[match.id]; autoVinculados++; }
           }
           existentesCmp.add(cmpKey);
           newEgresos.push(mov);
@@ -8028,7 +8115,7 @@ function _importMPStandardLines(lines) {
               .filter(w => w.length > 3).some(w => titNorm.includes(w));
           return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
         });
-        if (match) { mov.facturaId = match.id; autoVinculados++; }
+        if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
       }
 
       newEgresos.push(mov);
@@ -10588,8 +10675,14 @@ async function _fbLoad() {
           if (d.formaCobroMovs?.length)  formaCobroMovs = d.formaCobroMovs;
           if (d.productosRubros && Object.keys(d.productosRubros).length) productosRubros = d.productosRubros;
           // Fallbacks para migración (docs viejos antes del split)
-          if (d.mpMovs?.length && !mpMovs.length)         mpMovs      = d.mpMovs;
-          if (d.galiciaMovs?.length && !galiciaMovs.length) galiciaMovs = d.galiciaMovs;
+          if (d.mpMovs?.length && !mpMovs.length) {
+            mpMovs = d.mpMovs;
+            mpMovs.forEach(m => { if (m.facturaId && !m.facturaIds) { m.facturaIds = [m.facturaId]; delete m.facturaId; } });
+          }
+          if (d.galiciaMovs?.length && !galiciaMovs.length) {
+            galiciaMovs = d.galiciaMovs;
+            galiciaMovs.forEach(m => { if (m.facturaId && !m.facturaIds) { m.facturaIds = [m.facturaId]; delete m.facturaId; } });
+          }
           _seedGFMayo2026();
           break;
         default:
@@ -10597,7 +10690,10 @@ async function _fbLoad() {
             ventas = ventas.concat(d.items);
           break;
         case 'contable_mp':
-          if (d.items?.length) mpMovs = d.items;
+          if (d.items?.length) {
+            mpMovs = d.items;
+            mpMovs.forEach(m => { if (m.facturaId && !m.facturaIds) { m.facturaIds = [m.facturaId]; delete m.facturaId; } });
+          }
           break;
         case 'contable_mp_ing':
           if (d.items?.length) mpIngMovs = d.items;
@@ -10610,6 +10706,7 @@ async function _fbLoad() {
               if (seen.has(k)) return false;
               seen.add(k); return true;
             });
+            galiciaMovs.forEach(m => { if (m.facturaId && !m.facturaIds) { m.facturaIds = [m.facturaId]; delete m.facturaId; } });
             if (galiciaMovs.length !== d.items.length) _persistGal();
           }
           break;
