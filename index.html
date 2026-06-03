@@ -5988,8 +5988,10 @@ function renderProductosMes(key) {
     </div>`;
   };
 
-  const rubrosHtml = RUBROS_LIST.filter(r => grupoRubros[r]).map(r => {
-    const s  = RUBRO_STYLES_C[r];
+  const todosRubros = [...RUBROS_LIST, ..._customRubros];
+
+  const rubrosHtml = todosRubros.filter(r => grupoRubros[r]).map(r => {
+    const s  = RUBRO_STYLES_C[r] || { bg:'#F0F9FF', color:'#0C4A6E', icon:'📦' };
     const subtotal = grupoRubros[r].reduce((acc, [,p]) => acc + p.total, 0);
     return `<div style="margin-bottom:1.2rem">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;padding-bottom:.35rem;border-bottom:2px solid ${s.color}30">
@@ -6006,16 +6008,15 @@ function renderProductosMes(key) {
       <div style="display:flex;flex-direction:column;gap:.35rem">${sinCat.map(productoHtml).join('')}</div>
     </div>` : '';
 
-  const rubrosConDatos = RUBROS_LIST.filter(r => grupoRubros[r])
+  const rubrosConDatos = todosRubros.filter(r => grupoRubros[r])
     .sort((a, b) => grupoRubros[b].reduce((s,[,p])=>s+p.total,0) - grupoRubros[a].reduce((s,[,p])=>s+p.total,0));
   const botonesRubros = [...rubrosConDatos, ...(sinCat.length ? ['__sin__'] : [])].map(r => {
     const esSin   = r === '__sin__';
-    const s       = esSin ? null : RUBRO_STYLES_C[r];
+    const s       = esSin ? null : (RUBRO_STYLES_C[r] || { bg:'#F0F9FF', color:'#0C4A6E', icon:'📦' });
     const items   = esSin ? sinCat : grupoRubros[r];
     const subtotal = items.reduce((acc, [,p]) => acc + p.total, 0);
     const label2  = esSin ? 'Sin categoría' : `${s.icon} ${r}`;
-    const bg      = esSin ? 'var(--surface2)' : s.bg;
-    const color   = esSin ? 'var(--ink2)'     : s.color;
+    const color   = esSin ? 'var(--ink2)' : s.color;
     return `<button class="btn btn-outline" style="text-align:left;padding:.85rem 1.2rem;border-left:3px solid ${color}"
       onclick="renderProductosRubro('${key}','${r}')">
       <div style="font-size:1rem;font-weight:700;color:${color}">${label2}</div>
@@ -6040,46 +6041,143 @@ function renderProductosRubro(key, rubro) {
   const [y, m] = key.split('-');
   const mesLabel = MESES_NOMBRES[parseInt(m) - 1] + ' ' + y;
   const esSin   = rubro === '__sin__';
-  const s       = esSin ? null : RUBRO_STYLES_C[rubro];
-  const rubroLabel = esSin ? 'Sin categoría' : `${s.icon} ${rubro}`;
+  const s       = esSin ? null : (RUBRO_STYLES_C[rubro] || { bg:'#F0F9FF', color:'#0C4A6E', icon:'📦' });
+  const rubroLabel = esSin ? 'Sin categoría' : `${s?.icon||'📦'} ${rubro}`;
   const color   = esSin ? 'var(--ink2)' : s.color;
 
   const todosProds = Object.entries(d.productos).sort((a, b) => b[1].total - a[1].total);
-  const maxTotal   = todosProds[0]?.[1].total || 1;
 
   const items = todosProds.filter(([nombre]) => {
     const r = productosRubros[nombre];
     return esSin ? !r : r === rubro;
   });
 
-  const top10    = items.slice(0, 10);
-  const maxTop   = top10[0]?.[1].total || 1;
   const subtotal = items.reduce((acc, [,p]) => acc + p.total, 0);
 
-  const graficoHtml = top10.map(([nombre, pd], i) => {
-    const pct  = Math.round((pd.total / maxTop) * 100);
-    const slug = `prod_${i}_${key}`;
-    return `<div style="display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:.75rem;padding:.4rem 0;cursor:pointer" onclick="toggleSection('${slug}')">
-      <span style="font-size:.82rem;font-weight:600;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</span>
-      <div style="background:var(--surface2);border-radius:2px;height:22px;position:relative">
-        <div style="height:22px;width:${pct}%;background:${color};border-radius:2px;opacity:.85"></div>
+  if (!esSin) {
+    const top10  = items.slice(0, 10);
+    const maxTop = top10[0]?.[1].total || 1;
+    const graficoHtml = top10.map(([nombre, pd], i) => {
+      const pct  = Math.round((pd.total / maxTop) * 100);
+      const slug = `prod_${i}_${key}`;
+      return `<div style="display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:.75rem;padding:.4rem 0;cursor:pointer" onclick="toggleSection('${slug}')">
+        <span style="font-size:.82rem;font-weight:600;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</span>
+        <div style="background:var(--surface2);border-radius:2px;height:22px;position:relative">
+          <div style="height:22px;width:${pct}%;background:${color};border-radius:2px;opacity:.85"></div>
+        </div>
+        <span style="font-size:.78rem;color:var(--ink2);white-space:nowrap;min-width:72px">${pesos(pd.total)}</span>
       </div>
-      <span style="font-size:.78rem;color:var(--ink2);white-space:nowrap;min-width:72px">${pesos(pd.total)}</span>
-    </div>
-    <div id="${slug}" style="display:none;padding:.4rem .5rem .6rem 160px;font-size:.82rem;color:var(--ink2)">
-      ${pd.unidades.toLocaleString('es-AR')} unidades
-    </div>`;
+      <div id="${slug}" style="display:none;padding:.4rem .5rem .6rem 160px;font-size:.82rem;color:var(--ink2)">
+        ${pd.unidades.toLocaleString('es-AR')} unidades
+      </div>`;
+    }).join('');
+    screen.innerHTML = `
+      <button class="btn btn-outline" style="margin-bottom:1rem" onclick="renderProductosMes('${key}')">← ${mesLabel}</button>
+      <div style="margin-bottom:1.2rem">
+        <div style="font-size:1.1rem;font-weight:700;color:${color}">${rubroLabel}</div>
+        <div style="font-size:.85rem;color:var(--ink2)">${pesos(subtotal)} · ${items.length} productos</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem">
+        ${graficoHtml}
+      </div>`;
+    return;
+  }
+
+  // ── SIN CATEGORÍA: vista con checkboxes ──
+  const todosRubros = [...RUBROS_LIST, ..._customRubros];
+  const opcionesRubros = todosRubros.map(r => `<option value="${r}">${r}</option>`).join('');
+
+  const itemsHtml = items.map(([nombre, pd]) => {
+    const pct = Math.round((pd.total / (items[0]?.[1].total || 1)) * 100);
+    const nombreEsc = nombre.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<label style="display:flex;align-items:center;gap:.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.6rem 1rem;cursor:pointer">
+      <input type="checkbox" class="sincat-check" data-nombre="${nombreEsc}" style="width:16px;height:16px;accent-color:var(--accent);flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem">
+          <span style="font-weight:600;font-size:.9rem">${nombre}</span>
+          <span style="font-size:.82rem;color:var(--ink2)">${pd.unidades.toLocaleString('es-AR')} ud · ${pesos(pd.total)}</span>
+        </div>
+        <div style="height:5px;background:var(--surface2);border-radius:3px">
+          <div style="height:5px;width:${pct}%;background:var(--ink3);border-radius:3px"></div>
+        </div>
+      </div>
+    </label>`;
   }).join('');
 
   screen.innerHTML = `
     <button class="btn btn-outline" style="margin-bottom:1rem" onclick="renderProductosMes('${key}')">← ${mesLabel}</button>
-    <div style="margin-bottom:1.2rem">
-      <div style="font-size:1.1rem;font-weight:700;color:${color}">${rubroLabel}</div>
-      <div style="font-size:.85rem;color:var(--ink2)">${pesos(subtotal)} · ${items.length} productos</div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+      <div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--ink2)">Sin categoría</div>
+        <div style="font-size:.85rem;color:var(--ink2)">${pesos(subtotal)} · ${items.length} productos</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;cursor:pointer">
+        <input type="checkbox" id="checkTodos" onchange="_toggleTodosSinCat(this.checked)" style="accent-color:var(--accent)">
+        Seleccionar todos
+      </label>
     </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.2rem">
-      ${graficoHtml}
+    <div style="display:flex;flex-direction:column;gap:.4rem;margin-bottom:120px">
+      ${itemsHtml}
+    </div>
+    <div style="position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:1rem 1.5rem;z-index:200;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <span id="sincatCount" style="font-size:.85rem;color:var(--ink2);min-width:80px">0 seleccionados</span>
+      <select id="sincatRubroSel" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)" onchange="_onSincatRubroChange()">
+        <option value="">— Elegí categoría —</option>
+        ${opcionesRubros}
+        <option value="__nuevo__">+ Nueva categoría…</option>
+      </select>
+      <input id="sincatNuevoInput" placeholder="Nombre de la nueva categoría" style="display:none;flex:1;min-width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+      <button class="btn btn-primary" onclick="_moverProductosSeleccionados('${key}')" style="white-space:nowrap">Mover</button>
     </div>`;
+
+  // Actualizar contador al hacer click en cualquier checkbox
+  screen.querySelectorAll('.sincat-check').forEach(cb => {
+    cb.addEventListener('change', _actualizarContadorSinCat);
+  });
+}
+
+function _toggleTodosSinCat(checked) {
+  document.querySelectorAll('.sincat-check').forEach(cb => cb.checked = checked);
+  _actualizarContadorSinCat();
+}
+
+function _actualizarContadorSinCat() {
+  const sel = document.querySelectorAll('.sincat-check:checked').length;
+  const el = document.getElementById('sincatCount');
+  if (el) el.textContent = `${sel} seleccionado${sel !== 1 ? 's' : ''}`;
+}
+
+function _onSincatRubroChange() {
+  const sel = document.getElementById('sincatRubroSel');
+  const inp = document.getElementById('sincatNuevoInput');
+  if (!sel || !inp) return;
+  inp.style.display = sel.value === '__nuevo__' ? '' : 'none';
+  if (sel.value === '__nuevo__') inp.focus();
+}
+
+function _moverProductosSeleccionados(key) {
+  const selEl = document.getElementById('sincatRubroSel');
+  const inp   = document.getElementById('sincatNuevoInput');
+  if (!selEl) return;
+
+  let rubro = selEl.value;
+  if (rubro === '__nuevo__') {
+    rubro = (inp?.value || '').trim();
+    if (!rubro) { toast('Ingresá el nombre de la nueva categoría', 'error'); return; }
+    if (!_customRubros.includes(rubro)) {
+      _customRubros.push(rubro);
+      localStorage.setItem('cons_rubros', JSON.stringify(_customRubros));
+      _persistRubros();
+    }
+  }
+  if (!rubro) { toast('Elegí una categoría', 'error'); return; }
+
+  const checks = [...document.querySelectorAll('.sincat-check:checked')];
+  if (!checks.length) { toast('Seleccioná al menos un producto', 'error'); return; }
+
+  checks.forEach(cb => asignarRubro(cb.dataset.nombre, rubro));
+  toast(`${checks.length} producto${checks.length !== 1 ? 's' : ''} movido${checks.length !== 1 ? 's' : ''} a ${rubro}`, 'success');
+  renderProductosRubro(key, '__sin__');
 }
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
