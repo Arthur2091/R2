@@ -1453,6 +1453,24 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<div id="modalCartaCmp" class="overlay">
+  <div class="modal" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <h2 style="margin:0;flex:1">Comparación con la carta</h2>
+      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('todos')">Todos</button>
+      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('faltantes')">Solo faltantes</button>
+      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('existentes')">Solo existentes</button>
+    </div>
+    <input id="cartaCmpSearch" type="text" placeholder="Buscar producto…" oninput="_cartaRenderFiltrado()" style="flex-shrink:0;margin-top:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+    <div id="cartaCmpStats" style="flex-shrink:0;margin-top:8px;font-size:12px;color:var(--ink2)"></div>
+    <div id="cartaCmpScreen" style="overflow-y:auto;flex:1;margin-top:8px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
+      <button class="btn btn-outline" onclick="closeModal('modalCartaCmp')">Cerrar</button>
+      <button class="btn btn-primary" onclick="_importarFaltantesCarta()">Importar faltantes seleccionados</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalImpRevisor" class="overlay">
   <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Revisar recetas detectadas</h2>
@@ -1657,6 +1675,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="_impArrancar(this)">
+    <button class="btn btn-outline" onclick="_abrirComparacionCarta()">📋 Comparar con carta</button>
     <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
     <button id="btnSeleccionarRecetas" class="btn btn-outline" onclick="_toggleModoSeleccion()">Seleccionar</button>
     <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
@@ -11188,6 +11207,125 @@ function _toggleRubroSection(header) {
   const tog  = header.querySelector('.rubro-toggle');
   body.classList.toggle('open');
   tog.classList.toggle('open');
+}
+
+/* ── COMPARACIÓN CON CARTA ───────────────────────────────────────── */
+const CARTA_PRODUCTOS = [
+  { cat:'Café de Especialidad', items:['Espresso','Lungo','Americano','Doppio','Cortado en pocillo','Cortado en vasito','Americano doble','Latte','Capuccino','Mocaccino','Flat White'] },
+  { cat:'Café Frío', items:['Iced Coffee','Cold Brew','Iced Capuccino','Iced Flat White','Iced CapuVainilla','Iced CapuCaramelo','Iced CapuAvellana'] },
+  { cat:'Infusiones', items:['Té clásico','Té Inti Zen','Chocolate caliente','Chocolate frío','Submarino Águila'] },
+  { cat:'Bebidas Frías', items:['Limonada con almíbar de menta y jengibre','Limonada en jarra','Jugo de naranja','Iced Tea'] },
+  { cat:'Licuados', items:['Licuado de banana','Licuado de durazno','Licuado de frutilla','Licuado de naranja'] },
+  { cat:'Refrescos', items:['Coca Cola','Lima Limón','Pomelo','Agua sin Gas','Sifoncito','Aquarius Pomelo','Aquarius Manzana','Aquarius Naranja'] },
+  { cat:'Pastelería / Panadería', items:['Medialuna de Manteca','Croissant Clásico','Sfogliatella','Scon de Queso','Cookie Nutella','Cookie Red Velvet','Cookie Toddy','Cookie Frambuesa','Cookie 2ble choco','Brownie con Nuez','Budín Arándano y choco blanco','Budín Banana nuez y chocolate','Budín Limón con amapola','Macarons'] },
+  { cat:'Tortas', items:['Tiramisu','Lemon Pie','Cheese Cake con Frutos Rojos','Bruce'] },
+  { cat:'Desayunos & Meriendas', items:['Tostadas con mermelada y queso untable','Medialunas con jamón y queso x2','Croissant jamón crudo brie rúcula y tomate','Tostado de jamón y queso','Croque Monsieur de jamón y queso','Triffle yogur granola y fruta','Avocado Toast con huevo soft','Avocroissant de palta y huevos revueltos','French Toast con frutos rojos y miel','French Toast con huevos revueltos y Bacon','Huevos Revueltos con Bacon y verdeo','Omelette de Jamón y Queso'] },
+  { cat:'Combos de Cafetería', items:['Combo Yoda','Combo Qui-Gon','Combo Han Solo','Combo Anakin','Combo Luke','Combo Obi-Wan','Combo Padme','Combo Leia','Combo Rei Bright Side','Combo Rei Dark Side','Combo Chewie'] },
+  { cat:'Ciabattas', items:['Episodio 2 Carne desmechada','Episodio 3 Pollo Crispy','Episodio 5 Pollo Grill','Episodio 6 Veggie'] },
+  { cat:'Tartas', items:['AT-AT Walker Espinaca y muzzarella','X-Wing Calabaza y muzzarella'] },
+  { cat:'Wraps', items:['Wrap Criollo','Wrap Veggie','Wrap Caesar','Wrap Falafel'] },
+  { cat:'Ensaladas', items:['Ensalada R2-D2','Ensalada BB-8','Ensalada C-3PO Keto'] },
+  { cat:'Pastas', items:['Ñoquis de papa','Ñoquis de espinaca','Fideos finitos al huevo','Cintas de albahaca','Fetuccini','Tallarines de espinaca'] },
+  { cat:'Salsas Especiales', items:['Pesto Lovers','Parisienne','PP Boloñesa blanca pesto','Scarparo'] },
+];
+
+let _cartaFiltroActivo = 'todos';
+let _cartaCmpData = []; // { cat, nombre, recetaMatch, seleccionada }
+
+function _normCarta(s) {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function _cartaMatchScore(a, b) {
+  const na = _normCarta(a), nb = _normCarta(b);
+  if (na === nb) return 1;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  const toks = s => new Set(s.split(' ').filter(t => t.length > 2));
+  const ta = toks(na), tb = toks(nb);
+  let common = 0; ta.forEach(t => tb.has(t) && common++);
+  const union = ta.size + tb.size - common;
+  return union > 0 ? common / union : 0;
+}
+
+function _abrirComparacionCarta() {
+  _cartaCmpData = [];
+  CARTA_PRODUCTOS.forEach(({ cat, items }) => {
+    items.forEach(nombre => {
+      let best = null, bestScore = 0;
+      recetas.filter(r => !r.oculta && (r.tipo || 'venta') === 'venta').forEach(r => {
+        const sc = _cartaMatchScore(nombre, r.nombre);
+        if (sc > bestScore) { bestScore = sc; best = r; }
+      });
+      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.6 ? best : null, score: bestScore, seleccionada: bestScore < 0.6 });
+    });
+  });
+  _cartaFiltroActivo = 'todos';
+  document.getElementById('cartaCmpSearch').value = '';
+  _cartaRenderFiltrado();
+  openModal('modalCartaCmp');
+}
+
+function _cartaFiltrar(modo) {
+  _cartaFiltroActivo = modo;
+  _cartaRenderFiltrado();
+}
+
+function _cartaRenderFiltrado() {
+  const q = _normCarta(document.getElementById('cartaCmpSearch').value);
+  let datos = _cartaCmpData;
+  if (_cartaFiltroActivo === 'faltantes') datos = datos.filter(d => !d.recetaMatch);
+  if (_cartaFiltroActivo === 'existentes') datos = datos.filter(d => d.recetaMatch);
+  if (q) datos = datos.filter(d => _normCarta(d.nombre).includes(q) || _normCarta(d.cat).includes(q));
+
+  const total = _cartaCmpData.length;
+  const existentes = _cartaCmpData.filter(d => d.recetaMatch).length;
+  const faltantes = total - existentes;
+  document.getElementById('cartaCmpStats').innerHTML =
+    `<span style="color:var(--accent);font-weight:600">${existentes} ya existen</span> · <span style="color:#DC2626;font-weight:600">${faltantes} faltan</span> · ${total} total en la carta`;
+
+  const byCat = {};
+  datos.forEach(d => { if (!byCat[d.cat]) byCat[d.cat] = []; byCat[d.cat].push(d); });
+
+  document.getElementById('cartaCmpScreen').innerHTML = Object.entries(byCat).map(([cat, items]) => `
+    <div style="margin-bottom:16px">
+      <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink2);padding:4px 8px;background:var(--surface2);border-radius:6px;margin-bottom:6px">${cat}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${items.map(d => {
+          const match = d.recetaMatch;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;border:1px solid ${match ? '#D1FAE5' : '#FEE2E2'};background:${match ? '#F0FDF4' : '#FFF5F5'}">
+            <span style="font-size:16px">${match ? '✓' : '✗'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600">${d.nombre}</div>
+              ${match ? `<div style="font-size:11px;color:var(--accent)">→ "${match.nombre}" (${Math.round(d.score*100)}% match)</div>` : '<div style="font-size:11px;color:#DC2626">Sin receta asociada</div>'}
+            </div>
+            ${!match ? `<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+              <input type="checkbox" ${d.seleccionada?'checked':''} onchange="_cartaToggleSel('${d.cat}','${d.nombre.replace(/'/g,"\\'")}',this.checked)" style="width:15px;height:15px">
+              Importar
+            </label>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('') || '<div style="text-align:center;padding:40px;color:var(--ink3)">Sin resultados</div>';
+}
+
+function _cartaToggleSel(cat, nombre, checked) {
+  const d = _cartaCmpData.find(x => x.cat === cat && x.nombre === nombre);
+  if (d) d.seleccionada = checked;
+}
+
+function _importarFaltantesCarta() {
+  const aImportar = _cartaCmpData.filter(d => !d.recetaMatch && d.seleccionada);
+  if (!aImportar.length) { toast('No hay productos seleccionados para importar', 'error'); return; }
+  let creados = 0;
+  aImportar.forEach(d => {
+    const existe = recetas.find(r => _normCarta(r.nombre) === _normCarta(d.nombre));
+    if (existe) return;
+    recetas.push({ id: crypto.randomUUID(), nombre: d.nombre, rubro: _catToRubro(d.cat) || '', grupo: d.cat, tipo: 'venta', ingredientes: [], rinde: 1, rindeUnidad: 'u', precioVenta: null });
+    creados++;
+  });
+  if (creados) { persistRecetas(); renderRecetas(); }
+  toast(`${creados} receta${creados!==1?'s':''} importada${creados!==1?'s':''}`);
+  closeModal('modalCartaCmp');
 }
 
 function _cambiarRubroGrupo(grupo, nuevoRubro) {
