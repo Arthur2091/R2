@@ -8716,6 +8716,8 @@ function abrirTableroProveedores() {
                 style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:#FFF;color:var(--ink)">Proveedores</button>
               <button id="_tabBtnIns" onclick="_tableroSetTab('insumos',${JSON.stringify(meses)},${JSON.stringify(ventasMes)})"
                 style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Insumos clave</button>
+              <button id="_tabBtnDec" onclick="_tableroSetTab('decisiones',${JSON.stringify(meses)},${JSON.stringify(ventasMes)})"
+                style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Decisiones</button>
             </div>
             <button onclick="document.getElementById('_tableroModal').remove()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 16px;cursor:pointer;font:600 14px var(--font);color:var(--ink2)">✕</button>
           </div>
@@ -8731,10 +8733,13 @@ function abrirTableroProveedores() {
 
 function _tableroSetTab(tab, meses, ventasMes) {
   _tableroTab = tab;
-  document.getElementById('_tabBtnProv').style.cssText = `padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:${tab==='proveedores'?'#FFF':'transparent'};color:${tab==='proveedores'?'var(--ink)':'var(--ink2)'}`;
-  document.getElementById('_tabBtnIns').style.cssText  = `padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:${tab==='insumos'?'#FFF':'transparent'};color:${tab==='insumos'?'var(--ink)':'var(--ink2)'}`;
-  if (tab === 'proveedores') _renderTablaProveedores(meses, ventasMes);
-  else                       _renderTablaInsumos(meses, ventasMes);
+  const base = 'padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;';
+  document.getElementById('_tabBtnProv').style.cssText = base + `background:${tab==='proveedores'?'#FFF':'transparent'};color:${tab==='proveedores'?'var(--ink)':'var(--ink2)'}`;
+  document.getElementById('_tabBtnIns').style.cssText  = base + `background:${tab==='insumos'?'#FFF':'transparent'};color:${tab==='insumos'?'var(--ink)':'var(--ink2)'}`;
+  document.getElementById('_tabBtnDec').style.cssText  = base + `background:${tab==='decisiones'?'#FFF':'transparent'};color:${tab==='decisiones'?'var(--ink)':'var(--ink2)'}`;
+  if (tab === 'proveedores')    _renderTablaProveedores(meses, ventasMes);
+  else if (tab === 'insumos')   _renderTablaInsumos(meses, ventasMes);
+  else                          _renderTablaDecisiones(meses);
 }
 
 /* ── TAB 1: Proveedores ──────────────────────────────────────── */
@@ -8959,6 +8964,402 @@ function _renderTablaInsumos(meses, ventasMes) {
   document.getElementById('_tableroFooter').innerHTML =
     `<span style="color:#10B981;font-weight:700">Verde</span> = dentro del ±15% · <span style="color:#EF4444;font-weight:700">Rojo</span> = comprado más de lo teórico · <span style="color:#D97706;font-weight:700">Amarillo</span> = comprado menos de lo teórico &nbsp;·&nbsp;
     Solo insumos en kg/g vinculados en recetas · ${sinDatos} insumos sin match en facturas`;
+}
+
+/* ── TAB 3: Decisiones ───────────────────────────────────────── */
+
+// Estado de apertura del acordeón (persiste durante la sesión del modal)
+let _decSeccionAbierta = 'alertas';
+
+function _decToggle(id) {
+  _decSeccionAbierta = _decSeccionAbierta === id ? null : id;
+  // Re-renderizar solo el acordeón sin recalcular todo
+  const body = document.getElementById('_tableroBody');
+  if (!body._decData) return;
+  body.innerHTML = _decBuildAcordeon(body._decData);
+  body._decData = body._decData; // preserve reference
+}
+
+function _decBuildAcordeon(data) {
+  const secciones = [
+    { id: 'alertas',      titulo: '⚠️ Alertas de caída',          html: data.alertas },
+    { id: 'dias',         titulo: '📅 Mejores días para vender',   html: data.dias },
+    { id: 'sinmov',       titulo: '🔇 Productos sin movimiento',   html: data.sinmov },
+    { id: 'rentabilidad', titulo: '💰 Rentabilidad por producto',  html: data.rentabilidad },
+    { id: 'rubros',       titulo: '📊 Comparación de rubros',      html: data.rubros },
+  ];
+
+  return secciones.map(s => {
+    const open = _decSeccionAbierta === s.id;
+    return `
+      <div style="border-bottom:1px solid var(--border)">
+        <button onclick="_decToggle('${s.id}')" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:14px 20px;background:${open?'var(--surface2)':'#FFF'};border:none;cursor:pointer;font:600 14px var(--font);color:var(--ink);text-align:left">
+          <span>${s.titulo}</span>
+          <span style="font-size:12px;color:var(--ink3)">${open?'▲':'▼'}</span>
+        </button>
+        ${open ? `<div style="padding:16px 20px 20px;background:#FFF">${s.html}</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function _renderTablaDecisiones(meses) {
+  const DIAS_ABR = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const MESES_ABR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const TH = 'padding:8px 12px;text-align:right;font-size:12px;font-weight:700;color:var(--ink2);background:var(--surface2);border-bottom:2px solid var(--border)';
+  const TD = 'padding:8px 12px;text-align:right;font-size:13px;border-bottom:1px solid var(--border)';
+
+  /* ── utilidades de semanas ISO ── */
+  function isoWeek(fechaStr) {
+    const d = new Date(fechaStr + 'T00:00:00');
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
+    const firstThursday = new Date(thursday.getFullYear(), 0, 4);
+    return {
+      year: thursday.getFullYear(),
+      week: 1 + Math.round((thursday - firstThursday) / 604800000),
+    };
+  }
+
+  /* ── Sección 1: Alertas de caída ── */
+  function buildAlertas() {
+    // Agrupar unidades por (producto, semana)
+    const byProdSemana = {}; // { producto: { 'YYYY-WW': unidades } }
+    ventas.forEach(v => {
+      if (!v.fecha || !v.producto) return;
+      const { year, week } = isoWeek(v.fecha);
+      const wKey = `${year}-${String(week).padStart(2,'0')}`;
+      if (!byProdSemana[v.producto]) byProdSemana[v.producto] = {};
+      byProdSemana[v.producto][wKey] = (byProdSemana[v.producto][wKey]||0) + (Number(v.unidades)||0);
+    });
+
+    // Determinar las últimas 5 semanas con datos (para tener 4 de prom + 1 última)
+    const todasSemanas = new Set();
+    Object.values(byProdSemana).forEach(m => Object.keys(m).forEach(w => todasSemanas.add(w)));
+    const semanas = [...todasSemanas].sort();
+    if (semanas.length < 2) return '<p style="color:var(--ink2);font-size:13px">No hay suficientes datos semanales para calcular alertas.</p>';
+
+    const ultimaSem = semanas[semanas.length - 1];
+    const prev4 = semanas.slice(-5, -1); // hasta 4 semanas previas
+
+    const alertas = [];
+    Object.entries(byProdSemana).forEach(([prod, semMap]) => {
+      const ultVal = semMap[ultimaSem] || 0;
+      const prev = prev4.map(w => semMap[w] || 0);
+      if (!prev.length) return;
+      const prom4s = prev.reduce((a,b)=>a+b,0) / prev.length;
+      if (prom4s < 1) return; // sin baseline significativo
+      const caida = (prom4s - ultVal) / prom4s;
+      if (caida >= 0.30) {
+        alertas.push({
+          prod,
+          rubro: productosRubros?.[prod] || '—',
+          ultVal,
+          prom4s,
+          caida,
+        });
+      }
+    });
+
+    if (!alertas.length) return '<p style="color:#10B981;font-weight:700;font-size:14px">Sin alertas esta semana ✓</p>';
+
+    alertas.sort((a,b) => b.caida - a.caida);
+
+    return `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="${TH};text-align:left">Producto</th>
+        <th style="${TH}">Rubro</th>
+        <th style="${TH}">Últ. semana</th>
+        <th style="${TH}">Prom. 4s</th>
+        <th style="${TH}">Caída</th>
+      </tr></thead>
+      <tbody>
+        ${alertas.map(a => `<tr>
+          <td style="${TD};text-align:left;font-weight:600;color:var(--ink)">${a.prod}</td>
+          <td style="${TD};color:var(--ink2)">${a.rubro}</td>
+          <td style="${TD};font-family:var(--mono)">${Math.round(a.ultVal)}</td>
+          <td style="${TD};font-family:var(--mono)">${a.prom4s.toFixed(1)}</td>
+          <td style="${TD};font-family:var(--mono);font-weight:700;color:#EF4444">-${Math.round(a.caida*100)}%</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  /* ── Sección 2: Mejores días para vender ── */
+  function buildDias() {
+    // { rubro: { 0:dom, 1:lun, ... 6:sab } → unidades totales }
+    const rubDia = {};
+    ventas.forEach(v => {
+      if (!v.fecha || !v.producto) return;
+      const rubro = productosRubros?.[v.producto] || 'Sin rubro';
+      const dow = new Date(v.fecha + 'T00:00:00').getDay();
+      if (!rubDia[rubro]) rubDia[rubro] = Array(7).fill(0);
+      rubDia[rubro][dow] += Number(v.unidades)||0;
+    });
+
+    const rubros = Object.keys(rubDia).sort();
+    if (!rubros.length) return '<p style="color:var(--ink2);font-size:13px">Sin datos de ventas para calcular.</p>';
+
+    // Para el heatmap necesitamos min/max global
+    const todosVals = rubros.flatMap(r => rubDia[r]);
+    const maxVal = Math.max(...todosVals) || 1;
+
+    function celColor(val, rowMax, rowMin) {
+      if (val === 0) return 'var(--surface2)';
+      if (val === rowMax) return '#1B4332'; // verde oscuro fuerte
+      const ratio = (val - rowMin) / (rowMax - rowMin + 0.001);
+      const g = Math.round(80 + ratio * 120);
+      const rb = Math.round(220 - ratio * 100);
+      return `rgb(${rb},${g},${rb})`;
+    }
+
+    const orderDow = [1,2,3,4,5,6,0]; // Lun-Dom
+
+    const rows = rubros.map(r => {
+      const data = rubDia[r];
+      const rowMax = Math.max(...data);
+      const rowMin = Math.min(...data.filter(v=>v>0), rowMax);
+      return `<tr>
+        <td style="${TD};text-align:left;font-weight:600;color:var(--ink)">${r}</td>
+        ${orderDow.map(d => {
+          const v = data[d];
+          const bg = celColor(v, rowMax, rowMin);
+          const textColor = (bg === '#1B4332' || (v > maxVal*0.6)) ? '#FFF' : 'var(--ink)';
+          return `<td style="${TD};background:${bg};color:${textColor};font-family:var(--mono);font-weight:${v===rowMax?'700':'400'}">${v||'—'}</td>`;
+        }).join('')}
+      </tr>`;
+    });
+
+    return `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="${TH};text-align:left;min-width:140px">Rubro</th>
+        ${orderDow.map(d=>`<th style="${TH}">${DIAS_ABR[d]}</th>`).join('')}
+      </tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table>
+    <p style="margin:10px 0 0;font-size:11px;color:var(--ink3)">Verde oscuro = mayor volumen de cada rubro · Unidades vendidas totales por día</p>`;
+  }
+
+  /* ── Sección 3: Productos sin movimiento ── */
+  function buildSinMovimiento() {
+    if (!ventas.length) return '<p style="color:var(--ink2);font-size:13px">Sin datos de ventas.</p>';
+
+    // Fecha más reciente en ventas
+    const fechasValidas = ventas.map(v => v.fecha).filter(Boolean).sort();
+    const fechaMax = new Date(fechasValidas[fechasValidas.length-1] + 'T00:00:00');
+
+    // Última fecha de venta por producto
+    const ultimaFecha = {};
+    ventas.forEach(v => {
+      if (!v.producto || !v.fecha) return;
+      if (!ultimaFecha[v.producto] || v.fecha > ultimaFecha[v.producto])
+        ultimaFecha[v.producto] = v.fecha;
+    });
+
+    // Todos los productos conocidos (de productosRubros o de ventas)
+    const todosProds = new Set([
+      ...Object.keys(productosRubros||{}),
+      ...ventas.map(v=>v.producto).filter(Boolean),
+    ]);
+
+    const sinMov = [];
+    todosProds.forEach(prod => {
+      const uf = ultimaFecha[prod];
+      if (!uf) return; // nunca tuvo ventas — no es "sin movimiento reciente", es desconocido
+      const dias = Math.round((fechaMax - new Date(uf + 'T00:00:00')) / 86400000);
+      if (dias >= 14) {
+        sinMov.push({ prod, rubro: productosRubros?.[prod]||'—', ultimaFecha: uf, dias });
+      }
+    });
+
+    if (!sinMov.length) return '<p style="color:#10B981;font-weight:700;font-size:14px">Todos los productos tienen ventas en los últimos 14 días ✓</p>';
+
+    sinMov.sort((a,b) => b.dias - a.dias);
+
+    return `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="${TH};text-align:left">Producto</th>
+        <th style="${TH};text-align:left">Rubro</th>
+        <th style="${TH}">Última venta</th>
+        <th style="${TH}">Días sin vender</th>
+      </tr></thead>
+      <tbody>
+        ${sinMov.map(p => `<tr>
+          <td style="${TD};text-align:left;font-weight:600;color:var(--ink)">${p.prod}</td>
+          <td style="${TD};text-align:left;color:var(--ink2)">${p.rubro}</td>
+          <td style="${TD};font-family:var(--mono)">${p.ultimaFecha}</td>
+          <td style="${TD};font-family:var(--mono);font-weight:700;color:${p.dias>=30?'#EF4444':'#D97706'}">${p.dias}d</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  /* ── Sección 4: Rentabilidad por producto ── */
+  function buildRentabilidad() {
+    if (!recetas || !recetas.length)
+      return '<p style="color:var(--ink2);font-size:13px">No hay recetas cargadas. Cargá las recetas con sus ingredientes para ver este análisis.</p>';
+
+    // Precio promedio de insumo por nombre (case-insensitive)
+    const precioIns = {};
+    (insumos||[]).forEach(ins => {
+      const k = (ins.nombre||'').toLowerCase().trim();
+      const p = Number(ins.precio || ins.precioUnitario) || 0;
+      if (p > 0) precioIns[k] = p;
+    });
+
+    // Precio venta promedio por producto
+    const ventaProd = {}; // { prod: { totalPesos, totalUnits } }
+    ventas.forEach(v => {
+      if (!v.producto) return;
+      if (!ventaProd[v.producto]) ventaProd[v.producto] = { totalPesos: 0, totalUnits: 0 };
+      ventaProd[v.producto].totalPesos += Number(v.total)||0;
+      ventaProd[v.producto].totalUnits += Number(v.unidades)||0;
+    });
+
+    const filas = [];
+    recetas.forEach(rec => {
+      if (!rec.nombre || !rec.ingredientes?.length) return;
+
+      // Match de receta a producto (exact o case-insensitive)
+      const prodMatch = Object.keys(ventaProd).find(p =>
+        p.toLowerCase().trim() === rec.nombre.toLowerCase().trim()
+      );
+      const vd = prodMatch ? ventaProd[prodMatch] : null;
+      if (!vd || vd.totalUnits < 1) return;
+
+      const precioVenta = vd.totalPesos / vd.totalUnits;
+
+      // Costo de receta
+      let costoReceta = 0;
+      let sinPrecio = false;
+      rec.ingredientes.forEach(ing => {
+        const k = (ing.insumo||'').toLowerCase().trim();
+        const p = precioIns[k] || 0;
+        if (!p) { sinPrecio = true; return; }
+        costoReceta += (Number(ing.cantidad)||0) * p;
+      });
+      if (sinPrecio && costoReceta === 0) return; // sin datos de costo
+
+      const margen = precioVenta > 0 ? ((precioVenta - costoReceta) / precioVenta * 100) : null;
+
+      filas.push({ nombre: rec.nombre, costoReceta, precioVenta, margen, sinPrecio });
+    });
+
+    if (!filas.length)
+      return '<p style="color:var(--ink2);font-size:13px">No se encontraron recetas con datos de ventas y precios de insumos suficientes.</p>';
+
+    filas.sort((a,b) => (b.margen??-999) - (a.margen??-999));
+
+    const margenColor = m => m == null ? 'var(--ink3)' : m >= 60 ? '#10B981' : m >= 40 ? '#D97706' : '#EF4444';
+
+    return `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="${TH};text-align:left">Producto</th>
+        <th style="${TH}">Costo receta</th>
+        <th style="${TH}">Precio venta prom.</th>
+        <th style="${TH}">Margen %</th>
+      </tr></thead>
+      <tbody>
+        ${filas.map(f => `<tr>
+          <td style="${TD};text-align:left;font-weight:600;color:var(--ink)">${f.nombre}${f.sinPrecio?' <span style="font-size:10px;color:var(--ink3)" title="Faltan precios de algunos insumos">⚠</span>':''}</td>
+          <td style="${TD};font-family:var(--mono)">${pesos(f.costoReceta)}</td>
+          <td style="${TD};font-family:var(--mono)">${pesos(f.precioVenta)}</td>
+          <td style="${TD};font-family:var(--mono);font-weight:700;color:${margenColor(f.margen)}">${f.margen!=null?Math.round(f.margen)+'%':'—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <p style="margin:10px 0 0;font-size:11px;color:var(--ink3)">
+      <span style="color:#10B981;font-weight:700">&gt;60%</span> excelente ·
+      <span style="color:#D97706;font-weight:700">40-60%</span> normal ·
+      <span style="color:#EF4444;font-weight:700">&lt;40%</span> bajo ·
+      ⚠ = precio de algún insumo faltante (costo subestimado)
+    </p>`;
+  }
+
+  /* ── Sección 5: Comparación de rubros ── */
+  function buildRubros() {
+    if (!ventas.length) return '<p style="color:var(--ink2);font-size:13px">Sin datos de ventas.</p>';
+
+    // Últimos 6 meses con datos
+    const mesesConVentas = [...new Set(
+      ventas.map(v => (v.fecha||'').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m))
+    )].sort().slice(-6);
+
+    if (!mesesConVentas.length) return '<p style="color:var(--ink2);font-size:13px">Sin datos suficientes.</p>';
+
+    const rubroMes = {}; // { rubro: { mes: total } }
+    ventas.forEach(v => {
+      const mes = (v.fecha||'').slice(0,7);
+      if (!mesesConVentas.includes(mes) || !v.producto) return;
+      const rubro = productosRubros?.[v.producto] || 'Sin rubro';
+      if (!rubroMes[rubro]) rubroMes[rubro] = {};
+      rubroMes[rubro][mes] = (rubroMes[rubro][mes]||0) + (Number(v.total)||0);
+    });
+
+    const rubros = Object.keys(rubroMes).sort();
+    if (!rubros.length) return '<p style="color:var(--ink2);font-size:13px">Sin datos de rubros.</p>';
+
+    const totalMes = {};
+    mesesConVentas.forEach(m => {
+      totalMes[m] = rubros.reduce((s,r) => s + (rubroMes[r]?.[m]||0), 0);
+    });
+
+    const fmtK = n => {
+      if (!n) return '<span style="color:var(--ink3)">—</span>';
+      if (n >= 1000000) return '$'+(n/1000000).toFixed(1)+'M';
+      if (n >= 1000) return '$'+Math.round(n/1000)+'k';
+      return '$'+Math.round(n);
+    };
+
+    const fmtMesLabel = m => {
+      const [y,mo] = m.split('-');
+      return `${MESES_ABR[+mo-1]} '${y.slice(2)}`;
+    };
+
+    const rows = rubros.map(r => {
+      const vals = mesesConVentas.map(m => rubroMes[r]?.[m]||0);
+      const rowMax = Math.max(...vals);
+      return `<tr>
+        <td style="${TD};text-align:left;font-weight:600;color:var(--ink)">${r}</td>
+        ${mesesConVentas.map((m,i) => {
+          const v = vals[i];
+          const isBest = v === rowMax && v > 0;
+          return `<td style="${TD};font-family:var(--mono);${isBest?'background:#D8F3DC;font-weight:700;color:#1B4332;':''}">${fmtK(v)}</td>`;
+        }).join('')}
+      </tr>`;
+    });
+
+    return `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="${TH};text-align:left;min-width:140px">Rubro</th>
+        ${mesesConVentas.map(m=>`<th style="${TH}">${fmtMesLabel(m)}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${rows.join('')}
+        <tr style="background:var(--surface2)">
+          <td style="${TD};text-align:left;font-weight:700;color:var(--ink);border-top:2px solid var(--border)">Total</td>
+          ${mesesConVentas.map(m=>`<td style="${TD};font-family:var(--mono);font-weight:700;border-top:2px solid var(--border)">${fmtK(totalMes[m])}</td>`).join('')}
+        </tr>
+      </tbody>
+    </table>`;
+  }
+
+  /* ── Render final ── */
+  const data = {
+    alertas:      buildAlertas(),
+    dias:         buildDias(),
+    sinmov:       buildSinMovimiento(),
+    rentabilidad: buildRentabilidad(),
+    rubros:       buildRubros(),
+  };
+
+  _decSeccionAbierta = 'alertas';
+
+  const body = document.getElementById('_tableroBody');
+  body.innerHTML = _decBuildAcordeon(data);
+  body._decData = data; // guardar referencia para re-render del acordeón
+
+  document.getElementById('_tableroFooter').innerHTML =
+    'Clickeá cada sección para expandirla · Los datos reflejan todas las ventas registradas en el sistema';
 }
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
