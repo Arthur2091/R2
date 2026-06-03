@@ -6321,11 +6321,6 @@ function _renderDecisiones(desde, hasta) {
       </tbody></table>`
     : `<p style="color:${esSubida?'var(--ink3)':'#10B981'};font-weight:600;padding:8px 0">${esSubida ? 'Sin productos con subida significativa.' : '✓ Sin caídas esta semana.'}</p>`;
 
-  const alertasHtml = `
-    <div style="font-size:12px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">↓ Caída &gt;30%</div>
-    ${_tablaAlertas(alertasCaida, false)}
-    <div style="font-size:12px;font-weight:700;color:#065F46;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">↑ Subida &gt;30%</div>
-    ${_tablaAlertas(alertasSubida, true)}`;
 
   // ── 2. Mejores días ──
   const rubrosConDias = todosRubros.filter(r => ventasPorDia[r]);
@@ -6492,7 +6487,8 @@ function _renderDecisiones(desde, hasta) {
       <div style="font-size:.82rem;color:var(--ink2);margin-top:.15rem">Basado en ${ventas.length.toLocaleString('es-AR')} registros de ventas</div>
     </div>
     <div style="margin-top:1.25rem">
-      ${sec('alertas','Alertas de caída y subida','⚠️','#DC2626', alertasHtml, true)}
+      ${sec('alertasCaida','Alertas de caída','⚠️','#DC2626', _tablaAlertas(alertasCaida, false), false)}
+      ${sec('alertasSubida','Alertas de subida','📈','#065F46', _tablaAlertas(alertasSubida, true), false)}
       ${sec('dias','Mejores días para vender','📅','#1D4ED8', diasHtml)}
       ${sec('sinmov','Productos sin movimiento','🛑','#92400E', sinMovHtml)}
       ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
