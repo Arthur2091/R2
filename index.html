@@ -1378,7 +1378,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Importar recetas — elegí qué hojas</h2>
     <p class="modal-sub" style="flex-shrink:0">El Excel tiene muchas hojas. Tildá las que querés procesar ahora.</p>
-    <div id="impHojaLista" style="overflow-y:auto;flex:1;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
+    <input id="impHojaSearch" type="text" placeholder="Buscar hoja…" oninput="_impHojaFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none;background:var(--surface)">
+    <div id="impHojaLista" style="overflow-y:auto;flex:1;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
     <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
       <button class="btn btn-outline" onclick="closeModal('modalImpHoja')">Cancelar</button>
       <button class="btn btn-primary" onclick="_impAceptarHojas()">Procesar hojas seleccionadas</button>
@@ -13866,7 +13867,15 @@ function _impAbrirSelectorHoja() {
       <input type="checkbox" data-imp-sheet="${s.replace(/"/g, '&quot;')}" style="margin:0">
       <span>${s}</span>
     </label>`).join('');
+  document.getElementById('impHojaSearch').value = '';
   openModal('modalImpHoja');
+}
+
+function _impHojaFiltrar() {
+  const q = document.getElementById('impHojaSearch').value.toLowerCase().trim();
+  document.querySelectorAll('#impHojaLista label').forEach(el => {
+    el.style.display = (!q || el.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
 }
 
 function _impAceptarHojas() {
