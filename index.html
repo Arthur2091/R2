@@ -2216,11 +2216,55 @@ document.addEventListener('click', e => {
 });
 
 /* ── MODALS ─────────────────────────────────────────────────────── */
-function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function _makeDraggable(overlayEl) {
+  const modal = overlayEl.querySelector('.modal');
+  if (!modal || modal._drag) return;
+  modal._drag = true;
+  const handle = modal.querySelector('h2');
+  if (!handle) return;
+  handle.style.cursor = 'grab';
+  handle.title = 'Arrastrá para mover';
+  handle.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const r = modal.getBoundingClientRect();
+    modal.style.position = 'fixed';
+    modal.style.left = r.left + 'px';
+    modal.style.top  = r.top  + 'px';
+    modal.style.margin = '0';
+    overlayEl.style.display = 'block';
+    const sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
+    handle.style.cursor = 'grabbing';
+    const move = e => {
+      modal.style.left = (ox + e.clientX - sx) + 'px';
+      modal.style.top  = (oy + e.clientY - sy) + 'px';
+    };
+    const up = () => {
+      handle.style.cursor = 'grab';
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
+}
+
+function openModal(id) {
+  const el = document.getElementById(id);
+  el.classList.add('open');
+  // Reset position so siempre abre centrado
+  const modal = el.querySelector('.modal');
+  if (modal) { modal.style.position = ''; modal.style.left = ''; modal.style.top = ''; modal.style.margin = ''; el.style.display = ''; }
+  _makeDraggable(el);
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  el.classList.remove('open');
+  el.style.display = '';
+}
 
 document.querySelectorAll('.overlay').forEach(el => {
-  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  el.addEventListener('click', e => { if (e.target === el) { el.classList.remove('open'); el.style.display = ''; } });
 });
 
 /* ── TOAST ──────────────────────────────────────────────────────── */
@@ -3675,6 +3719,7 @@ function marcarFacturaPagada(facturaId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('_pagarModal'));
 }
 
 function _confirmarPago(facturaId, medioPago) {
@@ -3983,6 +4028,7 @@ function vincularFacturaAPedido(pedidoId) {
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+  _makeDraggable(document.getElementById('vincularFactModal'));
 }
 
 function _confirmarVinculo(pedidoId, facturaId) {
@@ -4037,6 +4083,7 @@ function marcarPedidoRecibido(pedidoId) {
     </div>
   </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+  _makeDraggable(document.getElementById('recibidoOptModal'));
 }
 
 function _resolverRecepcion(pedidoId, modo) {
@@ -4272,6 +4319,7 @@ function _mostrarAutoLinkModal() {
   </div>`;
 
   document.body.insertAdjacentHTML('beforeend', html);
+  _makeDraggable(document.getElementById('autoLinkOverlay'));
 }
 
 function _cerrarAutoLink(vincular) {
@@ -6948,6 +6996,7 @@ function _abrirVincularExtractoGF(gfId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('vincularExtractoGFModal'));
 }
 function _vincularExtractoAGF(source, movId, gfId) {
   document.getElementById('vincularExtractoGFModal')?.remove();
@@ -6993,6 +7042,7 @@ function _abrirVincularSueldoMP(mpId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('vincularSueldoMPModal'));
 }
 function _vincularSueldoMP(mpId, sueldoId) {
   document.getElementById('vincularSueldoMPModal')?.remove();
@@ -7031,6 +7081,7 @@ function _abrirVincularSueldoGal(galId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('vincularSueldoGalModal'));
 }
 function _vincularSueldoGal(galId, sueldoId) {
   document.getElementById('vincularSueldoGalModal')?.remove();
@@ -7279,12 +7330,9 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
 
   document.getElementById(modalId)?.remove();
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="overlay open" id="${modalId}" style="display:flex;align-items:flex-start;justify-content:center">
-      <div class="modal" id="${modalId}_panel" style="max-width:560px;margin-top:60px;position:relative;user-select:none">
-        <div id="${modalId}_drag" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:grab">
-          <span style="color:var(--ink3);font-size:16px;letter-spacing:2px">⠿</span>
-          <h2 style="margin:0">Vincular a factura</h2>
-        </div>
+    <div class="overlay open" id="${modalId}" style="display:flex">
+      <div class="modal" style="max-width:560px">
+        <h2>Vincular a factura</h2>
         <p class="modal-sub">${fecha} · ${desc} · <strong>${pesos(monto)}</strong></p>
         <input type="search" id="${modalId}_search" placeholder="Buscar proveedor o N° boleta…" autocomplete="off"
           oninput="document.getElementById('${modalId}_list').innerHTML=document.getElementById('${modalId}')._render(this.value)"
@@ -7300,34 +7348,7 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
   const el = document.getElementById(modalId);
   el._render   = _renderItems;
   el._onSelect = fId => { el.remove(); onSelect(fId); };
-
-  // Drag
-  const panel  = document.getElementById(`${modalId}_panel`);
-  const handle = document.getElementById(`${modalId}_drag`);
-  let ox = 0, oy = 0, sx = 0, sy = 0;
-  handle.addEventListener('mousedown', e => {
-    e.preventDefault();
-    const r = panel.getBoundingClientRect();
-    panel.style.position = 'fixed';
-    panel.style.left = r.left + 'px';
-    panel.style.top  = r.top  + 'px';
-    panel.style.margin = '0';
-    el.style.display = 'block';
-    sx = e.clientX; sy = e.clientY;
-    ox = r.left;    oy = r.top;
-    handle.style.cursor = 'grabbing';
-    const onMove = e => {
-      panel.style.left = (ox + e.clientX - sx) + 'px';
-      panel.style.top  = (oy + e.clientY - sy) + 'px';
-    };
-    const onUp = () => {
-      handle.style.cursor = 'grab';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
+  _makeDraggable(el);
   if (_provNombreMatch) {
     const inp = document.getElementById(`${modalId}_search`);
     if (inp) inp.value = _provNombreMatch;
@@ -7403,6 +7424,7 @@ function _abrirVincularGFMP(mpId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('vincularGFMPModal'));
 }
 function _vincularGFMP(mpId, gfId) {
   document.getElementById('vincularGFMPModal')?.remove();
@@ -7635,7 +7657,7 @@ async function _consultarCuitsGalicia() {
         </div>
       </div>
     </div>`);
-
+  _makeDraggable(document.getElementById('cuitModal'));
   window._cuitNombres = {};
 }
 
@@ -7814,6 +7836,7 @@ function _abrirVincularGFGal(galId) {
         </div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('vincularGFGalModal'));
 }
 function _vincularGFGal(galId, gfId) {
   document.getElementById('vincularGFGalModal')?.remove();
@@ -12131,6 +12154,7 @@ function _depAbrirStockProv(provId) {
         <div style="overflow-y:auto;flex:1">${rows}</div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('modalDepStockProv'));
 }
 
 function _depRenderPendientes(screen) {
@@ -12247,6 +12271,7 @@ function _depAbrirMovsProv(provId) {
         <div style="overflow-y:auto;flex:1">${rows}</div>
       </div>
     </div>`);
+  _makeDraggable(document.getElementById('modalDepMovsProv'));
 }
 
 function _depAbrirIngreso(pedidoId, modo) {
