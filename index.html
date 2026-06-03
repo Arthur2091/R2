@@ -7279,7 +7279,7 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
 
   document.getElementById(modalId)?.remove();
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="overlay open" id="${modalId}" style="display:flex">
+    <div class="overlay open" id="${modalId}" style="display:flex;justify-content:flex-start;padding-left:40px">
       <div class="modal" style="max-width:560px">
         <h2>Vincular a factura</h2>
         <p class="modal-sub">${fecha} · ${desc} · <strong>${pesos(monto)}</strong></p>
