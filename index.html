@@ -10950,6 +10950,7 @@ function renderRecetas() {
 
   // Filtro primario por tipo (venta/fabricacion). Si la receta no tiene tipo, se asume 'venta' (legacy).
   const visible = recetas.filter(r =>
+    !r.oculta &&
     ((r.tipo || 'venta') === _recetaTipo) &&
     (!search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search))
   );
@@ -11034,7 +11035,7 @@ function renderRecetas() {
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <span style="font-size:10px;color:var(--ink3);margin-top:4px">›</span>
+        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
       </div>
     </div>`;
   };
@@ -11051,7 +11052,7 @@ function renderRecetas() {
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <span style="font-size:10px;color:var(--ink3);margin-top:4px">›</span>
+        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
       </div>
       <div style="padding:8px 18px 12px;border-top:1px solid var(--border)">
         <select onclick="event.stopPropagation()" onchange="_cambiarRubroReceta('${r.id}',this.value)"
@@ -11061,6 +11062,8 @@ function renderRecetas() {
       </div>
     </div>`;
   };
+
+  const ocultas = recetas.filter(r => r.oculta && ((r.tipo || 'venta') === _recetaTipo));
 
   document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
     const rs    = byRubro[rubro];
@@ -11110,7 +11113,31 @@ function renderRecetas() {
       </div>
       <div class="rubro-body">${gruposHtml}${sinGrupoHtml}</div>
     </div>`;
-  }).join('');
+  }).join('') + (ocultas.length ? `
+    <div class="rubro-section" style="border-color:#F3F4F6;margin-top:24px">
+      <div class="rubro-section-header" style="background:#F3F4F6" onclick="_toggleRubroSection(this)">
+        <div class="rubro-icon" style="background:rgba(255,255,255,0.6);color:#6B7280">🗄️</div>
+        <div class="rubro-info">
+          <span class="rubro-label" style="color:#6B7280">Recetas dadas de baja</span>
+          <span class="rubro-badge" style="color:#9CA3AF">${ocultas.length} receta${ocultas.length!==1?'s':''}</span>
+        </div>
+        <span class="rubro-toggle" style="color:#9CA3AF">▶</span>
+      </div>
+      <div class="rubro-body">
+        <div class="recetas-grid">
+          ${ocultas.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => `
+            <div class="receta-card" style="opacity:.6">
+              <div class="receta-card-header">
+                <div style="flex:1">
+                  <div class="receta-card-title" style="color:var(--ink2)">${r.nombre}</div>
+                  <div class="receta-card-meta">${r.rubro || '—'}</div>
+                </div>
+                <button onclick="_restaurarReceta('${r.id}')" title="Restaurar" style="background:none;border:1px solid var(--border);cursor:pointer;padding:3px 8px;border-radius:6px;color:var(--ink2);font-size:11px;white-space:nowrap;flex-shrink:0">Restaurar</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>` : '');
 }
 
 function byRubroCount(rubro, lista) {
@@ -11118,12 +11145,48 @@ function byRubroCount(rubro, lista) {
   return lista.filter(r => _gr(r) === rubro).length;
 }
 
+function _renderRecetasPreservando() {
+  const screen = document.getElementById('recetasScreen');
+  const scrollY = screen ? screen.scrollTop : 0;
+  const abiertos = new Set(
+    [...document.querySelectorAll('.rubro-section .rubro-body.open')]
+      .map(b => b.closest('.rubro-section')?.querySelector('.rubro-label')?.textContent?.trim())
+      .filter(Boolean)
+  );
+  renderRecetas();
+  document.querySelectorAll('.rubro-section').forEach(sec => {
+    const label = sec.querySelector('.rubro-label')?.textContent?.trim();
+    if (abiertos.has(label)) {
+      sec.querySelector('.rubro-body')?.classList.add('open');
+      const tog = sec.querySelector('.rubro-toggle');
+      if (tog) tog.classList.add('open');
+    }
+  });
+  if (screen) screen.scrollTop = scrollY;
+}
+
+function _ocultarReceta(id) {
+  const r = recetas.find(x => x.id === id);
+  if (!r) return;
+  r.oculta = true;
+  persistRecetas();
+  renderRecetas();
+}
+
+function _restaurarReceta(id) {
+  const r = recetas.find(x => x.id === id);
+  if (!r) return;
+  delete r.oculta;
+  persistRecetas();
+  renderRecetas();
+}
+
 function _cambiarRubroReceta(id, nuevoRubro) {
   const r = recetas.find(x => x.id === id);
   if (!r || !nuevoRubro) return;
   r.rubro = nuevoRubro;
   persistRecetas();
-  renderRecetas();
+  _renderRecetasPreservando();
 }
 
 function _toggleRubroSection(header) {
@@ -11137,7 +11200,7 @@ function _cambiarRubroGrupo(grupo, nuevoRubro) {
   if (!nuevoRubro) return;
   recetas.forEach(r => { if (r.grupo === grupo) r.rubro = nuevoRubro; });
   persistRecetas();
-  renderRecetas();
+  _renderRecetasPreservando();
 }
 
 function _setRubroFiltro(rubro) {
