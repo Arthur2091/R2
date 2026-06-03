@@ -9895,9 +9895,11 @@ function _navBack() {
 }
 
 function _reRenderReceta(id) {
+  const scrollY = window.scrollY;
   _navSkipPush = true;
   verReceta(id);
   _navSkipPush = false;
+  window.scrollTo(0, scrollY);
 }
 
 function verReceta(recetaId) {
