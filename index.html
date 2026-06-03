@@ -7438,7 +7438,14 @@ function _vincularMP(mpId, facturaIds) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
   m.facturaIds = facturaIds;
-  _persistMP();
+  facturaIds.forEach(fId => {
+    const f = facturas.find(x => x.id === fId);
+    if (!f) return;
+    f.pagado    = true;
+    f.medioPago = 'mp';
+    if (!f.fechaPago) f.fechaPago = m.fecha || _hoyISO();
+  });
+  _persistMP(); persist();
   renderContable();
   toast(`Vinculado a ${facturaIds.length > 1 ? facturaIds.length + ' facturas' : 'factura'}`, 'success');
 }
@@ -7513,10 +7520,14 @@ function _vincularGFMP(mpId, gfId) {
 function _desvincularMP(mpId) {
   const m = mpMovs.find(x => x.id === mpId);
   if (!m) return;
+  (m.facturaIds || []).forEach(fId => {
+    const f = facturas.find(x => x.id === fId);
+    if (f && f.medioPago === 'mp') { f.pagado = false; delete f.fechaPago; delete f.medioPago; }
+  });
   delete m.facturaIds;
-  _persistMP();
+  _persistMP(); persist();
   renderContable();
-  toast('Retiro desvinculado', 'info');
+  toast('Desvinculado', 'info');
 }
 
 // ── IMPORT MP ──
@@ -7905,7 +7916,14 @@ function renderAuditoria() {
          ${_colHtml(movD, 'Dudoso',  '#FEFCE8', '#FEF08A', '#713F12', '#713F12')}
        </div>`;
 }
-function _desvincularGal(id)    { const m = galiciaMovs.find(x=>x.id===id); if(!m) return; delete m.facturaIds; _persistGal(); renderContable(); toast('Desvinculado','info'); }
+function _desvincularGal(id) {
+  const m = galiciaMovs.find(x=>x.id===id); if(!m) return;
+  (m.facturaIds || []).forEach(fId => {
+    const f = facturas.find(x => x.id === fId);
+    if (f && f.medioPago === 'galicia') { f.pagado = false; delete f.fechaPago; delete f.medioPago; }
+  });
+  delete m.facturaIds; _persistGal(); persist(); renderContable(); toast('Desvinculado','info');
+}
 function _abrirVincularGal(galId) {
   const m = galiciaMovs.find(x => x.id === galId);
   if (!m) return;
@@ -7914,7 +7932,16 @@ function _abrirVincularGal(galId) {
 function _vincularGal(galId, facturaIds) {
   document.getElementById('vincularGalModal')?.remove();
   const m = galiciaMovs.find(x=>x.id===galId); if(!m) return;
-  m.facturaIds = facturaIds; _persistGal(); renderContable();
+  m.facturaIds = facturaIds;
+  facturaIds.forEach(fId => {
+    const f = facturas.find(x => x.id === fId);
+    if (!f) return;
+    f.pagado    = true;
+    f.medioPago = 'galicia';
+    if (!f.fechaPago) f.fechaPago = m.fecha || _hoyISO();
+  });
+  _persistGal(); persist();
+  renderContable();
   toast(`Vinculado a ${facturaIds.length > 1 ? facturaIds.length + ' facturas' : 'factura'}`, 'success');
 }
 function _abrirVincularGFGal(galId) {
