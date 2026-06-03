@@ -11050,34 +11050,39 @@ function renderRecetas() {
 
   const rubroOpts = RUBRO_ORDER.map(ro => `<option value="${ro}">${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('');
 
+  const _cardStyle = (r) => {
+    const st = RUBRO_STYLES[_getRubro(r)] || { bg:'#F7F5F0', color:'#6B6760' };
+    return { bg: st.bg, color: st.color };
+  };
+
   // Card simple — el selector está en el grupo header, no en la card
   const renderCard = (r) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
-    return `<div class="receta-card" onclick="verReceta('${r.id}')">
+    const cs       = _cardStyle(r);
+    return `<div class="receta-card" style="background:${cs.bg};border-color:${cs.bg}" onclick="verReceta('${r.id}')">
       <div class="receta-card-header">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
+        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:${cs.color};opacity:.5;font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626';this.style.opacity='1'" onmouseout="this.style.background='none';this.style.color='${cs.color}';this.style.opacity='.5'">✕</button>
       </div>
     </div>`;
   };
 
-  // Card con selector — para recetas sin grupo (añadidas manualmente)
+  // Card para recetas sin grupo (añadidas manualmente)
   const renderCardConSelector = (r) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
-    const rubroVal = RUBRO_ORDER.includes(r.rubro) ? r.rubro : '';
-    const opts     = `${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
-    return `<div class="receta-card" onclick="verReceta('${r.id}')">
+    const cs       = _cardStyle(r);
+    return `<div class="receta-card" style="background:${cs.bg};border-color:${cs.bg}" onclick="verReceta('${r.id}')">
       <div class="receta-card-header">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
+        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:${cs.color};opacity:.5;font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626';this.style.opacity='1'" onmouseout="this.style.background='none';this.style.color='${cs.color}';this.style.opacity='.5'">✕</button>
       </div>
     </div>`;
   };
