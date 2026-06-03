@@ -11256,7 +11256,7 @@ function _abrirComparacionCarta() {
         const sc = _cartaMatchScore(nombre, r.nombre);
         if (sc > bestScore) { bestScore = sc; best = r; }
       });
-      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.6 ? best : null, score: bestScore, seleccionada: bestScore < 0.6 });
+      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.78 ? best : null, score: bestScore, seleccionada: bestScore < 0.78 });
     });
   });
   _cartaFiltroActivo = 'todos';
