@@ -10095,13 +10095,11 @@ function _parseExcelRecetas(wb) {
     if (!ws) return;
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-    // Detectar columnas base donde aparece PRODUCTO (pueden ser 0, 10, 20 o 0, 12, etc.)
-    const prodRow = rows.find(r => r.some(v => String(v).trim().startsWith('PRODUCTO')));
-    if (!prodRow) return;
-    const colOffsets = prodRow
-      .map((v, i) => [i, v])
-      .filter(([, v]) => String(v).trim().startsWith('PRODUCTO'))
-      .map(([i]) => i);
+    // Detectar columnas base donde aparece PRODUCTO — escanear TODAS las filas para no perder bloques que empiezan en filas distintas
+    const colOffsetSet = new Set();
+    rows.forEach(r => r.forEach((v, ci) => { if (String(v||'').trim().startsWith('PRODUCTO')) colOffsetSet.add(ci); }));
+    const colOffsets = [...colOffsetSet].sort((a,b) => a-b);
+    if (!colOffsets.length) return;
 
     // Parsear cada bloque de columnas de forma independiente
     colOffsets.forEach(c => {
@@ -10581,6 +10579,7 @@ function _ventasMatchReceta(receta) {
   // Link manual tiene prioridad
   const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
   if (vps) return { producto: vps.join(', '), score: 1, manual: true, lista: vps };
+  if (receta.noAutoMatch) return null;
   const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
   let best = null, bestScore = 0;
   productosUnicos.forEach(p => {
@@ -11153,6 +11152,7 @@ function renderRecetas() {
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
+        <button onclick="event.stopPropagation();_quitarRubroReceta('${r.id}')" title="Quitar rubro" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:11px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FFF7ED';this.style.color='#C2410C'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">↩</button>
         <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
       </div>
     </div>`;
@@ -11278,6 +11278,14 @@ function _cambiarRubroReceta(id, nuevoRubro) {
   _renderRecetasPreservando();
 }
 
+function _quitarRubroReceta(id) {
+  const r = recetas.find(x => x.id === id);
+  if (!r) return;
+  r.rubro = '';
+  persistRecetas();
+  _renderRecetasPreservando();
+}
+
 function _toggleRubroSection(header) {
   const body = header.nextElementSibling;
   const tog  = header.querySelector('.rubro-toggle');
@@ -11349,6 +11357,22 @@ function _selectorVentasFiltrar() {
   const filtrados = q ? todos.filter(p => _normVentas(p).includes(q)) : todos;
   filtrados.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
   _selectorVentasRender(filtrados);
+}
+
+function _quitarAutoMatch(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  r.noAutoMatch = true;
+  persistRecetas();
+  verReceta(recetaId);
+}
+
+function _reactivarAutoMatch(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  delete r.noAutoMatch;
+  persistRecetas();
+  verReceta(recetaId);
 }
 
 function _desvincularProductoVentas(recetaId) {
@@ -11673,22 +11697,37 @@ function verReceta(recetaId) {
 
   // Panel de diagnóstico de match con ventas
   const ventasMatch = r.tipo !== 'fabricacion' ? _ventasMatchReceta(r) : null;
-  const matchDiagHtml = r.tipo !== 'fabricacion' ? `
-    <div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;${ventasMatch ? 'background:#F0FDF4;border:1px solid #BBF7D0' : 'background:#FFF5F5;border:1px solid #FECACA'}">
-      <span style="font-size:16px">${ventasMatch ? '✓' : '✗'}</span>
-      <div style="flex:1;min-width:0">
-        ${ventasMatch
-          ? `<div>${ventasMatch.manual ? '🔗 <strong style="color:#15803D">Vinculado manualmente:</strong>' : '<strong style="color:#15803D">Match automático:</strong>'}
-              ${ventasMatch.lista
-                ? ventasMatch.lista.map(p => `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;font-size:11px">${p}</span>`).join('')
-                : `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;font-size:11px">${ventasMatch.producto}</span>`}
-              ${!ventasMatch.manual ? `<span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}
-            </div>`
-          : `<strong style="color:#DC2626">Sin match en ventas</strong>`}
-      </div>
-      <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">${ventasMatch ? 'Editar' : 'Seleccionar'}</button>
-      ${ventasMatch?.manual ? `<button onclick="_desvincularProductoVentas('${r.id}')" style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--ink3)" title="Quitar vínculo">✕</button>` : ''}
-    </div>` : '';
+  const _hasManualLink = !!(r.ventasProductos?.length || r.ventasProducto);
+  const matchDiagHtml = r.tipo !== 'fabricacion' ? (() => {
+    if (ventasMatch) {
+      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0">
+        <span style="font-size:16px">✓</span>
+        <div style="flex:1;min-width:0">
+          <div>${ventasMatch.manual ? '🔗 <strong style="color:#15803D">Vinculado manualmente:</strong>' : '<strong style="color:#15803D">Match automático:</strong>'}
+            ${ventasMatch.lista
+              ? ventasMatch.lista.map(p => `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;font-size:11px">${p}</span>`).join('')
+              : `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;font-size:11px">${ventasMatch.producto}</span>`}
+            ${!ventasMatch.manual ? `<span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}
+          </div>
+        </div>
+        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Editar</button>
+        <button onclick="${ventasMatch.manual ? `_desvincularProductoVentas('${r.id}')` : `_quitarAutoMatch('${r.id}')`}" style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--ink3)" title="Quitar match">✕</button>
+      </div>`;
+    } else if (r.noAutoMatch && !_hasManualLink) {
+      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#F5F5F5;border:1px solid #E5E5E5">
+        <span style="font-size:16px">○</span>
+        <div style="flex:1;min-width:0"><span style="color:var(--ink2)">Match automático desactivado</span></div>
+        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Seleccionar</button>
+        <button onclick="_reactivarAutoMatch('${r.id}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font:11px var(--font);cursor:pointer;color:var(--ink3)" title="Reactivar auto-match">↺ Reactivar</button>
+      </div>`;
+    } else {
+      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#FFF5F5;border:1px solid #FECACA">
+        <span style="font-size:16px">✗</span>
+        <div style="flex:1;min-width:0"><strong style="color:#DC2626">Sin match en ventas</strong></div>
+        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Seleccionar</button>
+      </div>`;
+    }
+  })() : '';
 
   // Análisis del mes — consumo teórico + económico (solo si hay ventas)
   let analisisHtml = '';
