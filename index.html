@@ -10797,6 +10797,25 @@ function _onErRubroChange() {
   if (hint) hint.textContent = `mercado ${_margenObjRubro(sel.value)}%`;
 }
 
+function _migrarLecheKgToL() {
+  if (localStorage.getItem('mig_leche_kg_to_l')) return;
+  let cambiados = 0;
+  const esLeche = s => /leche/i.test(s || '');
+  const esKg    = u => /kg/i.test(u || '');
+  recetas.forEach(r => {
+    (r.ingredientes || []).forEach(ing => {
+      const ins = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
+      const nombre = ins ? ins.nombre : (ing.nombreOriginal || '');
+      if (esLeche(nombre) && esKg(ing.unidad)) {
+        ing.unidad = 'L';
+        cambiados++;
+      }
+    });
+  });
+  if (cambiados) { persistRecetas(); console.log(`[mig] Leche kg→L: ${cambiados} ingredientes corregidos`); }
+  localStorage.setItem('mig_leche_kg_to_l', '1');
+}
+
 function _migrarRecetasFlat() {
   if (!recetas.length || !recetas[0].subrecetas) return;
   const migradas = [];
@@ -11463,16 +11482,7 @@ function _normCarta(s) {
 }
 
 function _cartaMatchScore(a, b) {
-  const na = _normCarta(a), nb = _normCarta(b);
-  if (na === nb) return 1;
-  if (nb.length >= 5 && na.includes(nb)) return 0.85;
-  if (na.length >= 5 && nb.includes(na)) return 0.85;
-  const toks = s => new Set(s.split(' ').filter(t => t.length > 3));
-  const ta = toks(na), tb = toks(nb);
-  if (!ta.size || !tb.size) return 0;
-  let common = 0; ta.forEach(t => tb.has(t) && common++);
-  const union = ta.size + tb.size - common;
-  return union > 0 ? common / union : 0;
+  return _normCarta(a) === _normCarta(b) ? 1 : 0;
 }
 
 function _abrirComparacionCarta() {
@@ -11490,7 +11500,7 @@ function _abrirComparacionCarta() {
         const sc = _cartaMatchScore(nombre, r.nombre);
         if (sc > fabScore) { fabScore = sc; fabMatch = r; }
       });
-      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.78 ? best : null, score: bestScore, fabMatch: fabScore >= 0.78 ? fabMatch : null, seleccionada: bestScore < 0.78 });
+      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 1.0 ? best : null, score: bestScore, fabMatch: fabScore >= 1.0 ? fabMatch : null, seleccionada: bestScore < 1.0 });
     });
   });
   _cartaFiltroActivo = 'todos';
@@ -11532,13 +11542,16 @@ function _cartaRenderFiltrado() {
               <div style="font-size:13px;font-weight:600">${d.nombre}</div>
               ${match ? `<div style="font-size:11px;color:var(--accent)">→ "${match.nombre}" (${Math.round(d.score*100)}% match)</div>` : '<div style="font-size:11px;color:#DC2626">Sin receta asociada</div>'}
             </div>
-            ${!match ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+            ${match
+              ? `<button onclick="_cartaDeseleccionarMatch('${d.cat}','${d.nombre.replace(/'/g,"\\'")}');_cartaRenderFiltrado()" title="Quitar match" style="flex-shrink:0;padding:3px 8px;font-size:11px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;color:#92400E;cursor:pointer">✕ quitar</button>`
+              : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
               ${d.fabMatch ? `<div style="font-size:10px;color:#7C3AED;background:#EDE9FE;padding:2px 6px;border-radius:4px;white-space:nowrap">🔗 fab: ${d.fabMatch.nombre}</div>` : ''}
               <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
                 <input type="checkbox" ${d.seleccionada?'checked':''} onchange="_cartaToggleSel('${d.cat}','${d.nombre.replace(/'/g,"\\'")}',this.checked)" style="width:15px;height:15px">
                 Importar
               </label>
-            </div>` : ''}
+            </div>`
+            }
           </div>`;
         }).join('')}
       </div>
@@ -11550,12 +11563,20 @@ function _cartaToggleSel(cat, nombre, checked) {
   if (d) d.seleccionada = checked;
 }
 
+function _cartaDeseleccionarMatch(cat, nombre) {
+  const d = _cartaCmpData.find(x => x.cat === cat && x.nombre === nombre);
+  if (!d) return;
+  d.recetaMatch = null;
+  d.score = 0;
+  d.seleccionada = true;
+}
+
 function _importarFaltantesCarta() {
   const aImportar = _cartaCmpData.filter(d => !d.recetaMatch && d.seleccionada);
   if (!aImportar.length) { toast('No hay productos seleccionados para importar', 'error'); return; }
   let creados = 0;
   aImportar.forEach(d => {
-    const existe = recetas.find(r => _normCarta(r.nombre) === _normCarta(d.nombre));
+    const existe = recetas.find(r => !r.oculta && (r.tipo || 'venta') === 'venta' && _normCarta(r.nombre) === _normCarta(d.nombre));
     if (existe) return;
     const ingredientes = d.fabMatch
       ? [{ nombreOriginal: d.fabMatch.nombre, cantidad: 1, unidad: 'u', insumoId: null, recetaId: d.fabMatch.id }]
@@ -12395,6 +12416,7 @@ async function _fbLoad() {
       }
     });
     _migrarRecetasFlat();
+    _migrarLecheKgToL();
     renderInsumos();
     renderProveedores();
     renderRecetas();
