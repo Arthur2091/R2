@@ -10166,6 +10166,26 @@ function _normIng(s) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 }
 
+// Ranking de búsqueda: 0=exacto 1=empieza-con 2=palabra-empieza-con 3=contiene
+function _searchRank(nombre, q) {
+  const n  = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const qn = q.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (n === qn) return 0;
+  if (n.startsWith(qn)) return 1;
+  if (n.split(/\s+/).some(w => w.startsWith(qn))) return 2;
+  if (n.includes(qn)) return 3;
+  return 99;
+}
+
+function _searchSort(lista, q, getNombre) {
+  const getNom = getNombre || (x => x.nombre);
+  return lista
+    .map(x => ({ x, rank: _searchRank(getNom(x), q) }))
+    .filter(({ rank }) => rank < 99)
+    .sort((a, b) => a.rank - b.rank || getNom(a.x).localeCompare(getNom(b.x), 'es'))
+    .map(({ x }) => x);
+}
+
 function _matchIngrediente(nombre) {
   const n = _normIng(nombre);
   let match = insumos.find(i => _normIng(i.nombre) === n);
@@ -10812,10 +10832,10 @@ function _erDesvincular(ii)   { ii=+ii; if(_erIngs[ii]) { _erIngs[ii].insumoId =
 
 function _erBuscarInsInline(input, ii) {
   ii = +ii;
-  const q = input.value.toLowerCase().trim();
+  const q = input.value.trim();
   const res = document.getElementById('erIR_' + ii);
   if (!res || !q) { if(res) res.innerHTML=''; return; }
-  const matches = insumos.filter(i => i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))).slice(0,6);
+  const matches = _searchSort(insumos, q).slice(0, 6);
   res.innerHTML = matches.map(ins =>
     `<button onclick="_erVincularIns(${ii},'${ins.id}')"
       style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--ink)">${ins.nombre}</button>`
@@ -10824,11 +10844,11 @@ function _erBuscarInsInline(input, ii) {
 
 function _erBuscarRecInline(input, ii) {
   ii = +ii;
-  const q   = input.value.toLowerCase().trim();
+  const q   = input.value.trim();
   const res = document.getElementById('erIR_' + ii);
   const rid = document.getElementById('erRecetaId').value;
   if (!res || !q) { if(res) res.innerHTML=''; return; }
-  const matches = recetas.filter(r => r.id !== rid && (r.nombre.toLowerCase().includes(q) || (r.rubro||'').toLowerCase().includes(q))).slice(0,6);
+  const matches = _searchSort(recetas.filter(r => r.id !== rid), q).slice(0, 6);
   res.innerHTML = matches.map(r =>
     `<button onclick="_erVincularRec(${ii},'${r.id}')"
       style="font-size:11px;padding:3px 8px;border:1px solid #C4B5FD;border-radius:5px;background:var(--surface);cursor:pointer;color:#5B21B6">${r.nombre}</button>`
@@ -10840,12 +10860,8 @@ function _erVincularRec(ii, subRecetaId) { ii=+ii; if(_erIngs[ii]) { _erIngs[ii]
 
 function _erBuscarIns(q) {
   const res = document.getElementById('erResIns');
-  const qLower = (q || '').toLowerCase().trim();
-  // Sin query → todos alfabéticos. Con query → filtrar.
-  let lista = qLower
-    ? insumos.filter(i => i.nombre.toLowerCase().includes(qLower) || _normIng(i.nombre).includes(_normIng(qLower)))
-    : [...insumos];
-  lista = lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).slice(0, 50);
+  if (!(q || '').trim()) { res.innerHTML = ''; return; }
+  let lista = _searchSort(insumos, q.trim()).slice(0, 50);
   if (!lista.length) { res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>'; return; }
   res.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:180px;overflow-y:auto;padding:4px 0">` + lista.map(ins => {
     const precio = ins.precioConIVA ?? ins.precioSinIVA;
@@ -10859,10 +10875,8 @@ function _erBuscarIns(q) {
 function _erBuscarRec(q) {
   const res = document.getElementById('erResRec');
   const rid = document.getElementById('erRecetaId').value;
-  const qLower = (q || '').toLowerCase().trim();
-  let lista = recetas.filter(r => r.id !== rid);
-  if (qLower) lista = lista.filter(r => r.nombre.toLowerCase().includes(qLower) || (r.rubro||'').toLowerCase().includes(qLower));
-  lista = lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).slice(0, 50);
+  if (!(q || '').trim()) { res.innerHTML = ''; return; }
+  let lista = _searchSort(recetas.filter(r => r.id !== rid), q.trim()).slice(0, 50);
   if (!lista.length) { res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>'; return; }
   res.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:180px;overflow-y:auto;padding:4px 0">` + lista.map(r =>
     `<button onclick="_erAddRec('${r.id}')"
@@ -10892,9 +10906,8 @@ function _erAddRec(subRecetaId) {
 
 function _erResetSearch() {
   ['erSearchIns','erSearchRec'].forEach(id => document.getElementById(id).value = '');
-  // Mostrar la lista completa inicial (sin filtro) en vez de vacío
-  _erBuscarIns('');
-  _erBuscarRec('');
+  document.getElementById('erResIns').innerHTML = '';
+  document.getElementById('erResRec').innerHTML = '';
 }
 
 function _setErTipo(tipo) {
