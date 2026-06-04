@@ -2956,7 +2956,25 @@ function saveInsumo() {
   const editId = document.getElementById('fEditId').value;
   const normNombre = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
   const duplicado = insumos.find(i => i.id !== editId && i.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim() === normNombre);
-  if (duplicado) { toast(`Ya existe "${duplicado.nombre}" — renombrá con otro nombre o usá ese insumo directamente`, 'error'); return; }
+  if (duplicado && editId) {
+    // Fusionar: redirigir todas las referencias al insumo existente y eliminar el actual
+    proveedores.forEach(p => {
+      (p.items || []).forEach(it => { if (it.insumoId === editId) it.insumoId = duplicado.id; });
+    });
+    precios.forEach(pr => { if (pr.insumoId === editId) pr.insumoId = duplicado.id; });
+    (recetas || []).forEach(r => (r.ingredientes || []).forEach(ing => { if (ing.insumoId === editId) ing.insumoId = duplicado.id; }));
+    const oldIns = insumos.find(i => i.id === editId);
+    if (oldIns) {
+      const newAliases = [...new Set([...(duplicado.aliases || []), ...(oldIns.aliases || []), oldIns.nombre])].filter(a => a !== duplicado.nombre);
+      duplicado.aliases = newAliases;
+    }
+    insumos.splice(insumos.findIndex(i => i.id === editId), 1);
+    persist();
+    closeModal('modalInsumo');
+    toast(`Fusionado con "${duplicado.nombre}"`, 'success');
+    renderInsumos();
+    return;
+  }
 
   const data = {
     nombre,
