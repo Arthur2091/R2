@@ -11258,7 +11258,13 @@ function _abrirComparacionCarta() {
         const sc = _cartaMatchScore(nombre, r.nombre);
         if (sc > bestScore) { bestScore = sc; best = r; }
       });
-      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.78 ? best : null, score: bestScore, seleccionada: bestScore < 0.78 });
+      // Buscar receta de fabricación relacionada para auto-linkear al importar
+      let fabMatch = null, fabScore = 0;
+      recetas.filter(r => !r.oculta && r.tipo === 'fabricacion').forEach(r => {
+        const sc = _cartaMatchScore(nombre, r.nombre);
+        if (sc > fabScore) { fabScore = sc; fabMatch = r; }
+      });
+      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 0.78 ? best : null, score: bestScore, fabMatch: fabScore >= 0.78 ? fabMatch : null, seleccionada: bestScore < 0.78 });
     });
   });
   _cartaFiltroActivo = 'todos';
@@ -11300,10 +11306,13 @@ function _cartaRenderFiltrado() {
               <div style="font-size:13px;font-weight:600">${d.nombre}</div>
               ${match ? `<div style="font-size:11px;color:var(--accent)">→ "${match.nombre}" (${Math.round(d.score*100)}% match)</div>` : '<div style="font-size:11px;color:#DC2626">Sin receta asociada</div>'}
             </div>
-            ${!match ? `<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-              <input type="checkbox" ${d.seleccionada?'checked':''} onchange="_cartaToggleSel('${d.cat}','${d.nombre.replace(/'/g,"\\'")}',this.checked)" style="width:15px;height:15px">
-              Importar
-            </label>` : ''}
+            ${!match ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+              ${d.fabMatch ? `<div style="font-size:10px;color:#7C3AED;background:#EDE9FE;padding:2px 6px;border-radius:4px;white-space:nowrap">🔗 fab: ${d.fabMatch.nombre}</div>` : ''}
+              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+                <input type="checkbox" ${d.seleccionada?'checked':''} onchange="_cartaToggleSel('${d.cat}','${d.nombre.replace(/'/g,"\\'")}',this.checked)" style="width:15px;height:15px">
+                Importar
+              </label>
+            </div>` : ''}
           </div>`;
         }).join('')}
       </div>
@@ -11322,7 +11331,10 @@ function _importarFaltantesCarta() {
   aImportar.forEach(d => {
     const existe = recetas.find(r => _normCarta(r.nombre) === _normCarta(d.nombre));
     if (existe) return;
-    recetas.push({ id: crypto.randomUUID(), nombre: d.nombre, rubro: _catToRubro(d.cat) || '', grupo: d.cat, tipo: 'venta', ingredientes: [], rinde: 1, rindeUnidad: 'u', precioVenta: null });
+    const ingredientes = d.fabMatch
+      ? [{ nombreOriginal: d.fabMatch.nombre, cantidad: 1, unidad: 'u', insumoId: null, recetaId: d.fabMatch.id }]
+      : [];
+    recetas.push({ id: crypto.randomUUID(), nombre: d.nombre, rubro: _catToRubro(d.cat) || '', grupo: d.cat, tipo: 'venta', ingredientes, rinde: 1, rindeUnidad: 'u', precioVenta: null });
     creados++;
   });
   if (creados) { persistRecetas(); renderRecetas(); }
