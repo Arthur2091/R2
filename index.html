@@ -1378,8 +1378,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Importar recetas — elegí qué hojas</h2>
     <p class="modal-sub" style="flex-shrink:0">El Excel tiene muchas hojas. Tildá las que querés procesar ahora.</p>
-    <input id="impHojaSearch" type="text" placeholder="Buscar hoja…" oninput="_impHojaFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none;background:var(--surface)">
-    <div id="impHojaLista" style="overflow-y:auto;flex:1;margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
+    <div id="impHojaLista" style="overflow-y:auto;flex:1;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px"></div>
     <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
       <button class="btn btn-outline" onclick="closeModal('modalImpHoja')">Cancelar</button>
       <button class="btn btn-primary" onclick="_impAceptarHojas()">Procesar hojas seleccionadas</button>
@@ -1453,62 +1452,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
-<div id="modalGestionVinculos" class="overlay">
-  <div class="modal" style="max-width:780px;max-height:90vh;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-      <h2 style="margin:0;flex:1">Vínculos con ventas</h2>
-      <span id="gvStats" style="font-size:12px;color:var(--ink3)"></span>
-    </div>
-    <input id="gvSearch" type="text" placeholder="Buscar receta…" oninput="_gvRender()" style="flex-shrink:0;margin-top:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
-    <div style="flex-shrink:0;margin-top:6px;display:flex;gap:8px">
-      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='todos';_gvRender()">Todos</button>
-      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='sin';_gvRender()">Sin vínculo</button>
-      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='manual';_gvRender()">Manuales</button>
-      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='auto';_gvRender()">Automáticos</button>
-    </div>
-    <div id="gvLista" style="overflow-y:auto;flex:1;margin-top:10px;display:flex;flex-direction:column;gap:4px"></div>
-    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
-      <button class="btn btn-outline" onclick="closeModal('modalGestionVinculos')">Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<div id="modalSelectorVentas" class="overlay">
-  <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
-    <h2 style="flex-shrink:0">Seleccionar producto en ventas</h2>
-    <p class="modal-sub" style="flex-shrink:0">Elegí el producto de ventas que corresponde a esta receta.</p>
-    <input id="selectorVentasSearch" type="text" placeholder="Buscar producto…" oninput="_selectorVentasFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
-    <div id="selectorVentasLista" style="overflow-y:auto;flex:1;margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
-    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
-      <button class="btn btn-outline" onclick="closeModal('modalSelectorVentas')">Cancelar</button>
-      <button class="btn btn-primary" onclick="closeModal('modalSelectorVentas');if(_currentVerRecetaId)verReceta(_currentVerRecetaId)">Listo</button>
-    </div>
-  </div>
-</div>
-
-<div id="modalCartaCmp" class="overlay">
-  <div class="modal" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-      <h2 style="margin:0;flex:1">Comparación con la carta</h2>
-      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('todos')">Todos</button>
-      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('faltantes')">Solo faltantes</button>
-      <button class="btn btn-outline btn-sm" onclick="_cartaFiltrar('existentes')">Solo existentes</button>
-    </div>
-    <input id="cartaCmpSearch" type="text" placeholder="Buscar producto…" oninput="_cartaRenderFiltrado()" style="flex-shrink:0;margin-top:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
-    <div id="cartaCmpStats" style="flex-shrink:0;margin-top:8px;font-size:12px;color:var(--ink2)"></div>
-    <div id="cartaCmpScreen" style="overflow-y:auto;flex:1;margin-top:8px"></div>
-    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
-      <button class="btn btn-outline" onclick="closeModal('modalCartaCmp')">Cerrar</button>
-      <button class="btn btn-primary" onclick="_importarFaltantesCarta()">Importar faltantes seleccionados</button>
-    </div>
-  </div>
-</div>
-
 <div id="modalImpRevisor" class="overlay">
   <div class="modal" style="max-width:880px;max-height:88vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Revisar recetas detectadas</h2>
     <p class="modal-sub" style="flex-shrink:0">Las marcadas en <span style="color:var(--accent);font-weight:600">verde</span> matchean con productos vendidos. Elegí el tipo de cada una y desmarcá las que no quieras importar.</p>
-    <input id="impRevisorSearch" type="text" placeholder="Buscar receta…" oninput="_impRevisorFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none;background:var(--surface)">
     <div id="impRevisorScreen" style="overflow-y:auto;flex:1;margin-top:10px"></div>
     <div class="modal-actions" style="flex-shrink:0;margin-top:14px">
       <button class="btn btn-outline" onclick="closeModal('modalImpRevisor')">Cancelar</button>
@@ -1700,7 +1647,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">
     <button class="dep-subtab dep-subtab-active" data-receta-tipo="venta" onclick="_setRecetaTipo('venta')">🛒 Recetas de venta</button>
     <button class="dep-subtab" data-receta-tipo="fabricacion" onclick="_setRecetaTipo('fabricacion')">🏭 Recetas de fabricación</button>
-    <button class="dep-subtab" id="tabRecetasBaja" data-receta-tipo="baja" onclick="_setRecetaTipo('baja')" style="margin-left:auto;color:var(--ink3)">🗄️ Dadas de baja</button>
   </div>
   <div class="toolbar">
     <input id="searchRecetas" class="search-input" type="text" placeholder="Buscar receta…" oninput="renderRecetas()">
@@ -1708,8 +1654,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="_impArrancar(this)">
-    <button class="btn btn-outline" onclick="_abrirGestionVinculos()">🔗 Vínculos ventas</button>
-    <button class="btn btn-outline" onclick="_abrirComparacionCarta()">📋 Comparar con carta</button>
     <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
     <button id="btnSeleccionarRecetas" class="btn btn-outline" onclick="_toggleModoSeleccion()">Seleccionar</button>
     <button class="btn btn-outline" onclick="openConfigCostos()" style="margin-left:auto">⚙ Costos globales</button>
@@ -2953,34 +2897,6 @@ function openEditModal(id) {
 function saveInsumo() {
   const nombre = document.getElementById('fNombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
-  const editId = document.getElementById('fEditId').value;
-  const normNombre = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
-  const duplicado = insumos.find(i => i.id !== editId && i.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim() === normNombre);
-  if (duplicado && editId) {
-    // Fusionar: redirigir todas las referencias al insumo existente y eliminar el actual
-    proveedores.forEach(p => {
-      (p.items || []).forEach(it => { if (it.insumoId === editId) it.insumoId = duplicado.id; });
-      // Eliminar duplicados: si el mismo insumoId aparece más de una vez, quedarse con la primera entrada
-      const seen = new Set();
-      p.items = (p.items || []).filter(it => {
-        if (!it.insumoId || !seen.has(it.insumoId)) { seen.add(it.insumoId); return true; }
-        return false;
-      });
-    });
-    precios.forEach(pr => { if (pr.insumoId === editId) pr.insumoId = duplicado.id; });
-    (recetas || []).forEach(r => (r.ingredientes || []).forEach(ing => { if (ing.insumoId === editId) ing.insumoId = duplicado.id; }));
-    const oldIns = insumos.find(i => i.id === editId);
-    if (oldIns) {
-      const newAliases = [...new Set([...(duplicado.aliases || []), ...(oldIns.aliases || []), oldIns.nombre])].filter(a => a !== duplicado.nombre);
-      duplicado.aliases = newAliases;
-    }
-    insumos.splice(insumos.findIndex(i => i.id === editId), 1);
-    persist();
-    closeModal('modalInsumo');
-    toast(`Fusionado con "${duplicado.nombre}"`, 'success');
-    renderInsumos();
-    return;
-  }
 
   const data = {
     nombre,
@@ -2996,25 +2912,13 @@ function saveInsumo() {
     observaciones: document.getElementById('fObs').value.trim(),
   };
 
+  const editId   = document.getElementById('fEditId').value;
   const provId   = document.getElementById('fProveedor').value;
   let   insumoId = editId;
 
   if (editId) {
     const idx = insumos.findIndex(i => i.id === editId);
-    if (idx >= 0) {
-      const oldNombre = insumos[idx].nombre;
-      const aliases = [...(insumos[idx].aliases || [])];
-      if (oldNombre && oldNombre !== nombre && !aliases.includes(oldNombre)) {
-        aliases.push(oldNombre);
-      }
-      insumos[idx] = { ...insumos[idx], ...data, aliases };
-      // Propagar nuevo nombre a todos los items de proveedores vinculados
-      if (oldNombre !== nombre) {
-        proveedores.forEach(p => {
-          (p.items || []).forEach(it => { if (it.insumoId === editId) it.nombreBoleta = nombre; });
-        });
-      }
-    }
+    if (idx >= 0) insumos[idx] = { ...insumos[idx], ...data };
   } else {
     insumoId = crypto.randomUUID();
     insumos.push({ id: insumoId, aliases: [], ...data });
@@ -3225,7 +3129,7 @@ function _renderInsumosDetalle(provId) {
   if (search) items = items.filter(i => i.nombre.toLowerCase().includes(search));
   const ranked = items
     .map(i => ({ i, f: _frecuenciaInsumo(i.id) }))
-    .sort((a, b) => a.i.nombre.localeCompare(b.i.nombre, 'es'));
+    .sort((a, b) => b.f - a.f || a.i.nombre.localeCompare(b.i.nombre, 'es'));
 
   document.getElementById('statsInsumos').innerHTML = `
     <div class="stat-chip"><strong>${items.length}</strong> insumos</div>
@@ -10135,11 +10039,13 @@ function _parseExcelRecetas(wb) {
     if (!ws) return;
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-    // Detectar columnas base donde aparece PRODUCTO — escanear TODAS las filas para no perder bloques que empiezan en filas distintas
-    const colOffsetSet = new Set();
-    rows.forEach(r => r.forEach((v, ci) => { if (String(v||'').trim().startsWith('PRODUCTO')) colOffsetSet.add(ci); }));
-    const colOffsets = [...colOffsetSet].sort((a,b) => a-b);
-    if (!colOffsets.length) return;
+    // Detectar columnas base donde aparece PRODUCTO (pueden ser 0, 10, 20 o 0, 12, etc.)
+    const prodRow = rows.find(r => r.some(v => String(v).trim().startsWith('PRODUCTO')));
+    if (!prodRow) return;
+    const colOffsets = prodRow
+      .map((v, i) => [i, v])
+      .filter(([, v]) => String(v).trim().startsWith('PRODUCTO'))
+      .map(([i]) => i);
 
     // Parsear cada bloque de columnas de forma independiente
     colOffsets.forEach(c => {
@@ -10169,12 +10075,7 @@ function _parseExcelRecetas(wb) {
               while (i < rows.length) {
                 const ir = rows[i];
                 if (String(ir[c] || '').trim().startsWith('PRODUCTO')) break;
-                // Si encontramos el header de la siguiente sub-receta, salimos SIN consumirla
-                const ir_c1 = String(ir[c+1] || '').trim();
-                const ir_c2_raw = String(ir[c+2] || '').trim();
-                const isNextReceta = ir_c2_raw === 'COSTO' && typeof ir[c+4] === 'number' && ir[c+4] > 0 && (ir_c1.startsWith('*') || /^\d+$/.test(ir_c1));
-                if (isNextReceta) break;
-                const c2 = ir_c2_raw.toUpperCase();
+                const c2 = String(ir[c+2] || '').trim().toUpperCase();
                 // Detectar línea "COSTO X/POR <unidad>" — alternancia con longest-first y word boundaries para no comerse letras sueltas
                 const unitMatch = c2.match(/COSTO\s+(?:X|POR|PORC\.?)\s+(KG|LT|ML|GR|UNIDAD|UN|G\b|L\b)/);
                 const isCierre = unitMatch || c2.includes('TOTAL COSTO') || c2.includes('COSTO PORCION') || c2.includes('COSTO UNITARIO');
@@ -10191,7 +10092,9 @@ function _parseExcelRecetas(wb) {
                 }
                 i++;
               }
-              parsed.push({ nombre: subNombre, grupo: grupoNombre, rubro: _catToRubro(sheetName), rinde, rindeUnidad, precioVenta, ingredientes });
+              if (ingredientes.length > 0) {
+                parsed.push({ nombre: subNombre, grupo: grupoNombre, rubro: _catToRubro(sheetName), rinde, rindeUnidad, precioVenta, ingredientes });
+              }
             } else { i++; }
           }
         } else { i++; }
@@ -10204,29 +10107,6 @@ function _parseExcelRecetas(wb) {
 
 function _normIng(s) {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
-}
-
-function _norm(s) {
-  return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
-function _searchSort(lista, q, getNombre) {
-  const getNom = getNombre || (x => x.nombre);
-  const qn = _norm(q);
-  if (!qn) return [];
-  const scored = [];
-  for (const x of lista) {
-    const n = _norm(getNom(x));
-    let rank;
-    if (n === qn)                                       rank = 0;
-    else if (n.startsWith(qn))                          rank = 1;
-    else if (n.split(' ').some(w => w.startsWith(qn))) rank = 2;
-    else if (n.includes(qn))                            rank = 3;
-    else continue;
-    scored.push({ x, rank });
-  }
-  return scored
-    .sort((a, b) => a.rank - b.rank || getNom(a.x).localeCompare(getNom(b.x), 'es'))
-    .map(({ x }) => x);
 }
 
 function _matchIngrediente(nombre) {
@@ -10484,10 +10364,15 @@ function _renderMatchModal() {
 }
 
 function _filtrarMatch(input, safeId, nombre) {
-  const q = input.value.trim();
+  const q = input.value.toLowerCase().trim();
   const res = document.getElementById('mres_' + safeId);
   if (!q) { res.innerHTML = ''; return; }
-  const matches = _searchSort(insumos, q).slice(0, 12);
+
+  const matches = insumos.filter(i =>
+    i.nombre.toLowerCase().includes(q) ||
+    _normIng(i.nombre).includes(_normIng(q))
+  ).slice(0, 12);
+
   res.innerHTML = matches.map(i =>
     `<button onclick="_setMatch('${nombre}','${i.id}','${safeId}')"
       style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);cursor:pointer;color:var(--ink)">
@@ -10614,51 +10499,17 @@ function _cantidadEnPresentaciones(ins, cantidad, unidad) {
   return null;
 }
 
-const _STOPWORDS = new Set(['de','del','la','el','los','las','con','sin','en','y','a','al','por','x','para','un','una']);
-
-function _normVentas(s) {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,'').trim();
-}
-function _tokensVentas(s) {
-  return _normVentas(s).split(/\s+/).filter(t => t.length >= 2 && !_STOPWORDS.has(t));
-}
-function _ventasMatchScore(a, b) {
-  const na = _normVentas(a), nb = _normVentas(b);
-  if (na === nb) return 1;
-  const ta = new Set(_tokensVentas(a)), tb = new Set(_tokensVentas(b));
-  if (!ta.size || !tb.size) return 0;
-  let common = 0; ta.forEach(t => tb.has(t) && common++);
-  const union = ta.size + tb.size - common;
-  return union > 0 ? common / union : 0;
-}
-
-function _ventasMatchReceta(receta) {
-  if (!receta?.nombre || !ventas?.length) return null;
-  // Link manual tiene prioridad
-  const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
-  if (vps) return { producto: vps.join(', '), score: 1, manual: true, lista: vps };
-  if (receta.noAutoMatch) return null;
-  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
-  let best = null, bestScore = 0;
-  productosUnicos.forEach(p => {
-    const sc = _ventasMatchScore(receta.nombre, p);
-    if (sc > bestScore) { bestScore = sc; best = p; }
-  });
-  return bestScore >= 1.0 ? { producto: best, score: bestScore } : null;
-}
-
 function _ventasPorMesReceta(receta) {
+  // Devuelve un array de { mes, unidades, total, promedio } ordenado desc por mes.
   if (!receta?.nombre || !ventas?.length) return [];
-  const match = _ventasMatchReceta(receta);
-  if (!match) return [];
-  const productoTarget = match.producto;
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const target = norm(receta.nombre);
+  if (!target) return [];
   const porMes = {};
   ventas.forEach(v => {
-    const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
-    const coincide = vps
-      ? vps.includes(v.producto)
-      : _ventasMatchScore(receta.nombre, v.producto) >= 1.0;
-    if (!coincide) return;
+    const nom = norm(v.producto);
+    if (!nom) return;
+    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { mes, unidades: 0, total: 0 };
@@ -10720,14 +10571,18 @@ function _recetaUsarPrecioReal(recetaId) {
 }
 
 function _precioVentaReal(receta) {
+  // Toma del array `ventas` el precio promedio del producto que matchee con esta receta,
+  // del mes más reciente con ventas. Útil para comparar contra el precio cargado a mano.
   if (!receta?.nombre || !ventas?.length) return null;
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const target = norm(receta.nombre);
+  if (!target) return null;
+  // Agrupar ventas matcheadas por mes (YYYY-MM)
   const porMes = {};
   ventas.forEach(v => {
-    const vps2 = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
-    const coincide = vps2
-      ? vps2.includes(v.producto)
-      : _ventasMatchScore(receta.nombre, v.producto) >= 1.0;
-    if (!coincide) return;
+    const nom = norm(v.producto);
+    if (!nom) return;
+    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
@@ -10795,25 +10650,6 @@ function _onErRubroChange() {
   if (sel.value === '__nuevo__') { input.value = ''; input.focus(); }
   const hint = document.getElementById('erMargenHint');
   if (hint) hint.textContent = `mercado ${_margenObjRubro(sel.value)}%`;
-}
-
-function _migrarLecheKgToL() {
-  if (localStorage.getItem('mig_leche_kg_to_l')) return;
-  let cambiados = 0;
-  const esLeche = s => /leche/i.test(s || '');
-  const esKg    = u => /kg/i.test(u || '');
-  recetas.forEach(r => {
-    (r.ingredientes || []).forEach(ing => {
-      const ins = ing.insumoId ? insumos.find(i => i.id === ing.insumoId) : null;
-      const nombre = ins ? ins.nombre : (ing.nombreOriginal || '');
-      if (esLeche(nombre) && esKg(ing.unidad)) {
-        ing.unidad = 'L';
-        cambiados++;
-      }
-    });
-  });
-  if (cambiados) { persistRecetas(); console.log(`[mig] Leche kg→L: ${cambiados} ingredientes corregidos`); }
-  localStorage.setItem('mig_leche_kg_to_l', '1');
 }
 
 function _migrarRecetasFlat() {
@@ -10889,10 +10725,10 @@ function _erDesvincular(ii)   { ii=+ii; if(_erIngs[ii]) { _erIngs[ii].insumoId =
 
 function _erBuscarInsInline(input, ii) {
   ii = +ii;
-  const q = input.value.trim();
+  const q = input.value.toLowerCase().trim();
   const res = document.getElementById('erIR_' + ii);
   if (!res || !q) { if(res) res.innerHTML=''; return; }
-  const matches = _searchSort(insumos, q).slice(0, 6);
+  const matches = insumos.filter(i => i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))).slice(0,6);
   res.innerHTML = matches.map(ins =>
     `<button onclick="_erVincularIns(${ii},'${ins.id}')"
       style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--surface);cursor:pointer;color:var(--ink)">${ins.nombre}</button>`
@@ -10901,11 +10737,11 @@ function _erBuscarInsInline(input, ii) {
 
 function _erBuscarRecInline(input, ii) {
   ii = +ii;
-  const q   = input.value.trim();
+  const q   = input.value.toLowerCase().trim();
   const res = document.getElementById('erIR_' + ii);
   const rid = document.getElementById('erRecetaId').value;
   if (!res || !q) { if(res) res.innerHTML=''; return; }
-  const matches = _searchSort(recetas.filter(r => r.id !== rid), q).slice(0, 6);
+  const matches = recetas.filter(r => r.id !== rid && (r.nombre.toLowerCase().includes(q) || (r.rubro||'').toLowerCase().includes(q))).slice(0,6);
   res.innerHTML = matches.map(r =>
     `<button onclick="_erVincularRec(${ii},'${r.id}')"
       style="font-size:11px;padding:3px 8px;border:1px solid #C4B5FD;border-radius:5px;background:var(--surface);cursor:pointer;color:#5B21B6">${r.nombre}</button>`
@@ -10917,8 +10753,12 @@ function _erVincularRec(ii, subRecetaId) { ii=+ii; if(_erIngs[ii]) { _erIngs[ii]
 
 function _erBuscarIns(q) {
   const res = document.getElementById('erResIns');
-  if (!(q || '').trim()) { res.innerHTML = ''; return; }
-  let lista = _searchSort(insumos, q.trim()).slice(0, 50);
+  const qLower = (q || '').toLowerCase().trim();
+  // Sin query → todos alfabéticos. Con query → filtrar.
+  let lista = qLower
+    ? insumos.filter(i => i.nombre.toLowerCase().includes(qLower) || _normIng(i.nombre).includes(_normIng(qLower)))
+    : [...insumos];
+  lista = lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).slice(0, 50);
   if (!lista.length) { res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>'; return; }
   res.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:180px;overflow-y:auto;padding:4px 0">` + lista.map(ins => {
     const precio = ins.precioConIVA ?? ins.precioSinIVA;
@@ -10932,8 +10772,10 @@ function _erBuscarIns(q) {
 function _erBuscarRec(q) {
   const res = document.getElementById('erResRec');
   const rid = document.getElementById('erRecetaId').value;
-  if (!(q || '').trim()) { res.innerHTML = ''; return; }
-  let lista = _searchSort(recetas.filter(r => r.id !== rid), q.trim()).slice(0, 50);
+  const qLower = (q || '').toLowerCase().trim();
+  let lista = recetas.filter(r => r.id !== rid);
+  if (qLower) lista = lista.filter(r => r.nombre.toLowerCase().includes(qLower) || (r.rubro||'').toLowerCase().includes(qLower));
+  lista = lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).slice(0, 50);
   if (!lista.length) { res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>'; return; }
   res.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:180px;overflow-y:auto;padding:4px 0">` + lista.map(r =>
     `<button onclick="_erAddRec('${r.id}')"
@@ -10963,8 +10805,9 @@ function _erAddRec(subRecetaId) {
 
 function _erResetSearch() {
   ['erSearchIns','erSearchRec'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('erResIns').innerHTML = '';
-  document.getElementById('erResRec').innerHTML = '';
+  // Mostrar la lista completa inicial (sin filtro) en vez de vacío
+  _erBuscarIns('');
+  _erBuscarRec('');
 }
 
 function _setErTipo(tipo) {
@@ -11105,33 +10948,8 @@ function renderRecetas() {
   _currentVerRecetaId = null;
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
-  // Tab "Dadas de baja"
-  if (_recetaTipo === 'baja') {
-    const ocultas = recetas.filter(r => r.oculta && (!search || r.nombre.toLowerCase().includes(search)));
-    document.getElementById('recetaRubroFilters').innerHTML = '';
-    document.getElementById('statsRecetas').innerHTML = `<div class="stat-chip"><strong>${ocultas.length}</strong> recetas dadas de baja</div>`;
-    if (!ocultas.length) {
-      document.getElementById('recetasScreen').innerHTML = `<div class="empty-state"><h3>Sin recetas dadas de baja</h3></div>`;
-    } else {
-      document.getElementById('recetasScreen').innerHTML = `<div class="recetas-grid">
-        ${ocultas.sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => `
-          <div class="receta-card" style="opacity:.65">
-            <div class="receta-card-header">
-              <div style="flex:1">
-                <div class="receta-card-title" style="color:var(--ink2)">${r.nombre}</div>
-                <div class="receta-card-meta">${r.rubro || '—'} · ${r.tipo === 'fabricacion' ? '🏭' : '🛒'}</div>
-              </div>
-              <button onclick="_restaurarReceta('${r.id}')" style="background:none;border:1px solid var(--border);cursor:pointer;padding:3px 10px;border-radius:6px;color:var(--ink2);font-size:12px;white-space:nowrap;flex-shrink:0">Restaurar</button>
-            </div>
-          </div>`).join('')}
-      </div>`;
-    }
-    return;
-  }
-
   // Filtro primario por tipo (venta/fabricacion). Si la receta no tiene tipo, se asume 'venta' (legacy).
   const visible = recetas.filter(r =>
-    !r.oculta &&
     ((r.tipo || 'venta') === _recetaTipo) &&
     (!search || r.nombre.toLowerCase().includes(search) || (r.rubro||r.categoria||'').toLowerCase().includes(search))
   );
@@ -11206,51 +11024,43 @@ function renderRecetas() {
 
   const rubroOpts = RUBRO_ORDER.map(ro => `<option value="${ro}">${(RUBRO_STYLES[ro]||{}).icon||''} ${ro}</option>`).join('');
 
-  const _cardStyle = (r) => {
-    const st = RUBRO_STYLES[_getRubro(r)] || { bg:'#F7F5F0', color:'#6B6760' };
-    return { bg: st.bg, color: st.color };
-  };
-
   // Card simple — el selector está en el grupo header, no en la card
   const renderCard = (r) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
-    const cs       = _cardStyle(r);
-    return `<div class="receta-card" style="border-left:3px solid ${cs.color}" onclick="verReceta('${r.id}')">
+    return `<div class="receta-card" onclick="verReceta('${r.id}')">
       <div class="receta-card-header">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <button onclick="event.stopPropagation();_quitarRubroReceta('${r.id}')" title="Quitar rubro" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:11px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FFF7ED';this.style.color='#C2410C'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">↩</button>
-        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
+        <span style="font-size:10px;color:var(--ink3);margin-top:4px">›</span>
       </div>
     </div>`;
   };
 
-  // Card sin rubro — incluye selector de rubro
-  const renderCardSinRubro = (r) => {
+  // Card con selector — para recetas sin grupo (añadidas manualmente)
+  const renderCardConSelector = (r) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
-    return `<div class="receta-card" style="border-left:3px solid #C2410C">
+    const rubroVal = RUBRO_ORDER.includes(r.rubro) ? r.rubro : '';
+    const opts     = `${!rubroVal ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
+    return `<div class="receta-card">
       <div class="receta-card-header" onclick="verReceta('${r.id}')">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
-        <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
+        <span style="font-size:10px;color:var(--ink3);margin-top:4px">›</span>
       </div>
-      <div style="padding:6px 14px 10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
-        <select onchange="_cambiarRubroReceta('${r.id}',this.value)"
-          style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid #F59E0B;background:#FFFBEB;color:#92400E;font-family:var(--font);cursor:pointer;font-weight:600">
-          <option value="">⚠️ Sin rubro</option>${rubroOpts}
+      <div style="padding:8px 18px 12px;border-top:1px solid var(--border)">
+        <select onclick="event.stopPropagation()" onchange="_cambiarRubroReceta('${r.id}',this.value)"
+          style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--ink);font-family:var(--font);cursor:pointer">
+          ${opts}
         </select>
       </div>
     </div>`;
   };
-
-  // Card normal — sin selector
-  const renderCardConSelector = (r) => renderCard(r);
 
   document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
     const rs    = byRubro[rubro];
@@ -11276,13 +11086,17 @@ function renderRecetas() {
           <div class="receta-grupo-header">
             <span class="receta-grupo-label" style="color:${s.color}">${g}</span>
             <span class="receta-grupo-count">${byGrupo[g].length} receta${byGrupo[g].length!==1?'s':''}</span>
+            <select onclick="event.stopPropagation()" onchange="_cambiarRubroGrupo('${safeG}', this.value)"
+              style="font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid ${isSin?'#F59E0B':'var(--border)'};background:${isSin?'#FFFBEB':'var(--surface2)'};color:${isSin?'#92400E':'var(--ink)'};font-family:var(--font);cursor:pointer;font-weight:${isSin?'600':'400'}">
+              ${opts}
+            </select>
           </div>
-          <div class="recetas-grid">${[...byGrupo[g]].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => isSin ? renderCardSinRubro(r) : renderCard(r)).join('')}</div>
+          <div class="recetas-grid">${byGrupo[g].map(r => renderCard(r)).join('')}</div>
         </div>`;
     }).join('');
 
     const sinGrupoHtml = sinGrupo.length
-      ? `<div class="recetas-grid">${[...sinGrupo].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => isSin ? renderCardSinRubro(r) : renderCard(r)).join('')}</div>`
+      ? `<div class="recetas-grid">${sinGrupo.map(r => renderCardConSelector(r)).join('')}</div>`
       : '';
 
     return `<div class="rubro-section" style="border-color:${s.bg}">
@@ -11304,56 +11118,12 @@ function byRubroCount(rubro, lista) {
   return lista.filter(r => _gr(r) === rubro).length;
 }
 
-function _renderRecetasPreservando() {
-  const screen = document.getElementById('recetasScreen');
-  const scrollY = screen ? screen.scrollTop : 0;
-  const abiertos = new Set(
-    [...document.querySelectorAll('.rubro-section .rubro-body.open')]
-      .map(b => b.closest('.rubro-section')?.querySelector('.rubro-label')?.textContent?.trim())
-      .filter(Boolean)
-  );
-  renderRecetas();
-  document.querySelectorAll('.rubro-section').forEach(sec => {
-    const label = sec.querySelector('.rubro-label')?.textContent?.trim();
-    if (abiertos.has(label)) {
-      sec.querySelector('.rubro-body')?.classList.add('open');
-      const tog = sec.querySelector('.rubro-toggle');
-      if (tog) tog.classList.add('open');
-    }
-  });
-  if (screen) screen.scrollTop = scrollY;
-}
-
-function _ocultarReceta(id) {
-  const r = recetas.find(x => x.id === id);
-  if (!r) return;
-  r.oculta = true;
-  persistRecetas();
-  _renderRecetasPreservando();
-}
-
-function _restaurarReceta(id) {
-  const r = recetas.find(x => x.id === id);
-  if (!r) return;
-  delete r.oculta;
-  persistRecetas();
-  renderRecetas();
-}
-
 function _cambiarRubroReceta(id, nuevoRubro) {
   const r = recetas.find(x => x.id === id);
   if (!r || !nuevoRubro) return;
   r.rubro = nuevoRubro;
   persistRecetas();
-  _renderRecetasPreservando();
-}
-
-function _quitarRubroReceta(id) {
-  const r = recetas.find(x => x.id === id);
-  if (!r) return;
-  r.rubro = '';
-  persistRecetas();
-  _renderRecetasPreservando();
+  renderRecetas();
 }
 
 function _toggleRubroSection(header) {
@@ -11363,237 +11133,11 @@ function _toggleRubroSection(header) {
   tog.classList.toggle('open');
 }
 
-/* ── SELECTOR MANUAL PRODUCTO VENTAS ────────────────────────────── */
-let _selectorVentasRecetaId = null;
-
-function _abrirSelectorProductoVentas(recetaId) {
-  _selectorVentasRecetaId = recetaId;
-  const r = recetas.find(x => x.id === recetaId);
-  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))].sort((a, b) =>
-    _ventasMatchScore(r?.nombre || '', b) - _ventasMatchScore(r?.nombre || '', a)
-  );
-  document.getElementById('selectorVentasSearch').value = '';
-  _selectorVentasRender(productosUnicos);
-  openModal('modalSelectorVentas');
-}
-
-function _selectorVentasSeleccionados() {
-  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  return new Set(r?.ventasProductos?.length ? r.ventasProductos : (r?.ventasProducto ? [r.ventasProducto] : []));
-}
-
-function _selectorVentasRender(productos) {
-  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  const seleccionados = _selectorVentasSeleccionados();
-  document.getElementById('selectorVentasLista').innerHTML = `
-    ${seleccionados.size ? `<div style="padding:6px 0;margin-bottom:4px;font-size:11px;color:var(--ink2);font-weight:600">SELECCIONADOS: ${[...seleccionados].map(p=>`<span style="background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;display:inline-block">${p}</span>`).join('')}</div>` : ''}
-    ${productos.map(p => {
-      const score = _ventasMatchScore(r?.nombre || '', p);
-      const checked = seleccionados.has(p);
-      return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid ${checked ? 'var(--accent)' : 'var(--border)'};background:${checked ? '#F0FDF4' : 'var(--surface)'};cursor:pointer;font:13px var(--font)"
-        onmouseover="this.style.background='${checked ? '#F0FDF4' : 'var(--surface2)'}'" onmouseout="this.style.background='${checked ? '#F0FDF4' : 'var(--surface)'}'">
-        <input type="checkbox" ${checked ? 'checked' : ''} onchange="_selectorVentasToggle('${p.replace(/'/g,"\\'")}')" style="width:16px;height:16px;flex-shrink:0">
-        <span style="flex:1">${p}</span>
-        ${score >= 0.5 ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#EDE9FE;color:#5B21B6;font-weight:600">${Math.round(score*100)}%</span>` : ''}
-      </label>`;
-    }).join('')}
-  ` || '<div style="padding:20px;text-align:center;color:var(--ink3)">Sin productos cargados</div>';
-}
-
-function _selectorVentasToggle(producto) {
-  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  if (!r) return;
-  const set = _selectorVentasSeleccionados();
-  if (set.has(producto)) set.delete(producto); else set.add(producto);
-  r.ventasProductos = [...set];
-  delete r.ventasProducto;
-  persistRecetas();
-  // re-render preservando el scroll
-  const lista = document.getElementById('selectorVentasLista');
-  const scrollY = lista.scrollTop;
-  const q = _normVentas(document.getElementById('selectorVentasSearch').value);
-  const todos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
-  const filtrados = q ? todos.filter(p => _normVentas(p).includes(q)) : todos;
-  filtrados.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
-  _selectorVentasRender(filtrados);
-  lista.scrollTop = scrollY;
-  if (_currentVerRecetaId === _selectorVentasRecetaId) _reRenderReceta(_selectorVentasRecetaId);
-}
-
-function _selectorVentasFiltrar() {
-  const q = _normVentas(document.getElementById('selectorVentasSearch').value);
-  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  const todos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
-  const filtrados = q ? todos.filter(p => _normVentas(p).includes(q)) : todos;
-  filtrados.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
-  _selectorVentasRender(filtrados);
-}
-
-function _quitarAutoMatch(recetaId) {
-  const r = recetas.find(x => x.id === recetaId);
-  if (!r) return;
-  r.noAutoMatch = true;
-  persistRecetas();
-  verReceta(recetaId);
-}
-
-function _reactivarAutoMatch(recetaId) {
-  const r = recetas.find(x => x.id === recetaId);
-  if (!r) return;
-  delete r.noAutoMatch;
-  persistRecetas();
-  verReceta(recetaId);
-}
-
-function _desvincularProductoVentas(recetaId) {
-  const r = recetas.find(x => x.id === recetaId);
-  if (!r) return;
-  delete r.ventasProducto;
-  delete r.ventasProductos;
-  persistRecetas();
-  verReceta(recetaId);
-}
-
-/* ── COMPARACIÓN CON CARTA ───────────────────────────────────────── */
-const CARTA_PRODUCTOS = [
-  { cat:'Café de Especialidad', items:['Espresso','Lungo','Americano','Doppio','Cortado en pocillo','Cortado en vasito','Americano doble','Latte','Capuccino','Mocaccino','Flat White'] },
-  { cat:'Café Frío', items:['Iced Coffee','Cold Brew','Iced Capuccino','Iced Flat White','Iced CapuVainilla','Iced CapuCaramelo','Iced CapuAvellana'] },
-  { cat:'Infusiones', items:['Té clásico','Té Inti Zen','Chocolate caliente','Chocolate frío','Submarino Águila'] },
-  { cat:'Bebidas Frías', items:['Limonada con almíbar de menta y jengibre','Limonada en jarra','Jugo de naranja','Iced Tea'] },
-  { cat:'Licuados', items:['Licuado de banana','Licuado de durazno','Licuado de frutilla','Licuado de naranja'] },
-  { cat:'Refrescos', items:['Coca Cola','Lima Limón','Pomelo','Agua sin Gas','Sifoncito','Aquarius Pomelo','Aquarius Manzana','Aquarius Naranja'] },
-  { cat:'Pastelería / Panadería', items:['Medialuna de Manteca','Croissant Clásico','Sfogliatella','Scon de Queso','Cookie Nutella','Cookie Red Velvet','Cookie Toddy','Cookie Frambuesa','Cookie 2ble choco','Brownie con Nuez','Budín Arándano y choco blanco','Budín Banana nuez y chocolate','Budín Limón con amapola','Macarons'] },
-  { cat:'Tortas', items:['Tiramisu','Lemon Pie','Cheese Cake con Frutos Rojos','Bruce'] },
-  { cat:'Desayunos & Meriendas', items:['Tostadas con mermelada y queso untable','Medialunas con jamón y queso x2','Croissant jamón crudo brie rúcula y tomate','Tostado de jamón y queso','Croque Monsieur de jamón y queso','Triffle yogur granola y fruta','Avocado Toast con huevo soft','Avocroissant de palta y huevos revueltos','French Toast con frutos rojos y miel','French Toast con huevos revueltos y Bacon','Huevos Revueltos con Bacon y verdeo','Omelette de Jamón y Queso'] },
-  { cat:'Combos de Cafetería', items:['Combo Yoda','Combo Qui-Gon','Combo Han Solo','Combo Anakin','Combo Luke','Combo Obi-Wan','Combo Padme','Combo Leia','Combo Rei Bright Side','Combo Rei Dark Side','Combo Chewie'] },
-  { cat:'Ciabattas', items:['Episodio 2 Carne desmechada','Episodio 3 Pollo Crispy','Episodio 5 Pollo Grill','Episodio 6 Veggie'] },
-  { cat:'Tartas', items:['AT-AT Walker Espinaca y muzzarella','X-Wing Calabaza y muzzarella'] },
-  { cat:'Wraps', items:['Wrap Criollo','Wrap Veggie','Wrap Caesar','Wrap Falafel'] },
-  { cat:'Ensaladas', items:['Ensalada R2-D2','Ensalada BB-8','Ensalada C-3PO Keto'] },
-  { cat:'Pastas', items:['Ñoquis de papa','Ñoquis de espinaca','Fideos finitos al huevo','Cintas de albahaca','Fetuccini','Tallarines de espinaca'] },
-  { cat:'Salsas Especiales', items:['Pesto Lovers','Parisienne','PP Boloñesa blanca pesto','Scarparo'] },
-];
-
-let _cartaFiltroActivo = 'todos';
-let _cartaCmpData = []; // { cat, nombre, recetaMatch, seleccionada }
-
-function _normCarta(s) {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
-}
-
-function _cartaMatchScore(a, b) {
-  return _normCarta(a) === _normCarta(b) ? 1 : 0;
-}
-
-function _abrirComparacionCarta() {
-  _cartaCmpData = [];
-  CARTA_PRODUCTOS.forEach(({ cat, items }) => {
-    items.forEach(nombre => {
-      let best = null, bestScore = 0;
-      recetas.filter(r => !r.oculta && (r.tipo || 'venta') === 'venta').forEach(r => {
-        const sc = _cartaMatchScore(nombre, r.nombre);
-        if (sc > bestScore) { bestScore = sc; best = r; }
-      });
-      // Buscar receta de fabricación relacionada para auto-linkear al importar
-      let fabMatch = null, fabScore = 0;
-      recetas.filter(r => !r.oculta && r.tipo === 'fabricacion').forEach(r => {
-        const sc = _cartaMatchScore(nombre, r.nombre);
-        if (sc > fabScore) { fabScore = sc; fabMatch = r; }
-      });
-      _cartaCmpData.push({ cat, nombre, recetaMatch: bestScore >= 1.0 ? best : null, score: bestScore, fabMatch: fabScore >= 1.0 ? fabMatch : null, seleccionada: bestScore < 1.0 });
-    });
-  });
-  _cartaFiltroActivo = 'todos';
-  document.getElementById('cartaCmpSearch').value = '';
-  _cartaRenderFiltrado();
-  openModal('modalCartaCmp');
-}
-
-function _cartaFiltrar(modo) {
-  _cartaFiltroActivo = modo;
-  _cartaRenderFiltrado();
-}
-
-function _cartaRenderFiltrado() {
-  const q = _normCarta(document.getElementById('cartaCmpSearch').value);
-  let datos = _cartaCmpData;
-  if (_cartaFiltroActivo === 'faltantes') datos = datos.filter(d => !d.recetaMatch);
-  if (_cartaFiltroActivo === 'existentes') datos = datos.filter(d => d.recetaMatch);
-  if (q) datos = datos.filter(d => _normCarta(d.nombre).includes(q) || _normCarta(d.cat).includes(q));
-
-  const total = _cartaCmpData.length;
-  const existentes = _cartaCmpData.filter(d => d.recetaMatch).length;
-  const faltantes = total - existentes;
-  document.getElementById('cartaCmpStats').innerHTML =
-    `<span style="color:var(--accent);font-weight:600">${existentes} ya existen</span> · <span style="color:#DC2626;font-weight:600">${faltantes} faltan</span> · ${total} total en la carta`;
-
-  const byCat = {};
-  datos.forEach(d => { if (!byCat[d.cat]) byCat[d.cat] = []; byCat[d.cat].push(d); });
-
-  document.getElementById('cartaCmpScreen').innerHTML = Object.entries(byCat).map(([cat, items]) => `
-    <div style="margin-bottom:16px">
-      <div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--ink2);padding:4px 8px;background:var(--surface2);border-radius:6px;margin-bottom:6px">${cat}</div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        ${items.map(d => {
-          const match = d.recetaMatch;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;border:1px solid ${match ? '#D1FAE5' : '#FEE2E2'};background:${match ? '#F0FDF4' : '#FFF5F5'}">
-            <span style="font-size:16px">${match ? '✓' : '✗'}</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600">${d.nombre}</div>
-              ${match ? `<div style="font-size:11px;color:var(--accent)">→ "${match.nombre}" (${Math.round(d.score*100)}% match)</div>` : '<div style="font-size:11px;color:#DC2626">Sin receta asociada</div>'}
-            </div>
-            ${match
-              ? `<button onclick="_cartaDeseleccionarMatch('${d.cat}','${d.nombre.replace(/'/g,"\\'")}');_cartaRenderFiltrado()" title="Quitar match" style="flex-shrink:0;padding:3px 8px;font-size:11px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;color:#92400E;cursor:pointer">✕ quitar</button>`
-              : `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-              ${d.fabMatch ? `<div style="font-size:10px;color:#7C3AED;background:#EDE9FE;padding:2px 6px;border-radius:4px;white-space:nowrap">🔗 fab: ${d.fabMatch.nombre}</div>` : ''}
-              <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-                <input type="checkbox" ${d.seleccionada?'checked':''} onchange="_cartaToggleSel('${d.cat}','${d.nombre.replace(/'/g,"\\'")}',this.checked)" style="width:15px;height:15px">
-                Importar
-              </label>
-            </div>`
-            }
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`).join('') || '<div style="text-align:center;padding:40px;color:var(--ink3)">Sin resultados</div>';
-}
-
-function _cartaToggleSel(cat, nombre, checked) {
-  const d = _cartaCmpData.find(x => x.cat === cat && x.nombre === nombre);
-  if (d) d.seleccionada = checked;
-}
-
-function _cartaDeseleccionarMatch(cat, nombre) {
-  const d = _cartaCmpData.find(x => x.cat === cat && x.nombre === nombre);
-  if (!d) return;
-  d.recetaMatch = null;
-  d.score = 0;
-  d.seleccionada = true;
-}
-
-function _importarFaltantesCarta() {
-  const aImportar = _cartaCmpData.filter(d => !d.recetaMatch && d.seleccionada);
-  if (!aImportar.length) { toast('No hay productos seleccionados para importar', 'error'); return; }
-  let creados = 0;
-  aImportar.forEach(d => {
-    const existe = recetas.find(r => !r.oculta && (r.tipo || 'venta') === 'venta' && _normCarta(r.nombre) === _normCarta(d.nombre));
-    if (existe) return;
-    const ingredientes = d.fabMatch
-      ? [{ nombreOriginal: d.fabMatch.nombre, cantidad: 1, unidad: 'u', insumoId: null, recetaId: d.fabMatch.id }]
-      : [];
-    recetas.push({ id: crypto.randomUUID(), nombre: d.nombre, rubro: _catToRubro(d.cat) || '', grupo: d.cat, tipo: 'venta', ingredientes, rinde: 1, rindeUnidad: 'u', precioVenta: null });
-    creados++;
-  });
-  if (creados) { persistRecetas(); renderRecetas(); }
-  toast(`${creados} receta${creados!==1?'s':''} importada${creados!==1?'s':''}`);
-  closeModal('modalCartaCmp');
-}
-
 function _cambiarRubroGrupo(grupo, nuevoRubro) {
   if (!nuevoRubro) return;
   recetas.forEach(r => { if (r.grupo === grupo) r.rubro = nuevoRubro; });
   persistRecetas();
-  _renderRecetasPreservando();
+  renderRecetas();
 }
 
 function _setRubroFiltro(rubro) {
@@ -11682,23 +11226,7 @@ function _calcCostoRecetaUnd(rid, _visited) {
 
 function _navBack() {
   const prev = _navStack.pop();
-  if (!prev || prev.type === 'lista') {
-    renderRecetas();
-    if (prev?.openSections?.length || prev?.scrollY) {
-      requestAnimationFrame(() => {
-        (prev.openSections || []).forEach(label => {
-          document.querySelectorAll('.rubro-section-header').forEach(h => {
-            if (h.querySelector('.rubro-label')?.textContent?.trim() === label) {
-              h.nextElementSibling?.classList.add('open');
-              h.querySelector('.rubro-toggle')?.classList.add('open');
-            }
-          });
-        });
-        if (prev.scrollY) window.scrollTo(0, prev.scrollY);
-      });
-    }
-    return;
-  }
+  if (!prev || prev.type === 'lista') { renderRecetas(); return; }
   _navSkipPush = true;
   verReceta(prev.id);
   _navSkipPush = false;
@@ -11723,14 +11251,10 @@ function _reRenderReceta(id) {
 
 function verReceta(recetaId) {
   if (!_navSkipPush) {
-    if (_currentVerRecetaId) {
-      _navStack.push({ type: 'receta', id: _currentVerRecetaId });
-    } else {
-      const openSections = [...document.querySelectorAll('.rubro-body.open')]
-        .map(el => el.previousElementSibling?.querySelector('.rubro-label')?.textContent?.trim())
-        .filter(Boolean);
-      _navStack.push({ type: 'lista', scrollY: window.scrollY, openSections });
-    }
+    _navStack.push(_currentVerRecetaId
+      ? { type: 'receta', id: _currentVerRecetaId }
+      : { type: 'lista' }
+    );
   }
   _currentVerRecetaId = recetaId;
   const r = recetas.find(r => r.id === recetaId);
@@ -11766,40 +11290,6 @@ function verReceta(recetaId) {
   const margenOk = margen != null && margen >= margenObj - 2;
   const sinVincular = ings.filter(i => !i.insumoId && !i.recetaId).length;
   const s = RUBRO_STYLES[r.rubro] || { bg:'#F0EDE8', color:'#6B6760' };
-
-  // Panel de diagnóstico de match con ventas
-  const ventasMatch = r.tipo !== 'fabricacion' ? _ventasMatchReceta(r) : null;
-  const _hasManualLink = !!(r.ventasProductos?.length || r.ventasProducto);
-  const matchDiagHtml = r.tipo !== 'fabricacion' ? (() => {
-    if (ventasMatch) {
-      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#F0FDF4;border:1px solid #BBF7D0">
-        <span style="font-size:16px">✓</span>
-        <div style="flex:1;min-width:0">
-          <div>${ventasMatch.manual ? '🔗 <strong style="color:#15803D">Vinculado manualmente:</strong>' : '<strong style="color:#15803D">Match automático:</strong>'}
-            ${ventasMatch.lista
-              ? ventasMatch.lista.map(p => `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;font-size:11px">${p}</span>`).join('')
-              : `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;font-size:11px">${ventasMatch.producto}</span>`}
-            ${!ventasMatch.manual ? `<span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}
-          </div>
-        </div>
-        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Editar</button>
-        <button onclick="${ventasMatch.manual ? `_desvincularProductoVentas('${r.id}')` : `_quitarAutoMatch('${r.id}')`}" style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--ink3)" title="Quitar match">✕</button>
-      </div>`;
-    } else if (r.noAutoMatch && !_hasManualLink) {
-      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#F5F5F5;border:1px solid #E5E5E5">
-        <span style="font-size:16px">○</span>
-        <div style="flex:1;min-width:0"><span style="color:var(--ink2)">Match automático desactivado</span></div>
-        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Seleccionar</button>
-        <button onclick="_reactivarAutoMatch('${r.id}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font:11px var(--font);cursor:pointer;color:var(--ink3)" title="Reactivar auto-match">↺ Reactivar</button>
-      </div>`;
-    } else {
-      return `<div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;background:#FFF5F5;border:1px solid #FECACA">
-        <span style="font-size:16px">✗</span>
-        <div style="flex:1;min-width:0"><strong style="color:#DC2626">Sin match en ventas</strong></div>
-        <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">Seleccionar</button>
-      </div>`;
-    }
-  })() : '';
 
   // Análisis del mes — consumo teórico + económico (solo si hay ventas)
   let analisisHtml = '';
@@ -11890,7 +11380,6 @@ function verReceta(recetaId) {
         <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
         <div style="display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;margin-top:4px;background:${s.bg};color:${s.color}">${r.rubro || ''}</div>
         ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:6px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
-        ${matchDiagHtml}
       </div>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
@@ -12013,14 +11502,16 @@ function _vincularIngReceta(recetaId, ii, subRecetaId) {
 }
 
 function _buscarIngMatch(input, recetaId, ii) {
-  const q   = input.value.trim();
+  const q   = input.value.toLowerCase().trim();
   const sid = `${recetaId}_${ii}`.replace(/-/g,'_');
   const res = document.getElementById('ir_' + sid);
   if (!res) return;
   if (!q) { res.innerHTML = ''; return; }
 
   const conPrecio = insumos.filter(i => i.precioSinIVA || i.precioConIVA);
-  const matches   = _searchSort(conPrecio, q).slice(0, 10);
+  const matches   = conPrecio.filter(i =>
+    i.nombre.toLowerCase().includes(q) || _normIng(i.nombre).includes(_normIng(q))
+  ).slice(0, 10);
 
   res.innerHTML = matches.map(ins => {
     const precio = ins.precioConIVA ?? ins.precioSinIVA;
@@ -12416,7 +11907,6 @@ async function _fbLoad() {
       }
     });
     _migrarRecetasFlat();
-    _migrarLecheKgToL();
     renderInsumos();
     renderProveedores();
     renderRecetas();
@@ -13030,7 +12520,7 @@ function _lpCandidatos(nombreLista, provId) {
   // Para cada insumo, scoreamos contra el nombre del insumo Y contra los nombreBoleta linkeados
   const ranked = insumosProv.map(ins => {
     const nombresBoleta = prov.items.filter(it => it.insumoId === ins.id).map(it => it.nombreBoleta || '');
-    const scores = [_lpSim(nombreLista, ins.nombre), ...nombresBoleta.map(nb => _lpSim(nombreLista, nb)), ...(ins.aliases || []).map(a => _lpSim(nombreLista, a))];
+    const scores = [_lpSim(nombreLista, ins.nombre), ...nombresBoleta.map(nb => _lpSim(nombreLista, nb))];
     const best = Math.max(...scores);
     const fuente = scores.indexOf(best) === 0 ? 'insumo' : 'boleta';
     return { insumo: ins, score: best, fuente };
@@ -14300,15 +13790,7 @@ function _impAbrirSelectorHoja() {
       <input type="checkbox" data-imp-sheet="${s.replace(/"/g, '&quot;')}" style="margin:0">
       <span>${s}</span>
     </label>`).join('');
-  document.getElementById('impHojaSearch').value = '';
   openModal('modalImpHoja');
-}
-
-function _impHojaFiltrar() {
-  const q = document.getElementById('impHojaSearch').value.toLowerCase().trim();
-  document.querySelectorAll('#impHojaLista label').forEach(el => {
-    el.style.display = (!q || el.textContent.toLowerCase().includes(q)) ? '' : 'none';
-  });
 }
 
 function _impAceptarHojas() {
@@ -14399,23 +13881,8 @@ function _impAbrirRevisor() {
       ${items.map(filaHtml).join('')}
     </div>`).join('');
 
-  document.getElementById('impRevisorSearch').value = '';
   document.getElementById('impRevisorScreen').innerHTML = html;
   openModal('modalImpRevisor');
-}
-
-function _impRevisorFiltrar() {
-  const q = document.getElementById('impRevisorSearch').value.toLowerCase().trim();
-  document.querySelectorAll('#impRevisorScreen [data-imp-row]').forEach(el => {
-    const nombre = el.querySelector('[style*="font-weight:600"]')?.textContent?.toLowerCase() || '';
-    el.style.display = (!q || nombre.includes(q)) ? '' : 'none';
-  });
-  // Mostrar/ocultar headers de grupo si todos sus hijos están ocultos
-  document.querySelectorAll('#impRevisorScreen > div').forEach(grupo => {
-    const filas = grupo.querySelectorAll('[data-imp-row]');
-    const alguoVisible = [...filas].some(f => f.style.display !== 'none');
-    grupo.style.display = alguoVisible ? '' : 'none';
-  });
 }
 
 function _impSetTipo(idx, tipo) {
