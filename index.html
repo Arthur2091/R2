@@ -10644,7 +10644,7 @@ function _ventasMatchReceta(receta) {
     const sc = _ventasMatchScore(receta.nombre, p);
     if (sc > bestScore) { bestScore = sc; best = p; }
   });
-  return bestScore >= 0.5 ? { producto: best, score: bestScore } : null;
+  return bestScore >= 1.0 ? { producto: best, score: bestScore } : null;
 }
 
 function _ventasPorMesReceta(receta) {
@@ -10657,7 +10657,7 @@ function _ventasPorMesReceta(receta) {
     const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
     const coincide = vps
       ? vps.includes(v.producto)
-      : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
+      : _ventasMatchScore(receta.nombre, v.producto) >= 1.0;
     if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
@@ -10726,7 +10726,7 @@ function _precioVentaReal(receta) {
     const vps2 = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
     const coincide = vps2
       ? vps2.includes(v.producto)
-      : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
+      : _ventasMatchScore(receta.nombre, v.producto) >= 1.0;
     if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
