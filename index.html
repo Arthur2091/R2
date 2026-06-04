@@ -10519,17 +10519,43 @@ function _cantidadEnPresentaciones(ins, cantidad, unidad) {
   return null;
 }
 
+const _STOPWORDS = new Set(['de','del','la','el','los','las','con','sin','en','y','a','al','por','x','para','un','una']);
+
+function _normVentas(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,'').trim();
+}
+function _tokensVentas(s) {
+  return _normVentas(s).split(/\s+/).filter(t => t.length >= 2 && !_STOPWORDS.has(t));
+}
+function _ventasMatchScore(a, b) {
+  const na = _normVentas(a), nb = _normVentas(b);
+  if (na === nb) return 1;
+  const ta = new Set(_tokensVentas(a)), tb = new Set(_tokensVentas(b));
+  if (!ta.size || !tb.size) return 0;
+  let common = 0; ta.forEach(t => tb.has(t) && common++);
+  const union = ta.size + tb.size - common;
+  return union > 0 ? common / union : 0;
+}
+
+function _ventasMatchReceta(receta) {
+  // Devuelve { producto, score } del mejor match en ventas, o null
+  if (!receta?.nombre || !ventas?.length) return null;
+  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
+  let best = null, bestScore = 0;
+  productosUnicos.forEach(p => {
+    const sc = _ventasMatchScore(receta.nombre, p);
+    if (sc > bestScore) { bestScore = sc; best = p; }
+  });
+  return bestScore >= 0.5 ? { producto: best, score: bestScore } : null;
+}
+
 function _ventasPorMesReceta(receta) {
-  // Devuelve un array de { mes, unidades, total, promedio } ordenado desc por mes.
   if (!receta?.nombre || !ventas?.length) return [];
-  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const target = norm(receta.nombre);
-  if (!target) return [];
+  const match = _ventasMatchReceta(receta);
+  if (!match) return [];
   const porMes = {};
   ventas.forEach(v => {
-    const nom = norm(v.producto);
-    if (!nom) return;
-    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
+    if (_ventasMatchScore(receta.nombre, v.producto) < 0.5) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { mes, unidades: 0, total: 0 };
@@ -10591,18 +10617,10 @@ function _recetaUsarPrecioReal(recetaId) {
 }
 
 function _precioVentaReal(receta) {
-  // Toma del array `ventas` el precio promedio del producto que matchee con esta receta,
-  // del mes más reciente con ventas. Útil para comparar contra el precio cargado a mano.
   if (!receta?.nombre || !ventas?.length) return null;
-  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const target = norm(receta.nombre);
-  if (!target) return null;
-  // Agrupar ventas matcheadas por mes (YYYY-MM)
   const porMes = {};
   ventas.forEach(v => {
-    const nom = norm(v.producto);
-    if (!nom) return;
-    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
+    if (_ventasMatchScore(receta.nombre, v.producto) < 0.5) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
@@ -11520,6 +11538,18 @@ function verReceta(recetaId) {
   const sinVincular = ings.filter(i => !i.insumoId && !i.recetaId).length;
   const s = RUBRO_STYLES[r.rubro] || { bg:'#F0EDE8', color:'#6B6760' };
 
+  // Panel de diagnóstico de match con ventas
+  const ventasMatch = r.tipo !== 'fabricacion' ? _ventasMatchReceta(r) : null;
+  const matchDiagHtml = r.tipo !== 'fabricacion' ? `
+    <div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;${ventasMatch ? 'background:#F0FDF4;border:1px solid #BBF7D0' : 'background:#FFF5F5;border:1px solid #FECACA'}">
+      <span style="font-size:16px">${ventasMatch ? '✓' : '✗'}</span>
+      <div>
+        ${ventasMatch
+          ? `<strong style="color:#15803D">Match en ventas: "${ventasMatch.producto}"</strong> <span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}% similitud)</span>`
+          : `<strong style="color:#DC2626">Sin match en ventas</strong> — el nombre de la receta no coincide con ningún producto vendido`}
+      </div>
+    </div>` : '';
+
   // Análisis del mes — consumo teórico + económico (solo si hay ventas)
   let analisisHtml = '';
   if (real && r.tipo !== 'fabricacion') {
@@ -11609,6 +11639,7 @@ function verReceta(recetaId) {
         <div style="font-size:1.2rem;font-weight:700">${r.nombre}</div>
         <div style="display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;margin-top:4px;background:${s.bg};color:${s.color}">${r.rubro || ''}</div>
         ${sinVincular ? `<div style="font-size:12px;color:var(--warn);margin-top:6px">⚠ ${sinVincular} ingrediente${sinVincular>1?'s':''} sin vincular</div>` : ''}
+        ${matchDiagHtml}
       </div>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
         ${costoTotal>0?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Costo lote</div><div style="font-weight:700;font-size:1.1rem">$${costoTotal.toFixed(2)}</div></div>`:''}
