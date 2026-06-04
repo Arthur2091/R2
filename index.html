@@ -1481,6 +1481,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <div id="selectorVentasLista" style="overflow-y:auto;flex:1;margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
     <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
       <button class="btn btn-outline" onclick="closeModal('modalSelectorVentas')">Cancelar</button>
+      <button class="btn btn-primary" onclick="closeModal('modalSelectorVentas');if(_currentVerRecetaId)verReceta(_currentVerRecetaId)">Listo</button>
     </div>
   </div>
 </div>
@@ -10573,7 +10574,8 @@ function _ventasMatchScore(a, b) {
 function _ventasMatchReceta(receta) {
   if (!receta?.nombre || !ventas?.length) return null;
   // Link manual tiene prioridad
-  if (receta.ventasProducto) return { producto: receta.ventasProducto, score: 1, manual: true };
+  const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
+  if (vps) return { producto: vps.join(', '), score: 1, manual: true, lista: vps };
   const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
   let best = null, bestScore = 0;
   productosUnicos.forEach(p => {
@@ -10590,8 +10592,9 @@ function _ventasPorMesReceta(receta) {
   const productoTarget = match.producto;
   const porMes = {};
   ventas.forEach(v => {
-    const coincide = receta.ventasProducto
-      ? v.producto === receta.ventasProducto
+    const vps = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
+    const coincide = vps
+      ? vps.includes(v.producto)
       : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
     if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
@@ -10658,8 +10661,9 @@ function _precioVentaReal(receta) {
   if (!receta?.nombre || !ventas?.length) return null;
   const porMes = {};
   ventas.forEach(v => {
-    const coincide = receta.ventasProducto
-      ? v.producto === receta.ventasProducto
+    const vps2 = receta.ventasProductos?.length ? receta.ventasProductos : (receta.ventasProducto ? [receta.ventasProducto] : null);
+    const coincide = vps2
+      ? vps2.includes(v.producto)
       : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
     if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
@@ -11282,54 +11286,71 @@ let _selectorVentasRecetaId = null;
 function _abrirSelectorProductoVentas(recetaId) {
   _selectorVentasRecetaId = recetaId;
   const r = recetas.find(x => x.id === recetaId);
-  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))].sort((a, b) => {
-    const sa = _ventasMatchScore(r?.nombre || '', a);
-    const sb = _ventasMatchScore(r?.nombre || '', b);
-    return sb - sa;
-  });
+  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))].sort((a, b) =>
+    _ventasMatchScore(r?.nombre || '', b) - _ventasMatchScore(r?.nombre || '', a)
+  );
   document.getElementById('selectorVentasSearch').value = '';
   _selectorVentasRender(productosUnicos);
   openModal('modalSelectorVentas');
 }
 
+function _selectorVentasSeleccionados() {
+  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
+  return new Set(r?.ventasProductos?.length ? r.ventasProductos : (r?.ventasProducto ? [r.ventasProducto] : []));
+}
+
 function _selectorVentasRender(productos) {
   const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  document.getElementById('selectorVentasLista').innerHTML = productos.map(p => {
-    const score = _ventasMatchScore(r?.nombre || '', p);
-    const isActual = r?.ventasProducto === p;
-    return `<button onclick="_vincularProductoVentas('${p.replace(/'/g,"\\'")}')"
-      style="text-align:left;padding:9px 12px;border-radius:8px;border:1px solid ${isActual ? 'var(--accent)' : 'var(--border)'};background:${isActual ? '#F0FDF4' : 'var(--surface)'};cursor:pointer;font:13px var(--font);display:flex;align-items:center;gap:8px"
-      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${isActual ? '#F0FDF4' : 'var(--surface)'}'">
-      <span style="flex:1">${p}</span>
-      ${score >= 0.5 ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#EDE9FE;color:#5B21B6;font-weight:600">${Math.round(score*100)}%</span>` : ''}
-      ${isActual ? '<span style="font-size:11px;color:var(--accent);font-weight:600">actual</span>' : ''}
-    </button>`;
-  }).join('') || '<div style="padding:20px;text-align:center;color:var(--ink3)">Sin productos cargados</div>';
+  const seleccionados = _selectorVentasSeleccionados();
+  document.getElementById('selectorVentasLista').innerHTML = `
+    ${seleccionados.size ? `<div style="padding:6px 0;margin-bottom:4px;font-size:11px;color:var(--ink2);font-weight:600">SELECCIONADOS: ${[...seleccionados].map(p=>`<span style="background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;display:inline-block">${p}</span>`).join('')}</div>` : ''}
+    ${productos.map(p => {
+      const score = _ventasMatchScore(r?.nombre || '', p);
+      const checked = seleccionados.has(p);
+      return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:1px solid ${checked ? 'var(--accent)' : 'var(--border)'};background:${checked ? '#F0FDF4' : 'var(--surface)'};cursor:pointer;font:13px var(--font)"
+        onmouseover="this.style.background='${checked ? '#F0FDF4' : 'var(--surface2)'}'" onmouseout="this.style.background='${checked ? '#F0FDF4' : 'var(--surface)'}'">
+        <input type="checkbox" ${checked ? 'checked' : ''} onchange="_selectorVentasToggle('${p.replace(/'/g,"\\'")}')" style="width:16px;height:16px;flex-shrink:0">
+        <span style="flex:1">${p}</span>
+        ${score >= 0.5 ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#EDE9FE;color:#5B21B6;font-weight:600">${Math.round(score*100)}%</span>` : ''}
+      </label>`;
+    }).join('')}
+  ` || '<div style="padding:20px;text-align:center;color:var(--ink3)">Sin productos cargados</div>';
+}
+
+function _selectorVentasToggle(producto) {
+  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
+  if (!r) return;
+  const set = _selectorVentasSeleccionados();
+  if (set.has(producto)) set.delete(producto); else set.add(producto);
+  r.ventasProductos = [...set];
+  delete r.ventasProducto;
+  persistRecetas();
+  // re-render preservando el scroll
+  const lista = document.getElementById('selectorVentasLista');
+  const scrollY = lista.scrollTop;
+  const q = _normVentas(document.getElementById('selectorVentasSearch').value);
+  const todos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
+  const filtrados = q ? todos.filter(p => _normVentas(p).includes(q)) : todos;
+  filtrados.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
+  _selectorVentasRender(filtrados);
+  lista.scrollTop = scrollY;
+  if (_currentVerRecetaId === _selectorVentasRecetaId) _reRenderReceta(_selectorVentasRecetaId);
 }
 
 function _selectorVentasFiltrar() {
   const q = _normVentas(document.getElementById('selectorVentasSearch').value);
   const r = recetas.find(x => x.id === _selectorVentasRecetaId);
   const todos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
-  const filtrados = q
-    ? todos.filter(p => _normVentas(p).includes(q)).sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a))
-    : todos.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
+  const filtrados = q ? todos.filter(p => _normVentas(p).includes(q)) : todos;
+  filtrados.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
   _selectorVentasRender(filtrados);
-}
-
-function _vincularProductoVentas(producto) {
-  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
-  if (!r) return;
-  r.ventasProducto = producto;
-  persistRecetas();
-  closeModal('modalSelectorVentas');
-  verReceta(_selectorVentasRecetaId);
 }
 
 function _desvincularProductoVentas(recetaId) {
   const r = recetas.find(x => x.id === recetaId);
   if (!r) return;
   delete r.ventasProducto;
+  delete r.ventasProductos;
   persistRecetas();
   verReceta(recetaId);
 }
@@ -11652,10 +11673,15 @@ function verReceta(recetaId) {
       <span style="font-size:16px">${ventasMatch ? '✓' : '✗'}</span>
       <div style="flex:1;min-width:0">
         ${ventasMatch
-          ? `<strong style="color:#15803D">${ventasMatch.manual ? '🔗 Vinculado manualmente' : 'Match automático'}: "${ventasMatch.producto}"</strong>${!ventasMatch.manual ? ` <span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}`
+          ? `<div>${ventasMatch.manual ? '🔗 <strong style="color:#15803D">Vinculado manualmente:</strong>' : '<strong style="color:#15803D">Match automático:</strong>'}
+              ${ventasMatch.lista
+                ? ventasMatch.lista.map(p => `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;margin:1px;font-size:11px">${p}</span>`).join('')
+                : `<span style="display:inline-block;background:#D1FAE5;color:#065F46;border-radius:4px;padding:1px 6px;font-size:11px">${ventasMatch.producto}</span>`}
+              ${!ventasMatch.manual ? `<span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}
+            </div>`
           : `<strong style="color:#DC2626">Sin match en ventas</strong>`}
       </div>
-      <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">${ventasMatch ? 'Cambiar' : 'Seleccionar producto'}</button>
+      <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">${ventasMatch ? 'Editar' : 'Seleccionar'}</button>
       ${ventasMatch?.manual ? `<button onclick="_desvincularProductoVentas('${r.id}')" style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--ink3)" title="Quitar vínculo">✕</button>` : ''}
     </div>` : '';
 
