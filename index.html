@@ -2953,6 +2953,10 @@ function openEditModal(id) {
 function saveInsumo() {
   const nombre = document.getElementById('fNombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+  const editId = document.getElementById('fEditId').value;
+  const normNombre = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  const duplicado = insumos.find(i => i.id !== editId && i.nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim() === normNombre);
+  if (duplicado) { toast(`Ya existe "${duplicado.nombre}" — renombrá con otro nombre o usá ese insumo directamente`, 'error'); return; }
 
   const data = {
     nombre,
@@ -2968,7 +2972,6 @@ function saveInsumo() {
     observaciones: document.getElementById('fObs').value.trim(),
   };
 
-  const editId   = document.getElementById('fEditId').value;
   const provId   = document.getElementById('fProveedor').value;
   let   insumoId = editId;
 
