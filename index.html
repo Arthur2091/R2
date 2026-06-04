@@ -10131,7 +10131,12 @@ function _parseExcelRecetas(wb) {
               while (i < rows.length) {
                 const ir = rows[i];
                 if (String(ir[c] || '').trim().startsWith('PRODUCTO')) break;
-                const c2 = String(ir[c+2] || '').trim().toUpperCase();
+                // Si encontramos el header de la siguiente sub-receta, salimos SIN consumirla
+                const ir_c1 = String(ir[c+1] || '').trim();
+                const ir_c2_raw = String(ir[c+2] || '').trim();
+                const isNextReceta = ir_c2_raw === 'COSTO' && typeof ir[c+4] === 'number' && ir[c+4] > 0 && (ir_c1.startsWith('*') || /^\d+$/.test(ir_c1));
+                if (isNextReceta) break;
+                const c2 = ir_c2_raw.toUpperCase();
                 // Detectar línea "COSTO X/POR <unidad>" — alternancia con longest-first y word boundaries para no comerse letras sueltas
                 const unitMatch = c2.match(/COSTO\s+(?:X|POR|PORC\.?)\s+(KG|LT|ML|GR|UNIDAD|UN|G\b|L\b)/);
                 const isCierre = unitMatch || c2.includes('TOTAL COSTO') || c2.includes('COSTO PORCION') || c2.includes('COSTO UNITARIO');
