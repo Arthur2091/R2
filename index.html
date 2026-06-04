@@ -2960,6 +2960,12 @@ function saveInsumo() {
     // Fusionar: redirigir todas las referencias al insumo existente y eliminar el actual
     proveedores.forEach(p => {
       (p.items || []).forEach(it => { if (it.insumoId === editId) it.insumoId = duplicado.id; });
+      // Eliminar duplicados: si el mismo insumoId aparece más de una vez, quedarse con la primera entrada
+      const seen = new Set();
+      p.items = (p.items || []).filter(it => {
+        if (!it.insumoId || !seen.has(it.insumoId)) { seen.add(it.insumoId); return true; }
+        return false;
+      });
     });
     precios.forEach(pr => { if (pr.insumoId === editId) pr.insumoId = duplicado.id; });
     (recetas || []).forEach(r => (r.ingredientes || []).forEach(ing => { if (ing.insumoId === editId) ing.insumoId = duplicado.id; }));
