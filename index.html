@@ -1453,6 +1453,18 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<div id="modalSelectorVentas" class="overlay">
+  <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
+    <h2 style="flex-shrink:0">Seleccionar producto en ventas</h2>
+    <p class="modal-sub" style="flex-shrink:0">Elegí el producto de ventas que corresponde a esta receta.</p>
+    <input id="selectorVentasSearch" type="text" placeholder="Buscar producto…" oninput="_selectorVentasFiltrar()" style="flex-shrink:0;margin-top:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+    <div id="selectorVentasLista" style="overflow-y:auto;flex:1;margin-top:8px;display:flex;flex-direction:column;gap:4px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
+      <button class="btn btn-outline" onclick="closeModal('modalSelectorVentas')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalCartaCmp" class="overlay">
   <div class="modal" style="max-width:860px;max-height:90vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
@@ -10538,8 +10550,9 @@ function _ventasMatchScore(a, b) {
 }
 
 function _ventasMatchReceta(receta) {
-  // Devuelve { producto, score } del mejor match en ventas, o null
   if (!receta?.nombre || !ventas?.length) return null;
+  // Link manual tiene prioridad
+  if (receta.ventasProducto) return { producto: receta.ventasProducto, score: 1, manual: true };
   const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
   let best = null, bestScore = 0;
   productosUnicos.forEach(p => {
@@ -10553,9 +10566,13 @@ function _ventasPorMesReceta(receta) {
   if (!receta?.nombre || !ventas?.length) return [];
   const match = _ventasMatchReceta(receta);
   if (!match) return [];
+  const productoTarget = match.producto;
   const porMes = {};
   ventas.forEach(v => {
-    if (_ventasMatchScore(receta.nombre, v.producto) < 0.5) return;
+    const coincide = receta.ventasProducto
+      ? v.producto === receta.ventasProducto
+      : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
+    if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { mes, unidades: 0, total: 0 };
@@ -10620,7 +10637,10 @@ function _precioVentaReal(receta) {
   if (!receta?.nombre || !ventas?.length) return null;
   const porMes = {};
   ventas.forEach(v => {
-    if (_ventasMatchScore(receta.nombre, v.producto) < 0.5) return;
+    const coincide = receta.ventasProducto
+      ? v.producto === receta.ventasProducto
+      : _ventasMatchScore(receta.nombre, v.producto) >= 0.5;
+    if (!coincide) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
@@ -11227,6 +11247,64 @@ function _toggleRubroSection(header) {
   tog.classList.toggle('open');
 }
 
+/* ── SELECTOR MANUAL PRODUCTO VENTAS ────────────────────────────── */
+let _selectorVentasRecetaId = null;
+
+function _abrirSelectorProductoVentas(recetaId) {
+  _selectorVentasRecetaId = recetaId;
+  const r = recetas.find(x => x.id === recetaId);
+  const productosUnicos = [...new Set(ventas.map(v => v.producto).filter(Boolean))].sort((a, b) => {
+    const sa = _ventasMatchScore(r?.nombre || '', a);
+    const sb = _ventasMatchScore(r?.nombre || '', b);
+    return sb - sa;
+  });
+  document.getElementById('selectorVentasSearch').value = '';
+  _selectorVentasRender(productosUnicos);
+  openModal('modalSelectorVentas');
+}
+
+function _selectorVentasRender(productos) {
+  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
+  document.getElementById('selectorVentasLista').innerHTML = productos.map(p => {
+    const score = _ventasMatchScore(r?.nombre || '', p);
+    const isActual = r?.ventasProducto === p;
+    return `<button onclick="_vincularProductoVentas('${p.replace(/'/g,"\\'")}')"
+      style="text-align:left;padding:9px 12px;border-radius:8px;border:1px solid ${isActual ? 'var(--accent)' : 'var(--border)'};background:${isActual ? '#F0FDF4' : 'var(--surface)'};cursor:pointer;font:13px var(--font);display:flex;align-items:center;gap:8px"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='${isActual ? '#F0FDF4' : 'var(--surface)'}'">
+      <span style="flex:1">${p}</span>
+      ${score >= 0.5 ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#EDE9FE;color:#5B21B6;font-weight:600">${Math.round(score*100)}%</span>` : ''}
+      ${isActual ? '<span style="font-size:11px;color:var(--accent);font-weight:600">actual</span>' : ''}
+    </button>`;
+  }).join('') || '<div style="padding:20px;text-align:center;color:var(--ink3)">Sin productos cargados</div>';
+}
+
+function _selectorVentasFiltrar() {
+  const q = _normVentas(document.getElementById('selectorVentasSearch').value);
+  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
+  const todos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
+  const filtrados = q
+    ? todos.filter(p => _normVentas(p).includes(q)).sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a))
+    : todos.sort((a,b) => _ventasMatchScore(r?.nombre||'',b) - _ventasMatchScore(r?.nombre||'',a));
+  _selectorVentasRender(filtrados);
+}
+
+function _vincularProductoVentas(producto) {
+  const r = recetas.find(x => x.id === _selectorVentasRecetaId);
+  if (!r) return;
+  r.ventasProducto = producto;
+  persistRecetas();
+  closeModal('modalSelectorVentas');
+  verReceta(_selectorVentasRecetaId);
+}
+
+function _desvincularProductoVentas(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  delete r.ventasProducto;
+  persistRecetas();
+  verReceta(recetaId);
+}
+
 /* ── COMPARACIÓN CON CARTA ───────────────────────────────────────── */
 const CARTA_PRODUCTOS = [
   { cat:'Café de Especialidad', items:['Espresso','Lungo','Americano','Doppio','Cortado en pocillo','Cortado en vasito','Americano doble','Latte','Capuccino','Mocaccino','Flat White'] },
@@ -11543,11 +11621,13 @@ function verReceta(recetaId) {
   const matchDiagHtml = r.tipo !== 'fabricacion' ? `
     <div style="margin:10px 0;padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:8px;${ventasMatch ? 'background:#F0FDF4;border:1px solid #BBF7D0' : 'background:#FFF5F5;border:1px solid #FECACA'}">
       <span style="font-size:16px">${ventasMatch ? '✓' : '✗'}</span>
-      <div>
+      <div style="flex:1;min-width:0">
         ${ventasMatch
-          ? `<strong style="color:#15803D">Match en ventas: "${ventasMatch.producto}"</strong> <span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}% similitud)</span>`
-          : `<strong style="color:#DC2626">Sin match en ventas</strong> — el nombre de la receta no coincide con ningún producto vendido`}
+          ? `<strong style="color:#15803D">${ventasMatch.manual ? '🔗 Vinculado manualmente' : 'Match automático'}: "${ventasMatch.producto}"</strong>${!ventasMatch.manual ? ` <span style="color:var(--ink3)">(${Math.round(ventasMatch.score*100)}%)</span>` : ''}`
+          : `<strong style="color:#DC2626">Sin match en ventas</strong>`}
       </div>
+      <button onclick="_abrirSelectorProductoVentas('${r.id}')" style="flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font:12px var(--font);cursor:pointer;color:var(--ink2)">${ventasMatch ? 'Cambiar' : 'Seleccionar producto'}</button>
+      ${ventasMatch?.manual ? `<button onclick="_desvincularProductoVentas('${r.id}')" style="flex-shrink:0;background:none;border:none;cursor:pointer;font-size:11px;color:var(--ink3)" title="Quitar vínculo">✕</button>` : ''}
     </div>` : '';
 
   // Análisis del mes — consumo teórico + económico (solo si hay ventas)
