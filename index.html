@@ -1453,6 +1453,26 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   </div>
 </div>
 
+<div id="modalGestionVinculos" class="overlay">
+  <div class="modal" style="max-width:780px;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <h2 style="margin:0;flex:1">Vínculos con ventas</h2>
+      <span id="gvStats" style="font-size:12px;color:var(--ink3)"></span>
+    </div>
+    <input id="gvSearch" type="text" placeholder="Buscar receta…" oninput="_gvRender()" style="flex-shrink:0;margin-top:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);outline:none">
+    <div style="flex-shrink:0;margin-top:6px;display:flex;gap:8px">
+      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='todos';_gvRender()">Todos</button>
+      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='sin';_gvRender()">Sin vínculo</button>
+      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='manual';_gvRender()">Manuales</button>
+      <button class="btn btn-sm btn-outline" onclick="_gvFiltro='auto';_gvRender()">Automáticos</button>
+    </div>
+    <div id="gvLista" style="overflow-y:auto;flex:1;margin-top:10px;display:flex;flex-direction:column;gap:4px"></div>
+    <div class="modal-actions" style="flex-shrink:0;margin-top:12px">
+      <button class="btn btn-outline" onclick="closeModal('modalGestionVinculos')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div id="modalSelectorVentas" class="overlay">
   <div class="modal" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
     <h2 style="flex-shrink:0">Seleccionar producto en ventas</h2>
@@ -1687,6 +1707,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <input type="file" id="inputInsumosXls" accept=".xlsx,.xls" style="display:none" onchange="importarInsumosExcel(this)">
     <button class="btn btn-outline" onclick="document.getElementById('inputExcelRecetas').click()">Importar recetas</button>
     <input type="file" id="inputExcelRecetas" accept=".xlsx,.xls" style="display:none" onchange="_impArrancar(this)">
+    <button class="btn btn-outline" onclick="_abrirGestionVinculos()">🔗 Vínculos ventas</button>
     <button class="btn btn-outline" onclick="_abrirComparacionCarta()">📋 Comparar con carta</button>
     <button class="btn btn-primary" onclick="openNuevaReceta()">+ Receta</button>
     <button id="btnSeleccionarRecetas" class="btn btn-outline" onclick="_toggleModoSeleccion()">Seleccionar</button>
@@ -11128,21 +11149,29 @@ function renderRecetas() {
     </div>`;
   };
 
-  // Card para recetas sin grupo (añadidas manualmente)
-  const renderCardConSelector = (r) => {
+  // Card sin rubro — incluye selector de rubro
+  const renderCardSinRubro = (r) => {
     const ings     = r.ingredientes || [];
     const mapeados = ings.filter(i => i.insumoId).length;
-    const cs       = _cardStyle(r);
-    return `<div class="receta-card" style="border-left:3px solid ${cs.color}" onclick="verReceta('${r.id}')">
-      <div class="receta-card-header">
+    return `<div class="receta-card" style="border-left:3px solid #C2410C">
+      <div class="receta-card-header" onclick="verReceta('${r.id}')">
         <div style="flex:1">
           <div class="receta-card-title">${r.nombre}</div>
           <div class="receta-card-meta">${mapeados}/${ings.length} ing.${r.precioVenta?' · $'+r.precioVenta:''}</div>
         </div>
         <button onclick="event.stopPropagation();_ocultarReceta('${r.id}')" title="Dar de baja" style="background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--ink3);font-size:12px;line-height:1;flex-shrink:0" onmouseover="this.style.background='#FEE2E2';this.style.color='#DC2626'" onmouseout="this.style.background='none';this.style.color='var(--ink3)'">✕</button>
       </div>
+      <div style="padding:6px 14px 10px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
+        <select onchange="_cambiarRubroReceta('${r.id}',this.value)"
+          style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid #F59E0B;background:#FFFBEB;color:#92400E;font-family:var(--font);cursor:pointer;font-weight:600">
+          <option value="">⚠️ Sin rubro</option>${rubroOpts}
+        </select>
+      </div>
     </div>`;
   };
+
+  // Card normal — sin selector
+  const renderCardConSelector = (r) => renderCard(r);
 
   document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
     const rs    = byRubro[rubro];
@@ -11174,7 +11203,7 @@ function renderRecetas() {
     }).join('');
 
     const sinGrupoHtml = sinGrupo.length
-      ? `<div class="recetas-grid">${[...sinGrupo].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => renderCardConSelector(r)).join('')}</div>`
+      ? `<div class="recetas-grid">${[...sinGrupo].sort((a,b)=>a.nombre.localeCompare(b.nombre,'es')).map(r => isSin ? renderCardSinRubro(r) : renderCard(r)).join('')}</div>`
       : '';
 
     return `<div class="rubro-section" style="border-color:${s.bg}">
