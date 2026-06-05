@@ -566,7 +566,8 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 }
 .contable-section-header:hover { background: var(--surface2); }
 .contable-section-header h3 { font-size: 14px; font-weight: 600; }
-.contable-section-header .section-total { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.contable-section-header .section-total { font-family: var(--mono); font-size: 15px; font-weight: 600; visibility: hidden; }
+.contable-section.is-open .contable-section-header .section-total { visibility: visible; }
 .contable-section-body { padding: 0; }
 .contable-section-body table { width: 100%; border-collapse: collapse; }
 .contable-section-body td, .contable-section-body th {
@@ -6072,22 +6073,18 @@ function toggleSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
   const opening = el.style.display === 'none';
-  if (opening) {
-    document.querySelectorAll('.contable-section-body').forEach(body => {
-      if (body.id !== id) {
-        body.style.display = 'none';
-        const t = document.getElementById(body.id + 'Toggle');
-        if (t) t.textContent = '▼';
-        const hdr = body.previousElementSibling;
-        if (hdr) hdr.querySelectorAll('.section-total').forEach(s => s.style.visibility = 'hidden');
-      }
-    });
-  }
+  document.querySelectorAll('.contable-section-body').forEach(body => {
+    if (body.id !== id) {
+      body.style.display = 'none';
+      const t = document.getElementById(body.id + 'Toggle');
+      if (t) t.textContent = '▼';
+      body.closest('.contable-section')?.classList.remove('is-open');
+    }
+  });
   el.style.display = opening ? '' : 'none';
   const tog = document.getElementById(id + 'Toggle');
   if (tog) tog.textContent = opening ? '▲' : '▼';
-  const myHdr = el.previousElementSibling;
-  if (myHdr) myHdr.querySelectorAll('.section-total').forEach(s => s.style.visibility = opening ? '' : 'hidden');
+  el.closest('.contable-section')?.classList.toggle('is-open', opening);
 }
 
 function pesos(n) {
