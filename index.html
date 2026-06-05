@@ -1765,7 +1765,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         <div style="font-size:12px;font-weight:600;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Ingredientes</div>
         <div id="erIngList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px"></div>
         <!-- Agregar insumo -->
-        <div style="margin-bottom:6px">
+        <div id="erSearchInsWrap" style="margin-bottom:6px">
           <input id="erSearchIns" type="text" placeholder="Agregar insumo…"
             style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);outline:none;box-sizing:border-box"
             oninput="_erBuscarIns(this.value)">
@@ -10771,9 +10771,25 @@ function _erBuscarIns(q) {
 function _erBuscarRec(q) {
   const res = document.getElementById('erResRec');
   const rid = document.getElementById('erRecetaId').value;
+  const tipoActual = document.querySelector('input[name="erTipo"]:checked')?.value;
   const qLower = (q || '').toLowerCase().trim();
-  let lista = recetas.filter(r => r.id !== rid);
-  if (qLower) lista = lista.filter(r => r.nombre.toLowerCase().includes(qLower) || (r.rubro||'').toLowerCase().includes(qLower));
+  let lista = recetas.filter(r => r.id !== rid && r.tipo !== tipoActual);
+  const actual = recetas.find(r => r.id === rid);
+  const palabras = (actual?.nombre || '').toLowerCase().split(/\s+/).filter(p => p.length > 2);
+  const score = r => {
+    const n = r.nombre.toLowerCase();
+    let s = 0;
+    palabras.forEach(p => { if (n.startsWith(p)) s += 3; else if (n.includes(p)) s += 1; });
+    if (r.rubro && r.rubro === actual?.rubro) s += 1;
+    return s;
+  };
+  if (!qLower) {
+    lista = lista.map(r => ({ r, s: score(r) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 8).map(x => x.r);
+    if (!lista.length) { res.innerHTML = ''; return; }
+  } else {
+    lista = lista.filter(r => r.nombre.toLowerCase().includes(qLower) || (r.rubro||'').toLowerCase().includes(qLower));
+    lista = lista.map(r => ({ r, s: score(r) })).sort((a, b) => b.s - a.s).map(x => x.r).slice(0, 50);
+  }
   lista = lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).slice(0, 50);
   if (!lista.length) { res.innerHTML = '<span style="font-size:12px;color:var(--ink3)">Sin resultados</span>'; return; }
   res.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:4px;max-height:180px;overflow-y:auto;padding:4px 0">` + lista.map(r =>
@@ -10804,9 +10820,7 @@ function _erAddRec(subRecetaId) {
 
 function _erResetSearch() {
   ['erSearchIns','erSearchRec'].forEach(id => document.getElementById(id).value = '');
-  // Mostrar la lista completa inicial (sin filtro) en vez de vacío
-  _erBuscarIns('');
-  _erBuscarRec('');
+  ['erResIns','erResRec'].forEach(id => document.getElementById(id).innerHTML = '');
 }
 
 function _setErTipo(tipo) {
@@ -10816,6 +10830,8 @@ function _setErTipo(tipo) {
   });
   const areaWrap = document.getElementById('erAreaWrap');
   if (areaWrap) areaWrap.style.display = tipo === 'fabricacion' ? 'block' : 'none';
+  const insWrap = document.getElementById('erSearchInsWrap');
+  if (insWrap) insWrap.style.display = tipo === 'venta' ? 'none' : '';
 }
 
 function _setErArea(area) {
@@ -10895,12 +10911,24 @@ function saveEditReceta() {
     recetas.push({ id: crypto.randomUUID(), ...data });
   }
   persistRecetas();
-  closeModal('modalEditReceta');
   toast(recetaId ? 'Receta actualizada' : 'Receta creada', 'success');
+  const abiertas = [...document.querySelectorAll('.rubro-section-header')].filter(h => h.nextElementSibling?.classList.contains('open')).map(h => h.querySelector('.rubro-label')?.textContent?.trim()).filter(Boolean);
+  const scrollY = window.scrollY;
   if (recetaId && _currentVerRecetaId) {
     _reRenderReceta(recetaId);
   } else {
     renderRecetas();
+    requestAnimationFrame(() => {
+      abiertas.forEach(label => {
+        document.querySelectorAll('.rubro-section-header').forEach(h => {
+          if (h.querySelector('.rubro-label')?.textContent?.trim() === label) {
+            h.nextElementSibling?.classList.add('open');
+            h.querySelector('.rubro-toggle')?.classList.add('open');
+          }
+        });
+      });
+      window.scrollTo(0, scrollY);
+    });
   }
 }
 
