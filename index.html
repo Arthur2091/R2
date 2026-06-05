@@ -10435,6 +10435,32 @@ function _finalizarImportRecetas() {
 }
 
 
+/* ── VENTA ALIAS ─────────────────────────────────────────────────── */
+let ventaAlias = JSON.parse(localStorage.getItem('ventaAlias') || '{}');
+function _persistVentaAlias() { localStorage.setItem('ventaAlias', JSON.stringify(ventaAlias)); }
+function setVentaAlias(recetaId, producto) {
+  if (producto) ventaAlias[recetaId] = producto; else delete ventaAlias[recetaId];
+  _persistVentaAlias();
+}
+function _ventaTarget(receta) {
+  return ventaAlias[receta.id] || receta.nombre;
+}
+function _ventasSugerencias(receta) {
+  if (!ventas?.length) return [];
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').trim();
+  const target = norm(_ventaTarget(receta));
+  const palabras = target.split(/\s+/).filter(p => p.length > 2);
+  const productos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
+  return productos.map(p => {
+    const n = norm(p);
+    let s = 0;
+    if (n === target) s = 100;
+    else if (n.includes(target) || target.includes(n)) s = 50;
+    else palabras.forEach(w => { if (n.includes(w)) s += 10; });
+    return { producto: p, score: s };
+  }).filter(x => x.score > 0).sort((a,b) => b.score - a.score).slice(0, 20).map(x => x.producto);
+}
+
 /* ── CONFIG COSTOS GLOBALES ─────────────────────────────────────── */
 function _cfgMargen()  { return parseFloat(localStorage.getItem('cons_margen_obj') || '0') || 0; }
 function _cfgExtras()  { return parseFloat(localStorage.getItem('cons_costos_extra') || '0') || 0; }
@@ -10513,13 +10539,14 @@ function _ventasPorMesReceta(receta) {
   // Devuelve un array de { mes, unidades, total, promedio } ordenado desc por mes.
   if (!receta?.nombre || !ventas?.length) return [];
   const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const target = norm(receta.nombre);
+  const alias = ventaAlias[receta.id];
+  const target = norm(alias || receta.nombre);
   if (!target) return [];
   const porMes = {};
   ventas.forEach(v => {
     const nom = norm(v.producto);
     if (!nom) return;
-    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
+    if (alias ? nom !== target : (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom))))) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { mes, unidades: 0, total: 0 };
@@ -10585,14 +10612,15 @@ function _precioVentaReal(receta) {
   // del mes más reciente con ventas. Útil para comparar contra el precio cargado a mano.
   if (!receta?.nombre || !ventas?.length) return null;
   const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const target = norm(receta.nombre);
+  const alias = ventaAlias[receta.id];
+  const target = norm(alias || receta.nombre);
   if (!target) return null;
   // Agrupar ventas matcheadas por mes (YYYY-MM)
   const porMes = {};
   ventas.forEach(v => {
     const nom = norm(v.producto);
     if (!nom) return;
-    if (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom)))) return;
+    if (alias ? nom !== target : (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom))))) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
@@ -11455,13 +11483,24 @@ function verReceta(recetaId) {
           </div>
         </div>`:''}
         ${real
-          ? `<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta · ${realMesTxt}</div><div style="font-weight:700;font-size:1.1rem;color:var(--accent)" title="${real.unidades}u vendidas · total $${real.total.toLocaleString('es-AR',{maximumFractionDigits:0})}">$${real.promedio.toFixed(0)}</div></div>`
-          : `<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div><div style="font-weight:500;font-size:1.1rem;color:var(--ink3)">—</div></div>`}
+          ? `<div style="text-align:right">
+               <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">
+                 Precio venta · ${realMesTxt}
+                 ${ventaAlias[r.id] ? `<span style="font-size:10px;color:var(--info);margin-left:4px" title="Vinculado a: ${ventaAlias[r.id]}">🔗</span>` : ''}
+               </div>
+               <div style="font-weight:700;font-size:1.1rem;color:var(--accent)" title="${real.unidades}u vendidas · total $${real.total.toLocaleString('es-AR',{maximumFractionDigits:0})}">$${real.promedio.toFixed(0)}</div>
+               ${ventaAlias[r.id] ? `<div style="font-size:11px;color:var(--ink3);margin-top:2px">${ventaAlias[r.id]} <button onclick="_desvincularVenta('${r.id}')" style="font-size:10px;border:none;background:none;cursor:pointer;color:var(--ink3)" title="Desvincular">✕</button></div>` : ''}
+             </div>`
+          : `<div style="text-align:right">
+               <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div>
+               <button onclick="_abrirVinculacionVenta('${r.id}')" style="font-size:12px;padding:4px 10px;border:1px dashed var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--info);margin-top:4px">🔗 Vincular ventas</button>
+             </div>`}
         ${margen!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Margen actual</div><div style="font-weight:700;font-size:1.1rem;color:${margenOk?'var(--accent)':'#B91C1C'}">${margen}% <span style="font-size:11px;color:var(--ink3);font-weight:400">vs ${margenObj}% obj.</span></div></div>`:''}
         ${markup!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Markup</div><div style="font-weight:700;font-size:1.1rem;color:var(--info)">${markup}%</div></div>`:''}
         <button class="btn btn-outline btn-sm" onclick="openEditReceta('${r.id}')">Editar</button>
       </div>
     </div>
+    <div id="_vincWrap_${r.id.replace(/-/g,'_')}"></div>
     <div class="table-wrap"><table>
       <thead><tr>
         <th>Ingrediente</th>
@@ -11624,6 +11663,57 @@ function limpiarRecetas() {
   persistRecetas();
   renderRecetas();
   toast('Recetas eliminadas');
+}
+
+/* ── VINCULACION VENTAS ──────────────────────────────────────────── */
+function _abrirVinculacionVenta(recetaId) {
+  const r = recetas.find(x => x.id === recetaId);
+  if (!r) return;
+  const sugs = _ventasSugerencias(r);
+  const wrap = document.getElementById('_vincWrap_' + recetaId.replace(/-/g,'_'));
+  if (!wrap) return;
+  const allProds = [...new Set((ventas||[]).map(v => v.producto).filter(Boolean))].sort();
+  wrap.innerHTML = `
+    <div style="margin-top:8px;padding:10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px">Seleccioná el producto de ventas</div>
+      <input id="_vincSearch_${recetaId.replace(/-/g,'_')}" type="text" placeholder="Buscar producto..."
+        oninput="_filtrarVincVenta('${recetaId}')"
+        style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px;box-sizing:border-box">
+      <div id="_vincList_${recetaId.replace(/-/g,'_')}" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
+        ${sugs.map(p => `<button onclick="_seleccionarVenta('${recetaId}','${p.replace(/'/g,"\\'")}')"
+          style="text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)">${p}</button>`).join('')}
+        ${!sugs.length ? '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin sugerencias — buscá por nombre</div>' : ''}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:8px">
+        <div style="font-size:11px;color:var(--ink3)">${sugs.length} sugerencia${sugs.length!==1?'s':''} · ${allProds.length} productos totales</div>
+        <button onclick="document.getElementById('_vincWrap_${recetaId.replace(/-/g,'_')}').innerHTML=''" style="font-size:11px;border:none;background:none;cursor:pointer;color:var(--ink3)">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function _filtrarVincVenta(recetaId) {
+  const sid = recetaId.replace(/-/g,'_');
+  const q = (document.getElementById('_vincSearch_' + sid)?.value || '').toLowerCase().trim();
+  const lista = document.getElementById('_vincList_' + sid);
+  if (!lista) return;
+  const allProds = [...new Set((ventas||[]).map(v => v.producto).filter(Boolean))].sort();
+  const filtrados = q ? allProds.filter(p => p.toLowerCase().includes(q)) : allProds;
+  lista.innerHTML = filtrados.slice(0, 30).map(p =>
+    `<button onclick="_seleccionarVenta('${recetaId}','${p.replace(/'/g,"\\'")}')"
+      style="text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)">${p}</button>`
+  ).join('') || '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin resultados</div>';
+}
+
+function _seleccionarVenta(recetaId, producto) {
+  setVentaAlias(recetaId, producto);
+  toast(`Vinculado a "${producto}"`, 'success');
+  _reRenderReceta(recetaId);
+}
+
+function _desvincularVenta(recetaId) {
+  setVentaAlias(recetaId, null);
+  toast('Vínculo eliminado', 'info');
+  _reRenderReceta(recetaId);
 }
 
 
