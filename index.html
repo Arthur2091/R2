@@ -10923,6 +10923,7 @@ function saveEditReceta() {
   }
   persistRecetas();
   toast(recetaId ? 'Receta actualizada' : 'Receta creada', 'success');
+  closeModal('modalEditReceta');
   const abiertas = [...document.querySelectorAll('.rubro-section-header')].filter(h => h.nextElementSibling?.classList.contains('open')).map(h => h.querySelector('.rubro-label')?.textContent?.trim()).filter(Boolean);
   const scrollY = window.scrollY;
   if (recetaId && _currentVerRecetaId) {
