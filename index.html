@@ -6071,9 +6071,19 @@ function initContableView() {
 function toggleSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.style.display = el.style.display === 'none' ? '' : 'none';
+  const opening = el.style.display === 'none';
+  if (opening) {
+    document.querySelectorAll('.contable-section-body').forEach(body => {
+      if (body.id !== id) {
+        body.style.display = 'none';
+        const t = document.getElementById(body.id + 'Toggle');
+        if (t) t.textContent = '▼';
+      }
+    });
+  }
+  el.style.display = opening ? '' : 'none';
   const tog = document.getElementById(id + 'Toggle');
-  if (tog) tog.textContent = el.style.display === 'none' ? '▼' : '▲';
+  if (tog) tog.textContent = opening ? '▲' : '▼';
 }
 
 function pesos(n) {
