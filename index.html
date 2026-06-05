@@ -6078,12 +6078,16 @@ function toggleSection(id) {
         body.style.display = 'none';
         const t = document.getElementById(body.id + 'Toggle');
         if (t) t.textContent = '▼';
+        const hdr = body.previousElementSibling;
+        if (hdr) hdr.querySelectorAll('.section-total').forEach(s => s.style.visibility = 'hidden');
       }
     });
   }
   el.style.display = opening ? '' : 'none';
   const tog = document.getElementById(id + 'Toggle');
   if (tog) tog.textContent = opening ? '▲' : '▼';
+  const myHdr = el.previousElementSibling;
+  if (myHdr) myHdr.querySelectorAll('.section-total').forEach(s => s.style.visibility = opening ? '' : 'hidden');
 }
 
 function pesos(n) {
