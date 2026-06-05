@@ -11253,7 +11253,27 @@ function _calcCostoRecetaUnd(rid, _visited) {
 
 function _navBack() {
   const prev = _navStack.pop();
-  if (!prev || prev.type === 'lista') { renderRecetas(); return; }
+  const lastId = _currentVerRecetaId;
+  if (!prev || prev.type === 'lista') {
+    renderRecetas();
+    requestAnimationFrame(() => {
+      const r = recetas.find(x => x.id === lastId);
+      const rubroLabel = r?.rubro || (r ? 'Sin rubro asignado' : null);
+      if (rubroLabel) {
+        document.querySelectorAll('.rubro-section-header').forEach(h => {
+          if (h.querySelector('.rubro-label')?.textContent?.trim() === rubroLabel) {
+            h.nextElementSibling?.classList.add('open');
+            h.querySelector('.rubro-toggle')?.classList.add('open');
+          }
+        });
+      }
+      requestAnimationFrame(() => {
+        const card = document.querySelector(`.receta-card[onclick*="${lastId}"], .receta-card-header[onclick*="${lastId}"]`);
+        if (card) (card.closest('.receta-card') || card).scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    });
+    return;
+  }
   _navSkipPush = true;
   verReceta(prev.id);
   _navSkipPush = false;
