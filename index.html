@@ -872,6 +872,13 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
           </div>
         </div>
         <div style="font-size:11px;color:var(--ink3);margin-top:-4px">Vencimiento = fecha de la boleta + días. Dejá 0 (o vacío) para pago contra entrega.</div>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border-radius:8px;cursor:pointer;margin-top:4px">
+          <input type="checkbox" id="provOcultarPedidosCheck" style="width:16px;height:16px;flex-shrink:0">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--ink2)">Ocultar en Pedidos</div>
+            <div style="font-size:11px;color:var(--ink3)">No hace pedidos por WhatsApp</div>
+          </div>
+        </label>
       </div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeProvTelModal()">Cancelar</button>
@@ -5466,7 +5473,10 @@ function _bAbrirNuevoProvDesdeBoleta() {
   window.guardarNuevoProv = function() {
     const nombre = document.getElementById('nuevoProvNombre').value.trim();
     oldGuardar();  // crea + persiste
-    if (nombre && proveedores.find(p => p.nombre === nombre)) {
+    const newProv = nombre ? proveedores.find(p => p.nombre === nombre) : null;
+    if (newProv) {
+      const enPedidos = confirm(`¿"${nombre}" hace pedidos por WhatsApp?\n\nSí → aparece en la vista de Pedidos\nNo → se oculta de Pedidos`);
+      if (!enPedidos) { newProv.ocultarEnPedidos = true; persist(); }
       _bProvName = nombre;
       const input = document.getElementById('boletaDetectedProv');
       if (input) input.value = nombre;
@@ -13342,7 +13352,11 @@ function renderPedidos() {
   };
   const TOP_N = 10;
   const conQty = prov => Object.values(_pedQty[prov.id] || {}).some(v => v > 0);
-  const _provsActivosFirst = [...proveedores].sort((a,b) => {
+  const _provsOcultos  = proveedores.filter(p => p.ocultarEnPedidos && !conQty(p));
+  const _provsVisibles = (window._pedMostrarOcultos)
+    ? proveedores
+    : proveedores.filter(p => !p.ocultarEnPedidos || conQty(p));
+  const _provsActivosFirst = [..._provsVisibles].sort((a,b) => {
     const ca = conQty(a), cb = conQty(b);
     if (ca !== cb) return cb - ca;
     return (_ultimaActividad(b) || '').localeCompare(_ultimaActividad(a) || '');
@@ -13439,7 +13453,14 @@ function renderPedidos() {
             ${_verTodos ? '▲ Mostrar solo los últimos 10' : `▼ Ver todos los proveedores (${_hayMas} más)`}
           </button>
         </div>` : '';
-    screen.innerHTML = `<div class="ped-grid">${cardsHtml}</div>${toggleBtn}`;
+    const ocultosBtn = _provsOcultos.length > 0
+      ? `<div style="text-align:center;margin-top:14px;font-size:12px;color:var(--ink3)">
+          ${_provsOcultos.length} proveedor${_provsOcultos.length === 1 ? '' : 'es'} oculto${_provsOcultos.length === 1 ? '' : 's'} (sin WhatsApp) —
+          <button onclick="window._pedMostrarOcultos=!window._pedMostrarOcultos;renderPedidos()" style="background:none;border:none;color:var(--info);cursor:pointer;font-size:12px;padding:0;text-decoration:underline">
+            ${window._pedMostrarOcultos ? 'ocultar' : 'mostrar'}
+          </button>
+        </div>` : '';
+    screen.innerHTML = `<div class="ped-grid">${cardsHtml}</div>${toggleBtn}${ocultosBtn}`;
   }
 
   const resumen = document.getElementById('pedidosResumen');
@@ -13546,6 +13567,7 @@ function openProvTelModal(provId) {
   document.getElementById('provTelInput').value = prov?.telefono || '';
   document.getElementById('provCondPagoInput').value = prov?.condicionPago || '';
   document.getElementById('provDiasPagoInput').value = (prov?.diasPago != null) ? prov.diasPago : '';
+  document.getElementById('provOcultarPedidosCheck').checked = !!prov?.ocultarEnPedidos;
   document.getElementById('provTelModal').classList.add('open');
   setTimeout(() => document.getElementById('provTelInput').focus(), 50);
 }
@@ -13580,6 +13602,7 @@ function guardarTelProv() {
   prov.condicionPago = document.getElementById('provCondPagoInput').value || null;
   const dias = parseInt(document.getElementById('provDiasPagoInput').value, 10);
   prov.diasPago = isFinite(dias) && dias >= 0 ? dias : null;
+  prov.ocultarEnPedidos = document.getElementById('provOcultarPedidosCheck').checked;
   persist();
   closeProvTelModal();
   renderProveedores();
