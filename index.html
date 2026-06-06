@@ -13620,7 +13620,7 @@ function enviarPedidoWA(provId) {
   if (!items.length) return;
 
   const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
-  let msg = `Hola Buenos días, ${prov.nombre}\nLes dejamos el detalle del pedido.\n\n`;
+  let msg = `Hola Buenos días,\nLes dejamos el detalle del pedido.\n\n`;
   items.forEach(([iid, qty]) => {
     const ins = insumos.find(i => i.id === iid);
     if (ins) msg += `• ${ins.nombre}: ${qty}\n`;
