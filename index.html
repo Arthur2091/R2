@@ -2238,6 +2238,7 @@ let _navSkipPush = false;
 let _pendingRecetas  = [];
 let _matchMap        = {};
 let _matchPendientes = [];
+let arcaPendientes   = [];  // facturas ARCA sin proveedor conocido → "Para Revisar"
 
 
 
@@ -2366,6 +2367,7 @@ function persist() {
     _fbWrite('pedidosPendientes', { items: pedidosPendientes }),
     _fbWrite('deposito',          { stock: deposito, movs: depositoMovs }),
     _fbWrite('produccion',        { stock: stockBarra, movs: produccionMovs }),
+    _fbWrite('arca_pendientes',   { items: arcaPendientes }),
   ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
@@ -2426,9 +2428,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 const SUBNAV_GROUPS = {
   compras: [
-    { id: 'viewProveedores', label: 'Proveedores' },
-    { id: 'viewBoletas',     label: '📷 Cargar Boletas' },
-    { id: 'viewPrecios',     label: 'Comparar precios' },
+    { id: 'viewProveedores',    label: 'Proveedores' },
+    { id: 'viewBoletas',        label: '📷 Cargar Boletas' },
+    { id: 'viewPrecios',        label: 'Comparar precios' },
+    { id: 'viewARCAPendientes', label: '🏛 Para Revisar' },
   ],
   stock: [
     { id: 'viewDeposito',  label: 'Depósito' },
@@ -2465,8 +2468,9 @@ function _switchSub(group, viewId) {
 
 function _onViewActivate(viewId) {
   const map = {
-    viewProveedores: renderProveedores,
-    viewBoletas:     initBoletasView,
+    viewProveedores:    renderProveedores,
+    viewBoletas:        initBoletasView,
+    viewARCAPendientes: renderARCAPendientes,
     viewContable:    initContableView,
     viewAuditoria:   renderAuditoria,
     viewProductos:   renderProductos,
@@ -3839,9 +3843,12 @@ function renderProveedorFacturas(provId, subtab) {
               <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:.25rem;flex-wrap:wrap">
                 <span style="font-weight:700;font-size:.95rem">${f.nroBoleta ? 'N° ' + f.nroBoleta : 'Sin número'}${(() => {
                   const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
-                  if (tipo === 'nota_credito') return ` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">NC</span>`;
-                  if (tipo === 'nota_debito')  return ` <span style="background:#FEF3C7;color:#92400E;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">ND</span>`;
-                  return '';
+                  let badges = '';
+                  if (tipo === 'nota_credito') badges += ` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">NC</span>`;
+                  if (tipo === 'nota_debito')  badges += ` <span style="background:#FEF3C7;color:#92400E;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">ND</span>`;
+                  if (f.arcaVerificada)        badges += ` <span style="background:#D1FAE5;color:#065F46;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">✓ ARCA</span>`;
+                  if (f.importadaDeARCA && !f.items?.length) badges += ` <span style="background:#EDE9FE;color:#5B21B6;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">📥 Sin ítems</span>`;
+                  return badges;
                 })()}</span>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   ${badge}
@@ -10115,45 +10122,44 @@ function importarARCA(input) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const wb   = XLSX.read(e.target.result, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-      // Fila 1 = headers, fila 2+ = datos
+      const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       const datos = rows.slice(2).filter(r => r[0]);
 
-      // Mapa CUIT → proveedor
+      // Mapas de lookup
       const cuitMap = {};
       proveedores.forEach(p => {
         const c = String(p.cuit || '').replace(/\D/g, '');
         if (c) cuitMap[c] = p;
       });
-
-      // Mapa nombre normalizado → proveedor (fallback)
       const nombreMap = {};
       proveedores.forEach(p => { nombreMap[_arcaNorm(p.nombre)] = p; });
 
-      const sinCargar = [];
-      const yaCargar = [];
+      const verificadas  = [];  // ya estaban cargadas
+      const dadas_alta   = [];  // proveedor conocido → crear
+      const sin_prov     = [];  // proveedor desconocido → Para Revisar
 
       datos.forEach(r => {
-        const fecha     = r[0]  || '';
-        const tipo      = r[1]  || '';
-        const pv        = r[2]  || '';
-        const nroDesde  = r[3]  || '';
-        const cae       = r[5]  || '';
-        const cuitEmisor = String(r[7] || '').replace(/\D/g, '');
-        const nombre    = r[8]  || '';
-        const total     = Number(r[29]) || 0;
+        const fecha       = String(r[0] || '');
+        const tipo        = String(r[1] || '');
+        const pv          = r[2] || '';
+        const nroDesde    = r[3] || '';
+        const cae         = String(r[5] || '');
+        const cuitEmisor  = String(r[7] || '').replace(/\D/g, '');
+        const nombre      = String(r[8] || '');
+        const total       = Number(r[29]) || 0;
+        const nroFmt      = _arcaFmtNro(pv, nroDesde);
+        const nroSimple   = String(nroDesde);
 
-        const nroFmt = _arcaFmtNro(pv, nroDesde);
-        const nroSimple = String(nroDesde);
+        // Convertir fecha DD/MM/YYYY → YYYY-MM-DD
+        const [d, m, y]   = fecha.split('/');
+        const fechaISO    = (y && m && d) ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : '';
 
-        // Resolver proveedor por CUIT o nombre
-        let prov = cuitMap[cuitEmisor];
-        if (!prov) prov = nombreMap[_arcaNorm(nombre)];
+        // Resolver proveedor
+        let prov = cuitMap[cuitEmisor] || nombreMap[_arcaNorm(nombre)] || null;
 
-        // Buscar factura en la app
+        // Buscar factura ya cargada
         let match = null;
         if (prov) {
           match = facturas.find(f => {
@@ -10161,22 +10167,62 @@ function importarARCA(input) {
             const nb = String(f.nroBoleta || '').trim();
             return nb === nroFmt || nb === nroSimple || _arcaNorm(nb) === _arcaNorm(nroFmt);
           });
-        } else {
-          // Sin proveedor conocido: buscar por importe + fecha aproximada
-          const [d, m, y] = String(fecha).split('/');
-          const fechaISO = y && m && d ? `${y}-${m}-${d}` : '';
-          match = facturas.find(f => {
-            if (fechaISO && f.fecha !== fechaISO) return false;
-            return f.importeTotal && Math.abs(Number(f.importeTotal) - total) < 1;
-          });
         }
 
-        const item = { fecha, tipo, pv, nro: nroDesde, nroFmt, cae, cuitEmisor, nombre, total, prov: prov || null };
-        if (match) yaCargar.push({ ...item, factura: match });
-        else sinCargar.push(item);
+        const item = { fecha, fechaISO, tipo, pv, nro: nroDesde, nroFmt, cae, cuitEmisor, nombre, total, prov };
+
+        if (match) {
+          // Marcar como verificada con ARCA
+          if (!match.arcaVerificada) { match.arcaVerificada = true; }
+          verificadas.push({ ...item, facturaId: match.id });
+        } else if (prov) {
+          dadas_alta.push(item);
+        } else {
+          sin_prov.push(item);
+        }
       });
 
-      _arcaMostrarResultado(sinCargar, yaCargar, datos.length);
+      // Crear facturas para proveedores conocidos
+      let creadas = 0;
+      dadas_alta.forEach(it => {
+        // Evitar duplicados si ya se importó antes
+        const yaExiste = facturas.find(f =>
+          f.proveedorId === it.prov.id &&
+          (String(f.nroBoleta||'').trim() === it.nroFmt || String(f.nroBoleta||'').trim() === String(it.nro))
+        );
+        if (yaExiste) { yaExiste.arcaVerificada = true; return; }
+        facturas.push({
+          id:              crypto.randomUUID(),
+          proveedorId:     it.prov.id,
+          nroBoleta:       it.nroFmt,
+          fecha:           it.fechaISO,
+          hora:            null,
+          importeTotal:    it.total,
+          items:           [],
+          importadaDeARCA: true,
+          arcaVerificada:  true,
+          cae:             it.cae,
+          tipoComprobante: it.tipo.toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                         : it.tipo.toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                         : 'factura',
+        });
+        creadas++;
+      });
+
+      // Actualizar Para Revisar: agregar nuevas, evitar duplicados por CAE
+      const caeExistentes = new Set(arcaPendientes.map(x => x.cae));
+      let nuevasPendientes = 0;
+      sin_prov.forEach(it => {
+        if (it.cae && caeExistentes.has(it.cae)) return;
+        arcaPendientes.push({ ...it, prov: undefined, id: crypto.randomUUID() });
+        nuevasPendientes++;
+      });
+
+      persist();
+      _arcaMostrarResultado(verificadas.length, creadas, nuevasPendientes, dadas_alta.length, sin_prov.length, datos.length);
+      renderProveedores();
+      renderARCAPendientes();
+
     } catch(err) {
       console.error(err);
       toast('Error al leer el archivo de ARCA', 'error');
@@ -10185,53 +10231,94 @@ function importarARCA(input) {
   reader.readAsArrayBuffer(file);
 }
 
-function _arcaMostrarResultado(sinCargar, yaCargar, total) {
-  const modal = document.getElementById('arcaModal');
-  const body  = document.getElementById('arcaModalBody');
-  if (!modal || !body) return;
+function _arcaMostrarResultado(verificadas, creadas, nuevasPend, totalConocidos, totalDesconocidos, total) {
+  toast(
+    `ARCA: ${verificadas} verificadas · ${creadas} dadas de alta · ${nuevasPend} a revisar`,
+    creadas || nuevasPend ? 'info' : 'success'
+  );
+}
 
-  const pct = Math.round((yaCargar.length / total) * 100);
+/* ── VISTA: Facturas A — Para Revisar ───────────────────────────── */
+
+function renderARCAPendientes() {
+  const screen = document.getElementById('arcaParaRevisarScreen');
+  if (!screen) return;
+
+  if (!arcaPendientes.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin facturas para revisar</h3><p>Cuando importes un archivo de ARCA con proveedores desconocidos, aparecen acá.</p></div>`;
+    return;
+  }
+
+  // Agrupar por CUIT emisor
+  const grupos = {};
+  arcaPendientes.forEach(it => {
+    const key = it.cuitEmisor || 'sin_cuit';
+    if (!grupos[key]) grupos[key] = { nombre: it.nombre, cuit: it.cuitEmisor, items: [] };
+    grupos[key].items.push(it);
+  });
+
+  const total = arcaPendientes.reduce((s, it) => s + (it.total || 0), 0);
 
   let html = `
-    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <div style="flex:1;min-width:120px;padding:14px 18px;background:#D1FAE5;border-radius:10px;text-align:center">
-        <div style="font-size:28px;font-weight:800;color:#065F46">${yaCargar.length}</div>
-        <div style="font-size:12px;color:#065F46;font-weight:600">Encontradas en la app</div>
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+      <div style="padding:12px 18px;background:#FEF3C7;border-radius:10px">
+        <span style="font-size:22px;font-weight:800;color:#92400E">${arcaPendientes.length}</span>
+        <span style="font-size:12px;color:#92400E;font-weight:600;margin-left:6px">facturas sin proveedor</span>
       </div>
-      <div style="flex:1;min-width:120px;padding:14px 18px;background:#FEE2E2;border-radius:10px;text-align:center">
-        <div style="font-size:28px;font-weight:800;color:#991B1B">${sinCargar.length}</div>
-        <div style="font-size:12px;color:#991B1B;font-weight:600">Sin cargar en la app</div>
+      <div style="padding:12px 18px;background:var(--surface2);border-radius:10px">
+        <span style="font-size:22px;font-weight:800;color:var(--ink)">${Object.keys(grupos).length}</span>
+        <span style="font-size:12px;color:var(--ink2);font-weight:600;margin-left:6px">emisores distintos</span>
       </div>
-      <div style="flex:1;min-width:120px;padding:14px 18px;background:var(--surface2);border-radius:10px;text-align:center">
-        <div style="font-size:28px;font-weight:800;color:var(--ink)">${pct}%</div>
-        <div style="font-size:12px;color:var(--ink2);font-weight:600">Cobertura</div>
+      <div style="padding:12px 18px;background:#D1FAE5;border-radius:10px">
+        <span style="font-size:16px;font-weight:800;color:#065F46">${pesos(total)}</span>
+        <span style="font-size:12px;color:#065F46;font-weight:600;margin-left:6px">total</span>
       </div>
     </div>`;
 
-  if (sinCargar.length) {
-    html += `<h3 style="font-size:14px;font-weight:700;color:#991B1B;margin-bottom:10px">⚠ Facturas recibidas en ARCA que NO están cargadas</h3>`;
-    html += `<div style="display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto">`;
-    sinCargar.forEach(it => {
-      const provNombre = it.prov ? it.prov.nombre : `<span style="color:var(--danger);font-weight:600">${it.nombre} (CUIT: ${it.cuitEmisor} — proveedor no registrado)</span>`;
-      html += `<div style="padding:10px 14px;background:var(--surface);border:1px solid #FECACA;border-radius:8px;font-size:13px">
-        <div style="font-weight:600;color:var(--ink)">${it.prov ? it.prov.nombre : it.nombre}</div>
-        <div style="color:var(--ink2);font-size:12px;margin-top:2px">
-          ${it.fecha} · ${it.tipo} · N° ${it.nroFmt} · <strong>$${Number(it.total).toLocaleString('es-AR', {minimumFractionDigits:2})}</strong>
-          ${!it.prov ? `<span style="margin-left:6px;padding:1px 6px;background:#FEE2E2;color:#991B1B;border-radius:4px;font-size:10px">CUIT ${it.cuitEmisor} no registrado</span>` : ''}
+  Object.values(grupos).forEach(g => {
+    const subtotal = g.items.reduce((s, it) => s + (it.total || 0), 0);
+    html += `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden">
+        <div style="padding:12px 16px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-weight:700;font-size:14px">${g.nombre}</div>
+            <div style="font-size:11px;color:var(--ink3);font-family:monospace">CUIT: ${g.cuit}</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:13px;font-weight:700;color:var(--accent)">${pesos(subtotal)}</span>
+            <button class="btn btn-outline btn-sm" onclick="_arcaCrearProveedor('${g.cuit}','${g.nombre.replace(/'/g,"\\'")}')">+ Dar de alta proveedor</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_arcaIgnorarEmisor('${g.cuit}')">Ignorar</button>
+          </div>
+        </div>
+        <div style="padding:8px 16px;display:flex;flex-direction:column;gap:6px">
+          ${g.items.map(it => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+              <span style="color:var(--ink2)">${it.fecha} · ${it.tipo} · N° ${it.nroFmt}</span>
+              <span style="font-weight:700;color:var(--ink)">${pesos(it.total)}</span>
+            </div>`).join('')}
         </div>
       </div>`;
-    });
-    html += `</div>`;
-  } else {
-    html += `<div style="padding:20px;text-align:center;color:var(--accent);font-weight:700">✓ Todas las facturas de ARCA están cargadas en la app</div>`;
-  }
+  });
 
-  body.innerHTML = html;
-  modal.classList.add('open');
+  screen.innerHTML = html;
 }
 
-function _arcaCerrar() {
-  document.getElementById('arcaModal')?.classList.remove('open');
+function _arcaCrearProveedor(cuit, nombre) {
+  openAddProvModal();
+  setTimeout(() => {
+    const n = document.getElementById('pNombre');
+    const c = document.getElementById('pCuit');
+    if (n) n.value = nombre.toUpperCase();
+    if (c) c.value = cuit;
+  }, 60);
+}
+
+function _arcaIgnorarEmisor(cuit) {
+  if (!confirm(`¿Ignorar todas las facturas del CUIT ${cuit}? Se eliminarán de "Para Revisar".`)) return;
+  arcaPendientes = arcaPendientes.filter(it => it.cuitEmisor !== cuit);
+  persist();
+  renderARCAPendientes();
+  toast('Emisor ignorado', 'success');
 }
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
@@ -12340,6 +12427,7 @@ async function _fbLoad(retry = 0) {
         case 'recetas':     if (d.items?.length)     recetas      = d.items;           break;
         case 'listasPrecios': if (d.items?.length)   listasPrecios = d.items;           break;
         case 'pedidosPendientes': if (d.items?.length) pedidosPendientes = d.items;     break;
+        case 'arca_pendientes':  if (d.items?.length) arcaPendientes = d.items;        break;
         case 'deposito':
           if (d.stock && typeof d.stock === 'object') deposito = d.stock;
           if (Array.isArray(d.movs)) depositoMovs = d.movs;
@@ -15149,6 +15237,17 @@ _auth.onAuthStateChanged(async user => {
       <button class="btn btn-primary" onclick="_arcaCerrar()">Cerrar</button>
     </div>
   </div>
+</div>
+
+<div id="viewARCAPendientes" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+    <div>
+      <h2 style="margin:0;font-size:18px">🏛 Facturas A — Para Revisar</h2>
+      <p style="margin:4px 0 0;font-size:13px;color:var(--ink2)">Comprobantes de ARCA de emisores no registrados como proveedores</p>
+    </div>
+    <label class="btn btn-outline" style="cursor:pointer">🏛 Importar ARCA<input type="file" accept=".xlsx,.xls" onchange="importarARCA(this)" style="display:none"></label>
+  </div>
+  <div id="arcaParaRevisarScreen"></div>
 </div>
 </body>
 </html>
