@@ -881,6 +881,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         </label>
       </div>
       <div class="modal-actions">
+        <button id="provBajaBtn" class="btn btn-outline" onclick="darDeBajaProv()" style="margin-right:auto;display:none"></button>
         <button class="btn btn-outline" onclick="closeProvTelModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarTelProv()">Guardar</button>
       </div>
@@ -934,6 +935,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div id="provListBottom" class="toolbar" style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border)">
     <button class="btn btn-primary" onclick="altaTodosLosInsumos()">+ Dar de alta todos los insumos</button>
     <button class="btn btn-outline" onclick="detectarDuplicadosProveedores()">Unificar duplicados</button>
+    <button id="btnMostrarBaja" class="btn btn-outline" onclick="toggleMostrarBaja()" style="display:none;margin-left:auto;color:var(--ink3)"></button>
   </div>
 
   <!-- MODAL: Alta insumo manual a proveedor -->
@@ -1147,38 +1149,51 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-primary" onclick="verConsolidado()">Ver consolidado</button>
     <button class="btn btn-outline" onclick="abrirTableroProveedores()" style="font-weight:700">📊 Tablero</button>
     <div style="flex:1"></div>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Importar ventas Excel
-      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importVentas(event)">
-    </label>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Egresos MP
-      <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'egreso')">
-    </label>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Ingresos MP
-      <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'ingreso')">
-    </label>
-    <button class="btn btn-outline" style="color:var(--accent);border-color:var(--accent);font-weight:700" onclick="_reAutoLinkContableManual()">🔗 Re-match por CUIT</button>
-    <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
-    <button class="btn btn-outline" onclick="_autoVincularGastosFijosMP()">GF → MP</button>
-    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarMPmes()">Borrar MP del mes</button>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Importar Galicia
-      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event)">
-    </label>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Importar Forma de cobro
-      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importFormaCobro(event)">
-    </label>
-    <label class="btn btn-outline" style="cursor:pointer">
-      Reporte MP
-      <input type="file" accept=".csv" style="display:none" onchange="importMPStandard(event)">
-    </label>
-    <button class="btn btn-outline" onclick="_autoVincularGalicia()">Auto-vincular Galicia</button>
-    <button class="btn btn-outline" onclick="_autoVincularGastosFijosGal()">GF → Galicia</button>
-    <button class="btn btn-outline" onclick="_consultarCuitsGalicia()">Consultar CUITs</button>
-    <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarGalMes()">Borrar Galicia del mes</button>
+    <button id="btnGaliciaRevisar" class="btn btn-outline" style="display:none;color:#92400E;border-color:#92400E;font-weight:700" onclick="_irGaliciaRevisar()">🔍 Para revisar <span id="badgeGaliciaRevisar"></span></button>
+
+    <!-- Dropdown Importación de datos -->
+    <div style="position:relative" id="importDropdownWrap">
+      <button class="btn btn-outline" onclick="_toggleImportDropdown()" style="font-weight:600">⬇ Importación de datos ▾</button>
+      <div id="importDropdown" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;min-width:220px;padding:6px 0">
+        <div style="padding:4px 14px 2px;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em">Importar archivos</div>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Ventas Excel
+          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importVentas(event);_closeImportDropdown()">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Egresos MP
+          <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'egreso');_closeImportDropdown()">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Ingresos MP
+          <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'ingreso');_closeImportDropdown()">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Reporte MP
+          <input type="file" accept=".csv" style="display:none" onchange="importMPStandard(event);_closeImportDropdown()">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Galicia
+          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importGalicia(event);_closeImportDropdown()">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 14px;cursor:pointer;font-size:13px" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+          Forma de cobro
+          <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importFormaCobro(event);_closeImportDropdown()">
+        </label>
+        <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+        <div style="padding:4px 14px 2px;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.04em">Acciones</div>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--accent);font-weight:600" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_reAutoLinkContableManual();_closeImportDropdown()">🔗 Re-match por CUIT</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_autoVincularMP();_closeImportDropdown()">Auto-vincular MP</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_autoVincularGastosFijosMP();_closeImportDropdown()">GF → MP</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_autoVincularGalicia();_closeImportDropdown()">Auto-vincular Galicia</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_autoVincularGastosFijosGal();_closeImportDropdown()">GF → Galicia</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_consultarCuitsGalicia();_closeImportDropdown()">Consultar CUITs</button>
+        <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--danger)" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_borrarMPmes();_closeImportDropdown()">Borrar MP del mes</button>
+        <button style="display:flex;width:100%;text-align:left;align-items:center;gap:8px;padding:8px 14px;font-size:13px;background:none;border:none;cursor:pointer;color:var(--danger)" onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''" onclick="_borrarGalMes();_closeImportDropdown()">Borrar Galicia del mes</button>
+      </div>
+    </div>
+
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
     <button id="btnModoLocal" class="btn btn-outline" onclick="_toggleSyncPaused()">☁ Auto-sync ON</button>
@@ -1273,6 +1288,14 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <div class="section-total" id="totalGaliciaIngresos" style="color:var(--accent)"></div>
     </div>
     <div id="secGaliciaIngresosBody" class="contable-section-body" style="display:none"></div>
+  </div>
+
+  <div class="contable-section" id="secGaliciaRevisar" style="display:none">
+    <div class="contable-section-header" onclick="toggleSection('secGaliciaRevisarBody')">
+      <h3>🔍 Galicia — Para revisar</h3>
+      <div class="section-total" id="totalGaliciaRevisar" style="color:#92400E"></div>
+    </div>
+    <div id="secGaliciaRevisarBody" class="contable-section-body" style="display:none"></div>
   </div>
 
   <div class="contable-section" id="secFormaCobro">
@@ -2026,7 +2049,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     </div>
     <input type="hidden" id="pEditId">
     <div class="modal-actions">
-      <button id="pDeleteBtn" class="btn btn-danger" onclick="eliminarProvDesdeModal()" style="margin-right:auto;display:none">Eliminar proveedor</button>
+      <div style="display:flex;gap:8px;margin-right:auto">
+        <button id="pDeleteBtn" class="btn btn-danger" onclick="eliminarProvDesdeModal()" style="display:none">Eliminar</button>
+        <button id="pBajaBtn" class="btn btn-outline" onclick="darDeBajaProvDesdeModal()" style="display:none"></button>
+      </div>
       <button class="btn btn-outline" onclick="closeModal('modalProveedor')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveProveedor()">Guardar</button>
     </div>
@@ -2428,10 +2454,10 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 
 const SUBNAV_GROUPS = {
   compras: [
-    { id: 'viewProveedores',    label: 'Proveedores' },
-    { id: 'viewBoletas',        label: '📷 Cargar Boletas' },
-    { id: 'viewPrecios',        label: 'Comparar precios' },
-    { id: 'viewARCAPendientes', label: '🏛 Para Revisar' },
+    { id: 'viewProveedores',      label: 'Proveedores' },
+    { id: 'viewBoletas',          label: '📷 Cargar Boletas' },
+    { id: 'viewPrecios',          label: 'Comparar precios' },
+    { id: 'viewARCAPendientes',   label: '🏛 Para Revisar' },
   ],
   stock: [
     { id: 'viewDeposito',  label: 'Depósito' },
@@ -2470,7 +2496,7 @@ function _onViewActivate(viewId) {
   const map = {
     viewProveedores:    renderProveedores,
     viewBoletas:        initBoletasView,
-    viewARCAPendientes: renderARCAPendientes,
+    viewARCAPendientes:  renderARCAPendientes,
     viewContable:    initContableView,
     viewAuditoria:   renderAuditoria,
     viewProductos:   renderProductos,
@@ -2584,6 +2610,21 @@ function closeModal(id) {
 
 document.querySelectorAll('.overlay').forEach(el => {
   el.addEventListener('click', e => { if (e.target === el) { el.classList.remove('open'); el.style.display = ''; } });
+});
+
+/* ── IMPORT DROPDOWN ────────────────────────────────────────────── */
+function _toggleImportDropdown() {
+  const d = document.getElementById('importDropdown');
+  if (!d) return;
+  d.style.display = d.style.display === 'none' ? '' : 'none';
+}
+function _closeImportDropdown() {
+  const d = document.getElementById('importDropdown');
+  if (d) d.style.display = 'none';
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('importDropdownWrap');
+  if (wrap && !wrap.contains(e.target)) _closeImportDropdown();
 });
 
 /* ── TOAST ──────────────────────────────────────────────────────── */
@@ -3252,6 +3293,7 @@ function openAddProvModal() {
   ['pNombre','pTelefono','pEmail','pCuit','pNotas','pEditId'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('pPago').value = 'transferencia';
   document.getElementById('pDeleteBtn').style.display = 'none';
+  document.getElementById('pBajaBtn').style.display = 'none';
   openModal('modalProveedor');
 }
 
@@ -3267,6 +3309,11 @@ function openEditProvModal(id) {
   document.getElementById('pPago').value     = p.pago     || 'transferencia';
   document.getElementById('pEditId').value   = id;
   document.getElementById('pDeleteBtn').style.display = '';
+  const bajaBtn = document.getElementById('pBajaBtn');
+  bajaBtn.style.display = '';
+  bajaBtn.textContent = p.baja ? 'Reactivar' : 'Dar de baja';
+  bajaBtn.style.color = p.baja ? 'var(--accent)' : 'var(--danger)';
+  bajaBtn.style.borderColor = p.baja ? 'var(--accent)' : 'var(--danger)';
   openModal('modalProveedor');
 }
 
@@ -3277,6 +3324,26 @@ function eliminarProvDesdeModal() {
   if (!confirm(`¿Eliminás a "${p.nombre}"? Se borran también sus facturas y precios.`)) return;
   closeModal('modalProveedor');
   eliminarProveedor(id, p.nombre);
+}
+
+function darDeBajaProvDesdeModal() {
+  const id = document.getElementById('pEditId').value;
+  const p = proveedores.find(x => x.id === id);
+  if (!p) return;
+  if (p.baja) {
+    p.baja = false;
+    persist();
+    renderProveedores();
+    closeModal('modalProveedor');
+    toast(`${p.nombre} reactivado`, 'success');
+  } else {
+    if (!confirm(`¿Dar de baja a "${p.nombre}"? Va a quedar oculto pero sus datos se conservan.`)) return;
+    p.baja = true;
+    persist();
+    renderProveedores();
+    closeModal('modalProveedor');
+    toast(`${p.nombre} dado de baja`, 'success');
+  }
 }
 
 
@@ -3418,6 +3485,13 @@ function savePeriod() {
 }
 
 
+let _showBaja = false;
+
+function toggleMostrarBaja() {
+  _showBaja = !_showBaja;
+  renderProveedores();
+}
+
 function renderProveedores() {
   _pendViewMode = null;
   const screen = document.getElementById('proveedoresScreen');
@@ -3426,8 +3500,18 @@ function renderProveedores() {
   if (top) top.style.display = '';
   if (bot) bot.style.display = '';
   _actualizarBadgePendientes();
+
+  const btnBaja = document.getElementById('btnMostrarBaja');
+  const nBaja = proveedores.filter(p => p.baja).length;
+  if (btnBaja) {
+    btnBaja.style.display = nBaja ? '' : 'none';
+    btnBaja.textContent = _showBaja ? 'Ocultar dados de baja' : `Dados de baja (${nBaja})`;
+  }
+
   const q      = (document.getElementById('searchProveedores')?.value || '').toLowerCase().trim();
-  let   lista  = [...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
+  let   lista  = [...proveedores]
+    .filter(p => _showBaja ? p.baja : !p.baja)
+    .sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
 
   if (!lista.length) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin proveedores</h3><p>Cargá una boleta para dar de alta el primero.</p></div>`;
@@ -3846,7 +3930,7 @@ function renderProveedorFacturas(provId, subtab) {
                   if (tipo === 'nota_credito') return ` <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">NC</span>`;
                   if (tipo === 'nota_debito')  return ` <span style="background:#FEF3C7;color:#92400E;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">ND</span>`;
                   return '';
-                })()}</span>
+                })()}${(f.arcaVerificada || f.importadaDeARCA) ? ` <span style="background:#EDE9FE;color:#5B21B6;font-size:10px;padding:2px 7px;border-radius:999px;font-weight:700;margin-left:4px">🏛 ARCA</span>` : ''}</span>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   ${badge}
                   ${(() => {
@@ -6041,7 +6125,8 @@ let gastosFijos    = [];
 let formaCobroMovs = [];
 let mpIngMovs      = [];
 let mpMovs       = [];
-let galiciaMovs  = [];
+let galiciaMovs        = [];
+let galiciaParaRevisar = [];
 let _sortMP     = { field: 'fecha', dir: -1 };
 let _sortGal    = { field: 'fecha', dir: -1 };
 let _sortGalIng = { field: 'fecha', dir: -1 };
@@ -6082,6 +6167,13 @@ function _persistGal() {
   _db.collection('data').doc('contable_gal').set({ items: galiciaMovs })
     .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_gal', e.message); _syncChip('error'); });
 }
+function _persistGalRevisar() {
+  if (_syncPaused) { _syncChip('paused'); return; }
+  if (!_fbLoaded) { _pendingWrites.add(_persistGalRevisar); _syncChip('syncing'); return; }
+  _syncChip('syncing');
+  _db.collection('data').doc('contable_gal_revisar').set({ items: galiciaParaRevisar })
+    .then(() => _syncChip('ok')).catch(e => { console.warn('write error: contable_gal_revisar', e.message); _syncChip('error'); });
+}
 function _persistBase() {
   if (_syncPaused) { _syncChip('paused'); return; }
   if (!_fbLoaded) { _pendingWrites.add(_persistBase); _syncChip('syncing'); return; }
@@ -6111,7 +6203,7 @@ function persistContable() {
   Promise.all(writes).then(() => _syncChip('ok')).catch(e => { console.warn('Firebase write error: contable', e.message); _syncChip('error'); });
 }
 function hydrateContable() {
-  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; mpIngMovs = []; galiciaMovs = []; productosRubros = {..._RUBROS_DEFAULT};
+  ventas = []; sueldos = []; otrosEgresos = []; gastosFijos = []; mpMovs = []; mpIngMovs = []; galiciaMovs = []; galiciaParaRevisar = []; productosRubros = {..._RUBROS_DEFAULT};
 }
 
 function initContableView() {
@@ -6138,24 +6230,29 @@ function initContableView() {
   document.getElementById('eFecha').value = now.toISOString().slice(0,10);
 
   renderContable();
+  if (typeof renderGaliciaRevisar === 'function') renderGaliciaRevisar();
 }
+
+const _seccionesAbiertas = new Set();
 
 function toggleSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
-  const opening = el.style.display === 'none';
-  document.querySelectorAll('.contable-section-body').forEach(body => {
-    if (body.id !== id) {
-      body.style.display = 'none';
-      const t = document.getElementById(body.id + 'Toggle');
-      if (t) t.textContent = '▼';
-      body.closest('.contable-section')?.classList.remove('is-open');
-    }
-  });
-  el.style.display = opening ? '' : 'none';
-  const tog = document.getElementById(id + 'Toggle');
-  if (tog) tog.textContent = opening ? '▲' : '▼';
-  el.closest('.contable-section')?.classList.toggle('is-open', opening);
+  const isOpen = _seccionesAbiertas.has(id);
+  if (isOpen) {
+    el.style.removeProperty('display');
+    el.style.display = 'none';
+    el.closest('.contable-section')?.classList.remove('is-open');
+    const tog = document.getElementById(id + 'Toggle');
+    if (tog) tog.textContent = '▼';
+    _seccionesAbiertas.delete(id);
+  } else {
+    el.style.setProperty('display', 'block', 'important');
+    el.closest('.contable-section')?.classList.add('is-open');
+    const tog = document.getElementById(id + 'Toggle');
+    if (tog) tog.textContent = '▲';
+    _seccionesAbiertas.add(id);
+  }
 }
 
 function pesos(n) {
@@ -6999,19 +7096,110 @@ function _renderComprasTabla(comprasPeriod, byProv, totalCompras) {
   </tbody></table>`;
 }
 
+function _renderDeudaPendiente(deudas) {
+  const byProv = {};
+  deudas.forEach(f => {
+    const nombre = proveedores.find(p => p.id === f.proveedorId)?.nombre || 'Sin proveedor';
+    if (!byProv[nombre]) byProv[nombre] = [];
+    byProv[nombre].push(f);
+  });
+  const totalDeuda = deudas.reduce((s, f) => s + (f.importeTotal || 0), 0);
+  const rows = Object.entries(byProv)
+    .sort(([,a],[,b]) => b.reduce((s,f)=>s+f.importeTotal,0) - a.reduce((s,f)=>s+f.importeTotal,0))
+    .map(([nombre, facs]) => {
+      const subtotal = facs.reduce((s, f) => s + (f.importeTotal || 0), 0);
+      const detalle = facs
+        .sort((a, b) => (b.fecha||'').localeCompare(a.fecha||''))
+        .map(f => `
+          <tr style="background:#FEF2F2">
+            <td style="padding-left:28px;font-family:var(--mono);font-size:12px;color:var(--danger)">${f.nroBoleta || '—'}</td>
+            <td style="font-size:12px;color:var(--danger)">${f.fecha || '—'}</td>
+            <td style="text-align:right;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--danger)">${pesos(f.importeTotal)}</td>
+            <td style="text-align:right;padding-right:8px">
+              <button onclick="_pagarFacturaContable('${f.id}')" style="font-size:11px;padding:2px 10px;border-radius:6px;border:1.5px solid var(--danger);background:transparent;color:var(--danger);cursor:pointer;font-weight:700">OK</button>
+            </td>
+          </tr>`).join('');
+      return `
+        <tr style="cursor:pointer" onclick="_toggleComprasProv(this)">
+          <td style="display:flex;align-items:center;gap:8px">
+            <span class="compras-chevron" style="font-size:10px;color:var(--ink3);transition:transform .2s">▶</span>
+            ${nombre}
+          </td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--danger)">${pesos(subtotal)}</td>
+          <td></td>
+        </tr>
+        <tr class="compras-detail-row" style="display:none"><td colspan="3" style="padding:0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr style="background:#FEE2E2">
+              <th style="padding:6px 28px;font-size:11px;text-align:left;font-weight:600;color:var(--danger)">N° Boleta</th>
+              <th style="padding:6px 8px;font-size:11px;text-align:left;font-weight:600;color:var(--danger)">Fecha</th>
+              <th style="padding:6px 8px;font-size:11px;text-align:right;font-weight:600;color:var(--danger)">Importe</th>
+              <th style="width:60px"></th>
+            </tr></thead>
+            <tbody>${detalle}</tbody>
+          </table>
+        </td></tr>`;
+    }).join('');
+  return `
+    <div style="margin-top:16px;border:1.5px solid #FCA5A5;border-radius:10px;overflow:hidden">
+      <div style="background:#FEF2F2;padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #FCA5A5">
+        <span style="font-size:14px">⚠️</span>
+        <span style="font-weight:700;font-size:13px;color:#991B1B">Boletas impagas de otros períodos</span>
+        <span style="margin-left:auto;font-family:var(--mono);font-weight:700;font-size:13px;color:#991B1B">${pesos(totalDeuda)}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#FEE2E2">
+          <th style="padding:8px 14px;text-align:left;font-size:12px;font-weight:700;color:#991B1B">Proveedor</th>
+          <th style="padding:8px 14px;text-align:right;font-size:12px;font-weight:700;color:#991B1B">Deuda</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tr style="background:#FEE2E2">
+          <td style="padding:8px 14px;font-weight:700;font-size:13px;color:#991B1B">Total deuda</td>
+          <td style="text-align:right;font-family:var(--mono);font-weight:700;font-size:13px;color:#991B1B;padding:8px 14px">${pesos(totalDeuda)}</td>
+          <td></td>
+        </tr>
+      </table>
+    </div>`;
+}
+
 function _pagarFacturaContable(facturaId) {
   const f = facturas.find(x => x.id === facturaId);
   if (!f) return;
   f.pagado   = !f.pagado;
   f.fechaPago = f.pagado ? _hoyISO() : null;
   persist();
+  // Guardar qué proveedores estaban expandidos
+  const abiertos = new Set(
+    [...document.querySelectorAll('#secComprasBody .compras-detail-row')]
+      .filter(r => r.style.display !== 'none')
+      .map(r => r.previousElementSibling?.querySelector('td')?.textContent?.trim())
+      .filter(Boolean)
+  );
   renderContable();
+  // Reabrir los que estaban abiertos
+  document.querySelectorAll('#secComprasBody tr[onclick]').forEach(row => {
+    const nombre = row.querySelector('td')?.textContent?.trim();
+    if (nombre && abiertos.has(nombre)) {
+      const detailRow = row.nextElementSibling;
+      const chevron   = row.querySelector('.compras-chevron');
+      if (detailRow) detailRow.style.display = '';
+      if (chevron)   chevron.style.transform = 'rotate(90deg)';
+    }
+  });
 }
 
 function _toggleComprasProv(row) {
   const detailRow = row.nextElementSibling;
   const chevron   = row.querySelector('.compras-chevron');
   const open      = detailRow.style.display !== 'none';
+  // Cerrar todos los otros
+  document.querySelectorAll('#secComprasBody .compras-detail-row').forEach(r => {
+    if (r !== detailRow) {
+      r.style.display = 'none';
+      r.previousElementSibling?.querySelector('.compras-chevron')?.style.setProperty('transform', '');
+    }
+  });
   detailRow.style.display = open ? 'none' : '';
   chevron.style.transform = open ? '' : 'rotate(90deg)';
 }
@@ -7151,6 +7339,7 @@ function renderContable() {
   const anio = parseInt(document.getElementById('contableAnio').value);
   if (isNaN(anio)) return;
 
+
   function inPeriod(fechaStr) {
     if (!fechaStr) return false;
     const s = String(fechaStr).slice(0, 10);
@@ -7193,10 +7382,13 @@ function renderContable() {
     if (!byProv[k]) byProv[k] = 0;
     byProv[k] += f.importeTotal || 0;
   });
+  const deudasOtros = facturas.filter(f => !f.pagado && f.importeTotal && f.fuente !== 'manual' && !inPeriod(f.fecha));
   document.getElementById('totalCompras').textContent = pesos(totalCompras);
-  document.getElementById('secComprasBody').innerHTML = comprasPeriod.length === 0
-    ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin compras registradas para este período.<br><span style="font-size:12px">Confirmá boletas en la tab Boletas.</span></div>`
-    : _renderComprasTabla(comprasPeriod, byProv, totalCompras);
+  document.getElementById('secComprasBody').innerHTML =
+    (comprasPeriod.length === 0
+      ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin compras registradas para este período.<br><span style="font-size:12px">Confirmá boletas en la tab Boletas.</span></div>`
+      : _renderComprasTabla(comprasPeriod, byProv, totalCompras))
+    + (deudasOtros.length ? _renderDeudaPendiente(deudasOtros) : '');
 
   // ── SUELDOS ──
   const sueldosPeriod = sueldos.filter(s => {
@@ -7206,25 +7398,48 @@ function renderContable() {
   });
   const totalSueldos = sueldosPeriod.reduce((s,x) => s + (x.monto || 0), 0);
 
-  const sueldoVinculadosIds = new Set([...mpMovs, ...galiciaMovs].filter(m => m.sueldoId).map(m => m.sueldoId));
+  const _transferPorSueldo = id => [...mpMovs, ...galiciaMovs]
+    .filter(m => m.sueldoId === id)
+    .reduce((s, m) => s + (m.monto || 0), 0);
+
   document.getElementById('totalSueldos').textContent = pesos(totalSueldos);
   document.getElementById('secSueldosBody').innerHTML = sueldosPeriod.length === 0
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin sueldos registrados. Usá "+ Sueldo".</div>`
     : `<table><thead><tr>
-        ${[['empleado','Empleado',''],['monto','Monto','text-align:right;']].map(([f,label,align])=>{
-          const active = _sortSueldos.field === f;
-          const arrow = active ? (_sortSueldos.dir === -1 ? ' ↓' : ' ↑') : '';
-          return `<th style="${align}cursor:pointer;user-select:none;${active?'color:var(--ink)':'color:var(--ink2)'}" onclick="_setSortSueldos('${f}')">${label}${arrow}</th>`;
-        }).join('')}
+        <th style="cursor:pointer;user-select:none;${_sortSueldos.field==='empleado'?'color:var(--ink)':'color:var(--ink2)'}" onclick="_setSortSueldos('empleado')">Empleado${_sortSueldos.field==='empleado'?(_sortSueldos.dir===-1?' ↓':' ↑'):''}</th>
+        <th style="text-align:right;cursor:pointer;user-select:none;${_sortSueldos.field==='monto'?'color:var(--ink)':'color:var(--ink2)'}" onclick="_setSortSueldos('monto')">Sueldo fijo${_sortSueldos.field==='monto'?(_sortSueldos.dir===-1?' ↓':' ↑'):''}</th>
+        <th style="text-align:right;color:var(--ink2)">Transferido</th>
+        <th style="text-align:right;color:var(--ink2)">Diferencia</th>
         <th></th></tr></thead><tbody>
-      ${_applySort(sueldosPeriod, _sortSueldos).map(s=>`
-        <tr>
-          <td>${s.empleado}${sueldoVinculadosIds.has(s.id) ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ en extracto</span>` : ''}</td>
+      ${_applySort(sueldosPeriod, _sortSueldos).map(s => {
+        const transf  = _transferPorSueldo(s.id);
+        const efect   = s.efectivo || 0;
+        const cubierto = transf + efect;
+        const diff    = cubierto - (s.monto || 0);
+        const diffColor = diff === 0 ? '#065F46' : diff > 0 ? '#1D4ED8' : '#DC2626';
+        const diffStr = diff === 0
+          ? `<span style="color:#065F46;font-weight:700">✓</span>`
+          : `<span style="color:${diffColor};font-weight:700">${diff > 0 ? '+' : ''}${pesos(diff)}</span>`;
+        const pendEfect = Math.max(0, (s.monto || 0) - transf);
+        const efectBtn  = efect > 0
+          ? `<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-weight:700;cursor:pointer" onclick="_editSueldoEfectivo('${s.id}',${efect})" title="Click para editar">💵 ${pesos(efect)}</span>`
+          : `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#92400E" onclick="_editSueldoEfectivo('${s.id}',${pendEfect})">+ Efectivo</button>`;
+        return `<tr>
+          <td>${_h(s.empleado)}${transf > 0 ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ extracto</span>` : ''}</td>
           <td style="text-align:right;font-family:var(--mono)">${pesos(s.monto)}</td>
+          <td style="text-align:right;font-family:var(--mono);color:${transf>0?'#065F46':'var(--ink3)'}">${transf > 0 ? pesos(transf) : '—'}</td>
+          <td style="text-align:right">${efectBtn}</td>
+          <td style="text-align:right;font-family:var(--mono)">${cubierto > 0 ? diffStr : '—'}</td>
           <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
-        </tr>
-      `).join('')}
-      <tr style="font-weight:600;background:var(--surface2)"><td>Total</td><td style="text-align:right;font-family:var(--mono)">${pesos(totalSueldos)}</td><td></td></tr>
+        </tr>`;
+      }).join('')}
+      <tr style="font-weight:600;background:var(--surface2)">
+        <td>Total</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(totalSueldos)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(sueldosPeriod.reduce((s,x)=>s+_transferPorSueldo(x.id),0))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(sueldosPeriod.reduce((s,x)=>s+(x.efectivo||0),0))}</td>
+        <td></td><td></td>
+      </tr>
     </tbody></table>`;
 
   // ── OTROS EGRESOS ──
@@ -7532,14 +7747,21 @@ function renderContable() {
   // ── FORMA DE COBRO ──
   const fcPeriod = formaCobroMovs.filter(m => inPeriod(`${m.periodo}-01`));
   const fcTotal  = fcPeriod.reduce((s,m) => s + (m.total||0), 0);
+  const fcEfectivo = fcPeriod.reduce((s,m) => s + (m.efectivo||0), 0);
+  const sueldosEfectivoPeriod = sueldosPeriod.reduce((s,x) => s + (x.efectivo||0), 0);
+  const gfEfectivoPeriod = gastosFijos.filter(g => inPeriod(`${g.periodo}-01`) && /efectivo/i.test(g.modo||'') && g.monto > 0).reduce((s,g) => s + (Number(g.monto)||0), 0);
+  const totalDescEfectivo = sueldosEfectivoPeriod + gfEfectivoPeriod;
+  const efectivoNeto = fcEfectivo - totalDescEfectivo;
   document.getElementById('totalFormaCobro').textContent = fcTotal ? pesos(fcTotal) : '';
   document.getElementById('secFormaCobroBody').innerHTML = !fcPeriod.length
     ? `<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px">Sin datos. Usá "Importar Forma de cobro" arriba.</div>`
     : `<table><thead><tr>
         <th>Período</th>
         <th style="text-align:right">Efectivo</th>
+        <th style="text-align:right">Mercado Pago</th>
         <th style="text-align:right">Tarjetas</th>
-        <th style="text-align:right">Otros</th>
+        <th style="text-align:right">Delivery</th>
+        <th style="text-align:right">Kripron</th>
         <th style="text-align:right">Total</th>
         <th style="text-align:right">Ventas</th>
         <th style="text-align:right">Ticket prom.</th>
@@ -7548,23 +7770,44 @@ function renderContable() {
       ${fcPeriod.sort((a,b)=>a.periodo.localeCompare(b.periodo)).map(m=>`
         <tr>
           <td style="font-weight:600">${m.periodo}</td>
-          <td style="text-align:right;font-family:var(--mono)">${pesos(m.efectivo)}</td>
-          <td style="text-align:right;font-family:var(--mono)">${pesos(m.tarjetas)}</td>
-          <td style="text-align:right;font-family:var(--mono)">${pesos(m.otros)}</td>
+          <td style="text-align:right;font-family:var(--mono)">${m.efectivo ? pesos(m.efectivo) : '—'}</td>
+          <td style="text-align:right;font-family:var(--mono)">${(m.mp||m.cta_cte) ? pesos(m.mp||m.cta_cte) : '—'}</td>
+          <td style="text-align:right;font-family:var(--mono)">${m.tarjetas ? pesos(m.tarjetas) : '—'}</td>
+          <td style="text-align:right;font-family:var(--mono)">${(m.delivery||m.otros) ? pesos(m.delivery||m.otros) : '—'}</td>
+          <td style="text-align:right;font-family:var(--mono)">${m.kripron ? pesos(m.kripron) : '—'}</td>
           <td style="text-align:right;font-family:var(--mono);font-weight:700;color:var(--accent)">${pesos(m.total)}</td>
-          <td style="text-align:right;color:var(--ink2)">${m.ventas}</td>
-          <td style="text-align:right;font-family:var(--mono);color:var(--ink2)">${pesos(m.promVtas)}</td>
+          <td style="text-align:right;color:var(--ink2)">${m.ventas||'—'}</td>
+          <td style="text-align:right;font-family:var(--mono);color:var(--ink2)">${m.promVtas ? pesos(m.promVtas) : '—'}</td>
           <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="_borrarFormaCobro('${m.id}')">✕</button></td>
         </tr>`).join('')}
       <tr style="font-weight:600;background:var(--surface2)">
         <td>Total</td>
-        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+m.efectivo,0))}</td>
-        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+m.tarjetas,0))}</td>
-        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+m.otros,0))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(fcEfectivo)}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+(m.mp||m.cta_cte||0),0))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+(m.tarjetas||0),0))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+(m.delivery||m.otros||0),0))}</td>
+        <td style="text-align:right;font-family:var(--mono)">${pesos(fcPeriod.reduce((s,m)=>s+(m.kripron||0),0))}</td>
         <td style="text-align:right;font-family:var(--mono);color:var(--accent)">${pesos(fcTotal)}</td>
-        <td style="text-align:right;color:var(--ink2)">${fcPeriod.reduce((s,m)=>s+m.ventas,0)}</td>
+        <td style="text-align:right;color:var(--ink2)">${fcPeriod.reduce((s,m)=>s+(m.ventas||0),0)}</td>
         <td></td><td></td>
-      </tr></tbody></table>`;
+      </tr>
+      ${totalDescEfectivo > 0 ? `
+      ${sueldosEfectivoPeriod > 0 ? `<tr style="color:var(--danger);font-size:12px">
+        <td style="padding-left:14px">— Sueldos en efectivo</td>
+        <td style="text-align:right;font-family:var(--mono)">-${pesos(sueldosEfectivoPeriod)}</td>
+        <td colspan="7"></td>
+      </tr>` : ''}
+      ${gfEfectivoPeriod > 0 ? `<tr style="color:var(--danger);font-size:12px">
+        <td style="padding-left:14px">— Gastos fijos en efectivo</td>
+        <td style="text-align:right;font-family:var(--mono)">-${pesos(gfEfectivoPeriod)}</td>
+        <td colspan="7"></td>
+      </tr>` : ''}
+      <tr style="font-weight:700;background:#FEF3C7">
+        <td>Efectivo neto</td>
+        <td style="text-align:right;font-family:var(--mono);color:${efectivoNeto>=0?'var(--accent)':'var(--danger)'}">${pesos(efectivoNeto)}</td>
+        <td colspan="7"></td>
+      </tr>` : ''}
+      </tbody></table>`;
 
   // ── INGRESOS MP ──
   const mpIngPeriod = mpIngMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
@@ -7667,6 +7910,24 @@ function renderContable() {
       <div class="amount" style="color:${resultColor}">${resultado >= 0 ? '' : '−'}${pesos(Math.abs(resultado))}</div>
       <div class="sub">${resultado >= 0 ? 'Ganancia' : 'Pérdida'} del período</div>
     </div>`;
+
+  // Restaurar secciones abiertas — forzar display:block y preservar scroll
+  const _scrollY = window.scrollY;
+  _seccionesAbiertas.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.setProperty('display', 'block', 'important');
+    el.closest('.contable-section')?.classList.add('is-open');
+    const tog = document.getElementById(id + 'Toggle');
+    if (tog) tog.textContent = '▲';
+  });
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: _scrollY, behavior: 'instant' });
+    _seccionesAbiertas.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.setProperty('display', 'block', 'important');
+    });
+  });
 }
 
 
@@ -8140,17 +8401,19 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
     const pn = norm(p.nombre||'');
     return descNorm.includes(pn) || (p.nombre||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).filter(w=>w.length>3).some(w=>descNorm.includes(norm(w)));
   };
+  const mesRef = (fecha||'').slice(0, 7); // 'YYYY-MM'
   const facsOrdenadas = [...facturas]
     .filter(f => f.importeTotal > 0)
     .sort((a, b) => {
+      const aMes = (a.fecha||'').slice(0, 7) === mesRef ? 0 : 1;
+      const bMes = (b.fecha||'').slice(0, 7) === mesRef ? 0 : 1;
+      if (aMes !== bMes) return aMes - bMes;
       const diffA = Math.abs(a.importeTotal - monto);
       const diffB = Math.abs(b.importeTotal - monto);
-      const closeA = diffA <= 2000;
-      const closeB = diffB <= 2000;
-      if (closeA && !closeB) return -1;
-      if (!closeA && closeB) return 1;
-      if (closeA && closeB) return diffA - diffB;
-      return (b.fecha||'').localeCompare(a.fecha||'');
+      if (diffA !== diffB) return diffA - diffB;
+      const da = Math.abs(new Date(a.fecha||0) - new Date(fecha||0));
+      const db = Math.abs(new Date(b.fecha||0) - new Date(fecha||0));
+      return da - db;
     });
 
   const selected = new Set();
@@ -8226,18 +8489,18 @@ function _abrirVincularBoletaModal({ desc, fecha, monto, modalId, onSelect }) {
 
   document.getElementById(modalId)?.remove();
   document.body.insertAdjacentHTML('beforeend', `
-    <div class="overlay open" id="${modalId}" style="display:flex">
-      <div class="modal" style="max-width:560px">
+    <div class="overlay open" id="${modalId}" style="display:flex;align-items:center">
+      <div class="modal" style="max-width:560px;display:flex;flex-direction:column;max-height:90vh">
         <h2>Vincular a factura</h2>
         <p class="modal-sub">${fecha} · ${desc} · <strong>${pesos(monto)}</strong></p>
         <input type="search" id="${modalId}_search" placeholder="Buscar proveedor o N° boleta…" autocomplete="off"
           oninput="document.getElementById('${modalId}_list').innerHTML=document.getElementById('${modalId}')._render(this.value)"
-          style="width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-top:12px;box-sizing:border-box">
-        <div id="${modalId}_list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:320px;overflow-y:auto">
+          style="width:100%;padding:9px 13px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-top:4px;box-sizing:border-box;flex-shrink:0">
+        <div id="${modalId}_list" style="display:flex;flex-direction:column;gap:6px;margin-top:10px;overflow-y:auto;flex:1;min-height:0">
           ${_renderItems(_provNombreMatch)}
         </div>
-        <div id="${modalId}_footer" style="margin-top:10px;font-size:13px;color:var(--ink2);min-height:20px"></div>
-        <div class="modal-actions" style="margin-top:10px">
+        <div id="${modalId}_footer" style="margin-top:10px;font-size:13px;color:var(--ink2);min-height:20px;flex-shrink:0"></div>
+        <div class="modal-actions" style="margin-top:10px;flex-shrink:0">
           <button class="btn btn-outline" onclick="document.getElementById('${modalId}').remove()">Cancelar</button>
           <button class="btn btn-primary" id="${modalId}_btnOk" disabled onclick="document.getElementById('${modalId}')._confirm()">Vincular</button>
         </div>
@@ -8884,76 +9147,137 @@ function importGalicia(e) {
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
       const parseAR = v => { const n = parseFloat(String(v).replace(/\./g,'').replace(',','.')); return isFinite(n)?n:0; };
       const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      const headerIdx = rows.findIndex(r => r.some(c=>/^fecha$/i.test(String(c).trim())) && r.some(c=>/débit/i.test(String(c))));
-      if (headerIdx < 0) { toast('No se encontró la tabla en el archivo','error'); return; }
-      const hdrs = rows[headerIdx].map(h=>String(h).trim());
-      const iF = hdrs.findIndex(h=>/^fecha$/i.test(h));
-      const iM = hdrs.findIndex(h=>/^movimiento$/i.test(h));
-      const iD = hdrs.findIndex(h=>/débit/i.test(h));
-      const iC = hdrs.findIndex(h=>/créd/i.test(h));
+
+      // Detectar formato Posicion Consolidada
+      const esPosConsolidada = (() => {
+        for (let i = 1; i < Math.min(5, rows.length); i++) {
+          const r = rows[i];
+          if (typeof r[0] === 'number' && r[0] > 40000 && typeof r[1] === 'string' && r[1].length > 5) return true;
+        }
+        return false;
+      })();
+
       const existentes    = new Set(galiciaMovs.map(m=>m.id));
       const existentesCmp = new Set(galiciaMovs.map(m=>`${m.fecha}|${Math.round(m.monto)}|${(m.tipo||'').slice(0,30)}|${m.esIngreso?1:0}`));
-      const newEgresos = [], newIngresos = [];
-      let autoVinculados = 0;
-      rows.slice(headerIdx+1).forEach((r,i) => {
-        const deb  = parseAR(r[iD]);
-        const cred = iC >= 0 ? parseAR(r[iC]) : 0;
-        const fechaRaw = String(r[iF]||'').trim();
-        if (!fechaRaw) return;
-        const [d,mo,y] = fechaRaw.split('/');
-        const fecha = `${y}-${mo?.padStart(2,'0')}-${d?.padStart(2,'0')}`;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
-        const movRaw = String(r[iM]||'');
-        const lineas = movRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const tipo = lineas[0] || 'Sin tipo';
-        const destinatario = lineas[1] || '';
-        const extras = lineas.slice(2).filter(l =>
-          !/^\d{10,}$/.test(l) && !/4517X{4,}/.test(l) && !/^VARIOS$/i.test(l) && !/^\d{8,}$/.test(l)
-        );
-        const descripcion = [tipo, destinatario, ...extras].filter(Boolean).join(' · ');
 
-        if (deb < 0) {
-          const monto = Math.abs(deb);
-          const cmpKey = `${fecha}|${Math.round(monto)}|${tipo.slice(0,30)}|0`;
-          const id = `gal-${fecha}-${monto}-${i}`;
+      // Rango de fechas ya cargado en la app
+      const fechasExistentes = galiciaMovs.map(m=>m.fecha).filter(Boolean).sort();
+      const fechaMinExist = fechasExistentes[0] || null;
+      const fechaMaxExist = fechasExistentes[fechasExistentes.length-1] || null;
+
+      const newEgresos = [], newIngresos = [];
+      const alertaEgresos = [], alertaIngresos = []; // nuevos dentro del rango ya cargado
+      let autoVinculados = 0;
+
+      const _procesar = (fecha, tipo, dest, desc, debito, credit, cuit, i) => {
+        const enRangoExist = fechaMinExist && fecha >= fechaMinExist && fecha <= fechaMaxExist;
+        if (debito > 0) {
+          const cmpKey = `${fecha}|${Math.round(debito)}|${tipo.slice(0,30)}|0`;
+          const id = `gal-${fecha}-${debito}-${i}`;
           if (existentes.has(id) || existentesCmp.has(cmpKey)) return;
-          const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(destinatario) || /diego.*hernan/i.test(destinatario);
-          const mov = { id, fecha, monto, descripcion, tipo, ...(esInterna?{esInterna:true}:{}) };
+          const esInterna = /transf.*ctas.*propias/i.test(tipo) || /cuenta propia/i.test(tipo) || /lay.o/i.test(dest) || /diego.*hernan/i.test(dest);
+          const mov = { id, fecha, monto: debito, descripcion: desc, tipo, ...(esInterna?{esInterna:true}:{}) };
           if (!esInterna) {
-            const cuitEnDesc = (lineas.find(l => /^(CU|NO)\s+\d{8,}/.test(l)) || '').replace(/\D/g,'');
-            const descNorm = norm(descripcion);
+            const descNorm = norm(desc);
             const match = facturas.find(f => {
               if (f.importeTotal <= 0) return false;
               const prov = proveedores.find(p=>p.id===f.proveedorId); if(!prov) return false;
-              const cuitMatch = cuitEnDesc && prov.cuit && prov.cuit === cuitEnDesc;
+              const cuitMatch = cuit && prov.cuit && prov.cuit === cuit;
               const nombreMatch = prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
                 .filter(w=>w.length>3).some(w=>descNorm.includes(w));
-              return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(monto);
+              return (cuitMatch || nombreMatch) && Math.round(f.importeTotal)===Math.round(debito);
             });
             if (match) { mov.facturaIds=[match.id]; autoVinculados++; }
           }
           existentesCmp.add(cmpKey);
-          newEgresos.push(mov);
-        } else if (cred > 0) {
-          const cmpKey = `${fecha}|${Math.round(cred)}|${tipo.slice(0,30)}|1`;
-          const id = `gal-ing-${fecha}-${cred}-${i}`;
+          if (enRangoExist) alertaEgresos.push(mov);
+          else newEgresos.push(mov);
+        } else if (credit > 0) {
+          const cmpKey = `${fecha}|${Math.round(credit)}|${tipo.slice(0,30)}|1`;
+          const id = `gal-ing-${fecha}-${credit}-${i}`;
           if (existentes.has(id) || existentesCmp.has(cmpKey)) return;
           existentesCmp.add(cmpKey);
-          newIngresos.push({ id, fecha, monto: cred, descripcion, tipo, esIngreso: true });
+          const mov = { id, fecha, monto: credit, descripcion: desc, tipo, esIngreso: true };
+          if (enRangoExist) alertaIngresos.push(mov);
+          else newIngresos.push(mov);
         }
-      });
+      };
 
-      if (!newEgresos.length && !newIngresos.length) {
+      if (esPosConsolidada) {
+        const excelToISO = n => {
+          if (!n || typeof n !== 'number') return null;
+          return new Date(Math.round((n - 25569) * 86400 * 1000)).toISOString().slice(0, 10);
+        };
+        rows.slice(1).forEach((r, i) => {
+          const fecha = excelToISO(r[0]);
+          if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+          const desc  = String(r[1]||'').trim(); if (!desc) return;
+          const partes = desc.split(' - ');
+          const tipo   = partes[0].trim();
+          const dest   = (partes[1]||'').trim();
+          const cuit   = /^\d{10,11}$/.test((partes[partes.length-1]||'').trim()) ? partes[partes.length-1].trim() : '';
+          const descripcion = partes.filter(Boolean).join(' · ');
+          const debito = Number(r[2])||0;
+          const credit = Number(r[5])||0;
+          _procesar(fecha, tipo, dest, descripcion, debito, credit, cuit, i);
+        });
+      } else {
+        const headerIdx = rows.findIndex(r => r.some(c=>/^fecha$/i.test(String(c).trim())) && r.some(c=>/d.bit/i.test(String(c))));
+        if (headerIdx < 0) { toast('No se encontró la tabla en el archivo','error'); return; }
+        const hdrs = rows[headerIdx].map(h=>String(h).trim());
+        const iF = hdrs.findIndex(h=>/^fecha$/i.test(h));
+        const iM = hdrs.findIndex(h=>/^movimiento$/i.test(h));
+        const iD = hdrs.findIndex(h=>/d.bit/i.test(h));
+        const iC = hdrs.findIndex(h=>/cr.d/i.test(h));
+        rows.slice(headerIdx+1).forEach((r,i) => {
+          const deb  = parseAR(r[iD]);
+          const cred = iC >= 0 ? parseAR(r[iC]) : 0;
+          const fechaRaw = String(r[iF]||'').trim(); if (!fechaRaw) return;
+          const [d,mo,y] = fechaRaw.split('/');
+          const fecha = `${y}-${mo?.padStart(2,'0')}-${d?.padStart(2,'0')}`;
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;
+          const movRaw = String(r[iM]||'');
+          const lineas = movRaw.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+          const tipo = lineas[0] || 'Sin tipo';
+          const dest = lineas[1] || '';
+          const extras = lineas.slice(2).filter(l =>
+            !/^\d{10,}$/.test(l) && !/4517X{4,}/.test(l) && !/^VARIOS$/i.test(l) && !/^\d{8,}$/.test(l)
+          );
+          const descripcion = [tipo, dest, ...extras].filter(Boolean).join(' · ');
+          const cuit = (lineas.find(l => /^(CU|NO)\s+\d{8,}/.test(l)) || '').replace(/\D/g,'');
+          _procesar(fecha, tipo, dest, descripcion, deb < 0 ? Math.abs(deb) : 0, cred, cuit, i);
+        });
+      }
+
+      const totalNuevos = newEgresos.length + newIngresos.length;
+      const totalAlerta = alertaEgresos.length + alertaIngresos.length;
+
+      if (!totalNuevos && !totalAlerta) {
         toast('No hay movimientos nuevos para importar', 'info'); return;
       }
 
-      _galPendienteImport = { egresos: newEgresos, ingresos: newIngresos, autoVinculados };
-      const pesos2 = n => '$ ' + n.toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2});
-      const totalE = newEgresos.reduce((s,m)=>s+m.monto,0);
-      const totalI = newIngresos.reduce((s,m)=>s+m.monto,0);
+      _galPendienteImport = { egresos: newEgresos, ingresos: newIngresos, alertaEgresos, alertaIngresos, autoVinculados };
+      const pesos2 = n => '$ ' + n.toLocaleString('es-AR', {minimumFractionDigits:2,maximumFractionDigits:2});
       const lines = [];
-      if (newEgresos.length) lines.push(`<strong>${newEgresos.length} egresos nuevos</strong> · ${pesos2(totalE)}${autoVinculados ? ` <span style="color:var(--accent)">(${autoVinculados} vinculados automáticamente)</span>` : ''}`);
-      if (newIngresos.length) lines.push(`<strong>${newIngresos.length} ingresos nuevos</strong> · <span style="color:var(--accent)">${pesos2(totalI)}</span>`);
+
+      if (totalNuevos) {
+        const totalE = newEgresos.reduce((s,m)=>s+m.monto,0);
+        const totalI = newIngresos.reduce((s,m)=>s+m.monto,0);
+        if (newEgresos.length) lines.push(`<strong>${newEgresos.length} egresos nuevos</strong> · ${pesos2(totalE)}${autoVinculados ? ` <span style="color:var(--accent)">(${autoVinculados} vinculados)</span>` : ''}`);
+        if (newIngresos.length) lines.push(`<strong>${newIngresos.length} ingresos nuevos</strong> · <span style="color:var(--accent)">${pesos2(totalI)}</span>`);
+      }
+
+      if (totalAlerta) {
+        const montoAlertaE = alertaEgresos.reduce((s,m)=>s+m.monto,0);
+        const montoAlertaI = alertaIngresos.reduce((s,m)=>s+m.monto,0);
+        lines.push(`<div style="margin-top:10px;padding:10px 12px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;font-size:12px">
+          <div style="font-weight:700;color:#92400E;margin-bottom:4px">⚠ ${totalAlerta} movimiento${totalAlerta!==1?'s':''} nuevos dentro del rango ya cargado (${fechaMinExist} → ${fechaMaxExist})</div>
+          ${alertaEgresos.length ? `<div style="color:#92400E">${alertaEgresos.length} egreso${alertaEgresos.length!==1?'s':''} · ${pesos2(montoAlertaE)}</div>` : ''}
+          ${alertaIngresos.length ? `<div style="color:#065F46">${alertaIngresos.length} ingreso${alertaIngresos.length!==1?'s':''} · ${pesos2(montoAlertaI)}</div>` : ''}
+          <div style="color:#92400E;margin-top:4px">Confirmá solo si sabés que faltan movimientos en ese período.</div>
+        </div>`);
+      }
+
       document.getElementById('importGaliciaResumen').innerHTML = lines.join('<br>');
       openModal('modalImportGalicia');
     } catch(err) { toast('Error: '+err.message,'error'); }
@@ -8963,16 +9287,97 @@ function importGalicia(e) {
 
 function _confirmarImportGalicia() {
   if (!_galPendienteImport) return;
-  const { egresos, ingresos, autoVinculados } = _galPendienteImport;
+  const { egresos, ingresos, alertaEgresos = [], alertaIngresos = [], autoVinculados } = _galPendienteImport;
   _galPendienteImport = null;
-  egresos.forEach(m => galiciaMovs.push(m));
-  ingresos.forEach(m => galiciaMovs.push(m));
+  [...egresos, ...ingresos].forEach(m => galiciaMovs.push(m));
+  // Los del rango ya cargado van al log de revisión, no a galiciaMovs
+  [...alertaEgresos, ...alertaIngresos].forEach(m => galiciaParaRevisar.push(m));
   closeModal('modalImportGalicia');
-  _persistGal(); renderContable();
+  _persistGal();
+  if (alertaEgresos.length || alertaIngresos.length) _persistGalRevisar();
+  renderContable();
   const parts = [];
-  if (egresos.length) parts.push(`${egresos.length} egresos${autoVinculados?` · ${autoVinculados} vinculados`:''}`);
-  if (ingresos.length) parts.push(`${ingresos.length} ingresos`);
-  toast(`Galicia: ${parts.join(' · ')} importados`, 'success');
+  if (egresos.length + ingresos.length) {
+    if (egresos.length) parts.push(`${egresos.length} egresos${autoVinculados ? ` · ${autoVinculados} vinculados` : ''}`);
+    if (ingresos.length) parts.push(`${ingresos.length} ingresos`);
+  }
+  const totalAlerta = alertaEgresos.length + alertaIngresos.length;
+  if (totalAlerta) parts.push(`${totalAlerta} en Galicia Historial para revisar`);
+  toast(`Galicia: ${parts.join(' · ')}`, parts.length ? 'success' : 'info');
+}
+
+function renderGaliciaRevisar() {
+  const sec   = document.getElementById('secGaliciaRevisar');
+  const body  = document.getElementById('secGaliciaRevisarBody');
+  const total = document.getElementById('totalGaliciaRevisar');
+  if (!sec || !body) return;
+
+  const btn   = document.getElementById('btnGaliciaRevisar');
+  const badge = document.getElementById('badgeGaliciaRevisar');
+  if (!galiciaParaRevisar.length) {
+    sec.style.display = 'none';
+    if (btn) btn.style.display = 'none';
+    return;
+  }
+
+  sec.style.display = '';
+  const n = galiciaParaRevisar.length;
+  if (total) total.textContent = `${n} pendiente${n!==1?'s':''}`;
+  if (btn)   { btn.style.display = ''; }
+  if (badge) { badge.textContent = `(${n})`; }
+
+  const sorted = [...galiciaParaRevisar].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+
+  let html = `<div style="display:flex;gap:8px;justify-content:flex-end;padding:8px 14px;border-bottom:1px solid var(--border)">
+    <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_descartarTodosGaliciaRevisar()">Descartar todos</button>
+  </div>`;
+
+  sorted.forEach(m => {
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_h(m.descripcion||m.tipo)}</div>
+        <div style="color:var(--ink3);margin-top:2px">${m.fecha}</div>
+      </div>
+      <div style="font-family:var(--mono);font-weight:700;flex-shrink:0;color:${m.esIngreso?'#065F46':'var(--ink)'}">${m.esIngreso?'+ ':''}${pesos(m.monto)}</div>
+      <button class="btn btn-outline btn-sm" style="color:var(--accent);border-color:var(--accent);flex-shrink:0" onclick="_altaGaliciaRevisar('${m.id}')">Dar de alta</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--ink3);flex-shrink:0" onclick="_descartarGaliciaRevisar('${m.id}')">✕</button>
+    </div>`;
+  });
+
+  body.innerHTML = html;
+}
+
+function _irGaliciaRevisar() {
+  const sec = document.getElementById('secGaliciaRevisar');
+  if (!sec) return;
+  sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const body = document.getElementById('secGaliciaRevisarBody');
+  if (body && body.style.display === 'none') toggleSection('secGaliciaRevisarBody');
+}
+
+function _altaGaliciaRevisar(id) {
+  const idx = galiciaParaRevisar.findIndex(m => m.id === id);
+  if (idx < 0) return;
+  galiciaMovs.push(galiciaParaRevisar.splice(idx, 1)[0]);
+  _persistGal(); _persistGalRevisar();
+  renderGaliciaRevisar(); renderContable();
+  toast('Movimiento dado de alta', 'success');
+}
+
+function _descartarGaliciaRevisar(id) {
+  galiciaParaRevisar = galiciaParaRevisar.filter(m => m.id !== id);
+  _persistGalRevisar();
+  renderGaliciaRevisar();
+  toast('Movimiento descartado', 'info');
+}
+
+function _descartarTodosGaliciaRevisar() {
+  if (!galiciaParaRevisar.length) return;
+  if (!confirm(`¿Descartar los ${galiciaParaRevisar.length} movimientos del historial?`)) return;
+  galiciaParaRevisar = [];
+  _persistGalRevisar();
+  renderGaliciaRevisar();
+  toast('Historial descartado', 'info');
 }
 
 // ── IMPORT REPORTE MP STANDARD (CSV oficial MP — ingresos + egresos) ──
@@ -9086,8 +9491,62 @@ function importFormaCobro(e) {
       const wb   = XLSX.read(ev.target.result, { type: 'array' });
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: 0 });
+
+      // ── Formato ARCA: columnas id, codigo, nombre, importe, ventas ──
+      const hdrARCA = rows.findIndex(r => r.some(c => /^nombre$/i.test(String(c).trim())) && r.some(c => /^importe$/i.test(String(c).trim())));
+      if (hdrARCA >= 0) {
+        const hdrs  = rows[hdrARCA].map(h => String(h).trim().toLowerCase());
+        const iNom  = hdrs.findIndex(h => h === 'nombre');
+        const iImp  = hdrs.findIndex(h => h === 'importe');
+        const iVtas = hdrs.findIndex(h => h === 'ventas');
+
+        // Agrupar por categoría
+        let efectivo=0, mp=0, tarjetas=0, delivery=0, kripron=0, totalVentas=0;
+        const iId = hdrs.findIndex(h => h === 'id');
+        rows.slice(hdrARCA + 1).forEach(r => {
+          const nom = String(r[iNom]||'').trim();
+          const imp = Number(r[iImp])||0;
+          const vts = Number(r[iVtas])||0;
+          const rid = String(r[iId]||'').trim();
+          // Solo procesar filas de detalle (id empieza en "01-")
+          if (!/^01-/.test(rid)) return;
+          if (!imp) return;
+          if (/^efectivo/i.test(nom))                                                  { efectivo += imp; totalVentas += vts; }
+          else if (/transfer.*mp|^mp$/i.test(nom))                                     mp       += imp;
+          else if (/kri[pk]r?on/i.test(nom))                                           kripron  += imp;
+          else if (/posnet|visa|master|amex|cabal|naranja|credito|debito/i.test(nom))  tarjetas += imp;
+          else                                                                          { delivery += imp; totalVentas += vts; }
+        });
+        const total = efectivo + mp + tarjetas + delivery + kripron;
+        if (!total) { toast('No se encontraron importes válidos', 'error'); return; }
+
+        // Pedir período
+        const now = new Date();
+        const defPeriodo = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+        const periodoInput = prompt(
+          `Efectivo: ${pesos(efectivo)}\nMercado Pago: ${pesos(mp)}\nTarjetas: ${pesos(tarjetas)}\nDelivery: ${pesos(delivery)}\nKripron: ${pesos(kripron)}\nTotal: ${pesos(total)}\n\nIngresá el período (YYYY-MM):`,
+          defPeriodo
+        );
+        if (!periodoInput) return;
+        const periodo = periodoInput.trim();
+        if (!/^\d{4}-\d{2}$/.test(periodo)) { toast('Período inválido. Usá formato YYYY-MM', 'error'); return; }
+        if (formaCobroMovs.some(m => m.periodo === periodo)) {
+          if (!confirm(`Ya existe un registro para ${periodo}. ¿Reemplazarlo?`)) return;
+          formaCobroMovs = formaCobroMovs.filter(m => m.periodo !== periodo);
+        }
+        formaCobroMovs.push({
+          id: crypto.randomUUID(), periodo,
+          efectivo, mp, tarjetas, delivery, kripron,
+          total, ventas: totalVentas, promVtas: totalVentas ? Math.round(total / totalVentas) : 0
+        });
+        _persistBase(); renderContable();
+        toast(`Forma de cobro ${periodo} importada`, 'success');
+        return;
+      }
+
+      // ── Formato clásico: columnas fecha, efectivo, tarjetas… ──
       const hdrIdx = rows.findIndex(r => r.some(c => /^fecha$/i.test(String(c).trim())));
-      if (hdrIdx < 0) { toast('No se encontró la tabla', 'error'); return; }
+      if (hdrIdx < 0) { toast('Formato no reconocido', 'error'); return; }
       const hdrs = rows[hdrIdx].map(h => String(h).trim().toLowerCase());
       const col  = k => hdrs.findIndex(h => h === k);
       const iF = col('fecha'); const iEf = col('efectivo'); const iCc = col('cta_cte');
@@ -9115,7 +9574,7 @@ function importFormaCobro(e) {
       });
       if (!added) { toast('No hay períodos nuevos para importar', 'info'); return; }
       _persistBase(); renderContable();
-      toast(`${added} período${added !== 1 ? 's' : ''} de forma de cobro importados`, 'success');
+      toast(`${added} período${added !== 1 ? 's' : ''} importados`, 'success');
     } catch(err) { toast('Error: ' + err.message, 'error'); }
   };
   reader.readAsArrayBuffer(file);
@@ -9308,6 +9767,18 @@ function deleteSueldo(id) {
   sueldos = sueldos.filter(s => s.id !== id);
   _persistBase();
   renderContable();
+}
+function _editSueldoEfectivo(id, sugerido) {
+  const val = prompt('Monto pagado en efectivo:', sugerido || 0);
+  if (val === null) return;
+  const n = parseFloat(val);
+  if (isNaN(n) || n < 0) { toast('Monto inválido', 'error'); return; }
+  const s = sueldos.find(x => x.id === id);
+  if (!s) return;
+  if (n === 0) delete s.efectivo; else s.efectivo = n;
+  _persistBase();
+  renderContable();
+  toast(n > 0 ? `Efectivo registrado: ${pesos(n)}` : 'Efectivo eliminado', 'success');
 }
 function _importarSueldosMesAnterior() {
   const actual = _periodoActual();
@@ -9503,6 +9974,14 @@ function _renderTablaProveedores(meses, ventasMes) {
     totalComprasMes[m] = provsConData.reduce((s,p) => s + (comprasProv[p.id]?.[m]||0), 0);
   });
 
+  const gfMes = {};
+  gastosFijos.forEach(g => {
+    if (!g.periodo || !meses.includes(g.periodo)) return;
+    gfMes[g.periodo] = (gfMes[g.periodo]||0) + (Number(g.monto)||0);
+  });
+  const totalEgresosMes = {};
+  meses.forEach(m => { totalEgresosMes[m] = (totalComprasMes[m]||0) + (gfMes[m]||0); });
+
   const MESES_ABR = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const fmtMes = m => { const [y,mo] = m.split('-'); return `${MESES_ABR[+mo-1]}<br><small>'${y.slice(2)}</small>`; };
   const fmtK = n => {
@@ -9544,6 +10023,16 @@ function _renderTablaProveedores(meses, ventasMes) {
         <td style="${TD};text-align:left;font-weight:700;font-size:13px;color:var(--danger);border-top:2px solid var(--border);border-bottom:0;${SL};background:#FFF5F5">Total Compras</td>
         ${meses.map(m=>`<td style="${TD};color:var(--danger);font-weight:700;border-top:2px solid var(--border);border-bottom:0">${fmtK(totalComprasMes[m])}</td>`).join('')}
         <td style="${TD};color:var(--danger);font-weight:700;border-top:2px solid var(--border);border-bottom:0">${fmtK(Object.values(totalComprasMes).reduce((s,v)=>s+v,0))}</td>
+      </tr>
+      <tr style="background:#FFF0F0">
+        <td style="${TD};text-align:left;font-weight:700;font-size:13px;color:#9B1C1C;border-top:1px solid var(--border);border-bottom:0;${SL};background:#FFF0F0">Gastos Fijos</td>
+        ${meses.map(m=>`<td style="${TD};color:#9B1C1C;font-weight:700;border-top:1px solid var(--border);border-bottom:0">${fmtK(gfMes[m])}</td>`).join('')}
+        <td style="${TD};color:#9B1C1C;font-weight:700;border-top:1px solid var(--border);border-bottom:0">${fmtK(Object.values(gfMes).reduce((s,v)=>s+v,0))}</td>
+      </tr>
+      <tr style="background:#FFE4E4">
+        <td style="${TD};text-align:left;font-weight:700;font-size:13px;color:#7F1D1D;border-top:2px solid #EF4444;border-bottom:0;${SL};background:#FFE4E4">Total Egresos</td>
+        ${meses.map(m=>`<td style="${TD};color:#7F1D1D;font-weight:700;border-top:2px solid #EF4444;border-bottom:0">${fmtK(totalEgresosMes[m])}</td>`).join('')}
+        <td style="${TD};color:#7F1D1D;font-weight:700;border-top:2px solid #EF4444;border-bottom:0">${fmtK(Object.values(totalEgresosMes).reduce((s,v)=>s+v,0))}</td>
       </tr>
       <tr style="background:var(--surface2)">
         <td style="${TD};text-align:left;font-weight:700;font-size:12px;color:var(--ink2);border-bottom:0;${SL};background:var(--surface2)">Food cost %</td>
@@ -10159,11 +10648,20 @@ function importarARCA(input) {
 
         const arcaRow = { fecha, fechaISO, tipo, pv, nro: nroDesde, nroFmt, cae, cuitEmisor, nombre, total };
 
-        const prov  = cuitMap[cuitEmisor] || nombreMap[_arcaNorm(nombre)] || null;
-        const match = prov
+        let prov  = cuitMap[cuitEmisor] || nombreMap[_arcaNorm(nombre)] || null;
+        let match = prov
           ? facturas.find(f => f.proveedorId === prov.id && _arcaNroMatch(f.nroBoleta, pv, nroDesde))
             || facturas.find(f => f.proveedorId === prov.id && f.fecha === fechaISO && f.importeTotal && Math.abs(Number(f.importeTotal)-total)<1)
           : null;
+
+        // Fallback: buscar por CAE globalmente (sin importar si el proveedor matcheó)
+        if (!match && cae) {
+          const byCAE = facturas.find(f => f.cae && f.cae === cae);
+          if (byCAE) {
+            match = byCAE;
+            if (!prov) prov = proveedores.find(p => p.id === byCAE.proveedorId) || null;
+          }
+        }
 
         if (match) {
           matches.push({ arcaRow, factura: match, prov });
@@ -10191,11 +10689,13 @@ function _arcaMostrarResultado(matches, noMatch) {
 
   const conProv = noMatch.filter(x => x.prov);
   const sinProv = noMatch.filter(x => !x.prov);
+  const yaVerif   = matches.filter(m => m.factura.arcaVerificada);
+  const nuevasMatch = matches.filter(m => !m.factura.arcaVerificada);
 
   let html = `<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
     <div style="flex:1;min-width:90px;padding:12px;background:#D1FAE5;border-radius:10px;text-align:center">
-      <div style="font-size:24px;font-weight:800;color:#065F46">${matches.length}</div>
-      <div style="font-size:11px;color:#065F46;font-weight:600">Con match ✓</div>
+      <div style="font-size:24px;font-weight:800;color:#065F46">${nuevasMatch.length}</div>
+      <div style="font-size:11px;color:#065F46;font-weight:600">Nuevas ✓</div>
     </div>
     <div style="flex:1;min-width:90px;padding:12px;background:#EDE9FE;border-radius:10px;text-align:center">
       <div style="font-size:24px;font-weight:800;color:#5B21B6">${conProv.length}</div>
@@ -10205,20 +10705,41 @@ function _arcaMostrarResultado(matches, noMatch) {
       <div style="font-size:24px;font-weight:800;color:#92400E">${sinProv.length}</div>
       <div style="font-size:11px;color:#92400E;font-weight:600">Para Revisar</div>
     </div>
+    ${yaVerif.length ? `<div style="flex:1;min-width:90px;padding:12px;background:var(--surface2);border-radius:10px;text-align:center">
+      <div style="font-size:24px;font-weight:800;color:var(--ink3)">${yaVerif.length}</div>
+      <div style="font-size:11px;color:var(--ink3);font-weight:600">Ya importadas</div>
+    </div>` : ''}
   </div>`;
 
-  /* ── Sección: Con match ── */
-  if (matches.length) {
+  /* ── Sección: Nuevas con match ── */
+  if (nuevasMatch.length) {
     html += `<details open style="margin-bottom:16px;border:1px solid #D1FAE5;border-radius:10px;overflow:hidden">
       <summary style="padding:10px 14px;background:#D1FAE5;font-size:13px;font-weight:700;color:#065F46;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
         <span>✓ Con match — se marcan como verificadas</span>
-        <span style="font-size:12px;opacity:.7">${matches.length} factura${matches.length!==1?'s':''}</span>
+        <span style="font-size:12px;opacity:.7">${nuevasMatch.length} factura${nuevasMatch.length!==1?'s':''}</span>
       </summary>
       <div style="padding:4px 14px 8px">`;
-    matches.forEach(({arcaRow, prov}) => {
+    nuevasMatch.forEach(({arcaRow, prov}) => {
       html += `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
         <span style="color:var(--ink2)">${_h(prov?.nombre||arcaRow.nombre)} · N° ${_h(arcaRow.nroFmt)} · ${_h(arcaRow.fecha)}</span>
         <span style="font-weight:700;color:#065F46">${pesos(arcaRow.total)}</span>
+      </div>`;
+    });
+    html += `</div></details>`;
+  }
+
+  /* ── Sección: Ya importadas (colapsado) ── */
+  if (yaVerif.length) {
+    html += `<details style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <summary style="padding:10px 14px;background:var(--surface2);font-size:13px;font-weight:700;color:var(--ink3);cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center">
+        <span>✓ Ya importadas anteriormente — sin cambios</span>
+        <span style="font-size:12px;opacity:.7">${yaVerif.length} factura${yaVerif.length!==1?'s':''}</span>
+      </summary>
+      <div style="padding:4px 14px 8px">`;
+    yaVerif.forEach(({arcaRow, prov}) => {
+      html += `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;opacity:.6">
+        <span style="color:var(--ink2)">${_h(prov?.nombre||arcaRow.nombre)} · N° ${_h(arcaRow.nroFmt)} · ${_h(arcaRow.fecha)}</span>
+        <span style="font-weight:700;color:var(--ink3)">${pesos(arcaRow.total)}</span>
       </div>`;
     });
     html += `</div></details>`;
@@ -10264,8 +10785,8 @@ function _arcaMostrarResultado(matches, noMatch) {
 function _arcaAplicar() {
   let marcadas = 0, dadas = 0;
 
-  _arcaLastMatches.forEach(({factura}) => {
-    if (!factura.arcaVerificada) { factura.arcaVerificada = true; marcadas++; }
+  _arcaLastMatches.filter(m => !m.factura.arcaVerificada).forEach(({factura}) => {
+    factura.arcaVerificada = true; marcadas++;
   });
 
   const conProv = _arcaLastNoMatch.filter(x => x.prov);
@@ -10369,6 +10890,7 @@ function renderARCAPendientes() {
               ${provOpts}
             </select>
             <button class="btn btn-primary btn-sm" onclick="_arcaVincular('${cuit}','${uid}')">Vincular</button>
+            <button class="btn btn-outline btn-sm" onclick="_arcaAltaProveedor('${cuit}')" style="color:var(--accent);border-color:var(--accent)">+ Dar de alta</button>
             <button class="btn btn-outline btn-sm" onclick="_arcaIgnorar('${cuit}')" style="color:var(--danger);border-color:var(--danger)">Ignorar</button>
           </div>
         </div>
@@ -10428,6 +10950,40 @@ function _arcaIgnorar(cuit) {
   persist();
   renderARCAPendientes();
   toast('Emisor ignorado', 'success');
+}
+
+function _arcaAltaProveedor(cuit) {
+  const items = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') === cuit);
+  if (!items.length) return;
+  const nombre = (items[0].nombre || '').trim() || cuit;
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const dup = proveedores.find(p => norm(p.nombre) === norm(nombre));
+  if (dup) { toast(`Ya existe un proveedor llamado "${dup.nombre}". Usá Vincular para asociarlo.`, 'error'); return; }
+  const prov = { id: crypto.randomUUID(), nombre, telefono: '', cuit: cuit !== 'sin_cuit' ? cuit : '', email: '', notas: '', pago: 'transferencia', items: [] };
+  proveedores.push(prov);
+  let dadas = 0;
+  items.forEach(it => {
+    facturas.push({
+      id: crypto.randomUUID(), proveedorId: prov.id,
+      nroBoleta: it.nroFmt, fecha: it.fechaISO, hora: null,
+      importeTotal: it.total, items: [],
+      importadaDeARCA: true, arcaVerificada: true, cae: it.cae,
+      tipoComprobante: (it.tipo||'').toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                     : (it.tipo||'').toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                     : 'factura',
+    });
+    dadas++;
+  });
+  arcaPendientes = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') !== cuit);
+  persist();
+  renderARCAPendientes();
+  renderProveedores();
+  renderPedidos();
+  const vinculados = _reAutoLinkContable();
+  const msg = `Proveedor "${nombre}" creado · ${dadas} factura${dadas!==1?'s':''} dada${dadas!==1?'s':''} de alta`;
+  toast(vinculados ? `${msg} · ${vinculados} movimiento${vinculados===1?'':'s'} vinculado${vinculados===1?'':'s'}` : msg, 'success');
+  _switchSub('compras', 'viewProveedores');
+  renderProveedorFacturas(prov.id, 'fact');
 }
 
 /* ── IMPORT INSUMOS DESDE EXCEL ─────────────────────────────────── */
@@ -12587,6 +13143,9 @@ async function _fbLoad(retry = 0) {
             if (galiciaMovs.length !== d.items.length) _persistGal();
           }
           break;
+        case 'contable_gal_revisar':
+          if (d.items?.length) galiciaParaRevisar = d.items;
+          break;
         case 'config':
           if (d.rubros?.length)  { _customRubros = d.rubros; localStorage.setItem('cons_rubros', JSON.stringify(_customRubros)); }
           if (d.margen_obj)      localStorage.setItem('cons_margen_obj',   String(d.margen_obj));
@@ -13903,8 +14462,34 @@ function openProvTelModal(provId) {
   document.getElementById('provCondPagoInput').value = prov?.condicionPago || '';
   document.getElementById('provDiasPagoInput').value = (prov?.diasPago != null) ? prov.diasPago : '';
   document.getElementById('provOcultarPedidosCheck').checked = !!prov?.ocultarEnPedidos;
+  const bajaBtn = document.getElementById('provBajaBtn');
+  if (bajaBtn && prov) {
+    bajaBtn.style.display = '';
+    bajaBtn.textContent = prov.baja ? 'Reactivar' : 'Dar de baja';
+    bajaBtn.style.color = prov.baja ? 'var(--accent)' : 'var(--danger)';
+    bajaBtn.style.borderColor = prov.baja ? 'var(--accent)' : 'var(--danger)';
+  }
   document.getElementById('provTelModal').classList.add('open');
   setTimeout(() => document.getElementById('provTelInput').focus(), 50);
+}
+
+function darDeBajaProv() {
+  const prov = proveedores.find(p => p.id === _pedProvForTel);
+  if (!prov) return;
+  if (prov.baja) {
+    prov.baja = false;
+    persist();
+    closeProvTelModal();
+    renderProveedores();
+    toast(`${prov.nombre} reactivado`, 'success');
+  } else {
+    if (!confirm(`¿Dar de baja a "${prov.nombre}"? Va a quedar oculto pero sus datos se conservan.`)) return;
+    prov.baja = true;
+    persist();
+    closeProvTelModal();
+    renderProveedores();
+    toast(`${prov.nombre} dado de baja`, 'success');
+  }
 }
 
 function closeProvTelModal() {
@@ -15359,5 +15944,6 @@ _auth.onAuthStateChanged(async user => {
   </div>
   <div id="arcaParaRevisarScreen"></div>
 </div>
+
 </body>
 </html>
