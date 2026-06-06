@@ -1105,8 +1105,12 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
       <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importVentas(event)">
     </label>
     <label class="btn btn-outline" style="cursor:pointer">
-      Importar MP
-      <input type="file" accept=".xlsx,.xls" style="display:none" onchange="importMP(event)">
+      Egresos MP
+      <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'egreso')">
+    </label>
+    <label class="btn btn-outline" style="cursor:pointer">
+      Ingresos MP
+      <input type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="importMP(event,'ingreso')">
     </label>
     <button class="btn btn-outline" style="color:var(--accent);border-color:var(--accent);font-weight:700" onclick="_reAutoLinkContableManual()">🔗 Re-match por CUIT</button>
     <button class="btn btn-outline" onclick="_autoVincularMP()">Auto-vincular MP</button>
@@ -8293,21 +8297,34 @@ function _desvincularMP(mpId) {
 }
 
 // ── IMPORT MP ──
-function _importMPcsv(lines) {
+function _importMPcsv(lines, tipo) {
+  // Si el archivo tiene dos headers (línea 0 con ";" y línea 1 con "," + "fecha"),
+  // saltar la primera y usar la segunda como header real.
+  let dataLines = lines;
+  if (lines.length > 2 && lines[0].includes(';') && /fecha/i.test(lines[1]) && lines[1].includes(',')) {
+    dataLines = lines.slice(1);
+  }
+
   // Detectar separador: si la primera línea tiene ";" usamos ese
-  const sep = lines[0].includes(';') ? ';' : ',';
+  const sep = dataLines[0].includes(';') ? ';' : ',';
   const parseRow = line => line.split(sep).map(f => f.trim().replace(/^"|"$/g, ''));
 
-  const headers = parseRow(lines[0]).map(h => h.toLowerCase().trim());
+  // Limpiar posible "0" o BOM al inicio del header
+  const rawHeader = dataLines[0].replace(/^[^a-zA-Z"]+/, '');
+  const headers = parseRow(rawHeader).map(h => h.toLowerCase().trim().replace(/^[^a-z]+/, ''));
 
   // Formato A (viejo): date,time,concepto,detalle,medio_pago,estado,amount_ars
   // Formato B: fecha,hora,tipo,detalle,monto,...
   // Formato C: "fecha";"descripcion";"tipo";"contraparte_o_comercio";"monto";"estado";"medio_de_pago"
   // Formato D: fecha;hora;tipo;descripcion;contraparte;medio_de_pago;estado;monto
+  // Formato E (nuevo MP): Fecha,Hora,Tipo,Descripcion,Importe,Moneda,Saldo parcial
   const iDate = headers.indexOf('fecha') >= 0 ? headers.indexOf('fecha') : headers.indexOf('date');
-  const iAmt  = headers.indexOf('monto') >= 0 ? headers.indexOf('monto') : headers.indexOf('amount_ars');
+  const iAmt  = headers.indexOf('monto') >= 0 ? headers.indexOf('monto')
+              : headers.indexOf('importe') >= 0 ? headers.indexOf('importe')
+              : headers.indexOf('amount_ars');
   const iDet  = headers.indexOf('contraparte_o_comercio') >= 0 ? headers.indexOf('contraparte_o_comercio')
               : headers.indexOf('contraparte') >= 0 ? headers.indexOf('contraparte')
+              : headers.indexOf('descripcion') >= 0 ? headers.indexOf('descripcion')
               : headers.indexOf('detalle') >= 0 ? headers.indexOf('detalle') : -1;
   const iTipo = headers.indexOf('tipo') >= 0 ? headers.indexOf('tipo') : headers.indexOf('concepto');
   const iEst  = headers.indexOf('estado');
@@ -8315,60 +8332,77 @@ function _importMPcsv(lines) {
   if (iDate < 0 || iAmt < 0) { toast('Formato MP no reconocido', 'error'); return; }
 
   const toISO = s => {
-    // "27/05/2026 20:36" o "27/05/2026"
-    const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    // "27/05/2026 20:36" o "27/05/2026" o "2026-06-05"
+    const s2 = String(s).trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s2)) return s2.slice(0, 10);
+    const m = s2.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : null;
   };
   const parseMonto = s => {
-    // Formato argentino "30.426,13" → 30426.13 | simple "30426.13"
+    // Formato argentino "30.426,13" → 30426.13 | simple "-30426.13"
     const str = String(s).trim().replace(/\s/g,'');
-    if (str.includes(',')) return parseFloat(str.replace(/\./g,'').replace(',','.'));
+    if (str.includes(',') && !str.includes('.')) return parseFloat(str.replace(',','.'));
+    if (str.includes(',') && str.includes('.')) return parseFloat(str.replace(/\./g,'').replace(',','.'));
     return parseFloat(str);
   };
   const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  const existentes = new Set(mpMovs.map(m => m.id));
+  const existentesEg  = new Set(mpMovs.map(m => m.id));
+  const existentesIng = new Set(mpIngMovs.map(m => m.id));
   let added = 0, autoVinculados = 0;
 
-  lines.slice(1).forEach((line, i) => {
+  dataLines.slice(1).forEach((line, i) => {
     if (!line.trim()) return;
     const r = parseRow(line);
-    const monto = parseMonto(r[iAmt]);
-    if (!isFinite(monto) || monto <= 0) return;
+    const importe = parseMonto(r[iAmt]);
+    if (!isFinite(importe) || importe === 0) return;
     const fecha = toISO(r[iDate]);
     if (!fecha) return;
     const estado = iEst >= 0 ? String(r[iEst] || '').trim() : 'Aprobado';
     if (estado && !/aprobado/i.test(estado)) return;
     const destino = iDet >= 0 ? String(r[iDet] || '').trim() : '';
-    const tipo    = iTipo >= 0 ? String(r[iTipo] || '').trim() : '';
+    const tipoMov = iTipo >= 0 ? String(r[iTipo] || '').trim() : '';
+    const monto = Math.abs(importe);
     const id = `mp-${fecha}-${monto}-${i}`;
-    if (existentes.has(id)) return;
 
-    const esInterna = /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
-    const mov = { id, fecha, monto, destino, tipo, categoria: '', ...(esInterna ? { esInterna: true } : {}) };
-
-    if (!esInterna) {
-      const titNorm = norm(destino);
-      const match = facturas.find(f => {
-        if (f.importeTotal <= 0) return false;
-        const prov = proveedores.find(p => p.id === f.proveedorId);
-        if (!prov) return false;
-        const provNorm = norm(prov.nombre);
-        const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
-          prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
-            .filter(w => w.length > 3).some(w => titNorm.includes(w));
-        return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
-      });
-      if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
+    if (tipo === 'ingreso') {
+      if (importe <= 0) return; // solo positivos
+      if (existentesIng.has(id)) return;
+      mpIngMovs.push({ id, fecha, monto, tipo: tipoMov || 'Ingreso MP' });
+      added++;
+    } else {
+      if (importe >= 0) return; // solo negativos
+      if (existentesEg.has(id)) return;
+      const esInterna = /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
+      const mov = { id, fecha, monto, destino, tipo: tipoMov, categoria: '', ...(esInterna ? { esInterna: true } : {}) };
+      if (!esInterna) {
+        const titNorm = norm(destino);
+        const match = facturas.find(f => {
+          if (f.importeTotal <= 0) return false;
+          const prov = proveedores.find(p => p.id === f.proveedorId);
+          if (!prov) return false;
+          const provNorm = norm(prov.nombre);
+          const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
+            prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+              .filter(w => w.length > 3).some(w => titNorm.includes(w));
+          return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
+        });
+        if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
+      }
+      mpMovs.push(mov);
+      added++;
     }
-
-    mpMovs.push(mov);
-    added++;
   });
 
-  if (added > 0) _irAlPeriodoImportado(mpMovs);
-  persistContable();
+  if (tipo === 'ingreso') {
+    if (added > 0) _irAlPeriodoImportado(mpIngMovs);
+    _persistMPIng();
+  } else {
+    if (added > 0) _irAlPeriodoImportado(mpMovs);
+    _persistMP();
+  }
   renderContable();
-  toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
+  const extra = tipo !== 'ingreso' && autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : '';
+  toast(`${added} movimientos importados${extra}`, added > 0 ? 'success' : 'info');
 }
 
 function _irAlPeriodoImportado(movs) {
@@ -8383,22 +8417,25 @@ function _irAlPeriodoImportado(movs) {
   savePeriod();
 }
 
-function importMP(e) {
+function importMP(e, tipo) {
+  tipo = tipo || 'egreso';
   const file = e.target.files[0];
   if (!file) return;
   e.target.value = '';
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      // Detectar si es el nuevo formato CSV de MP (parsear como texto para evitar
-      // que XLSX auto-convierta fechas DD/MM a serials de Excel)
+      // Parsear como texto para evitar que XLSX auto-convierta fechas DD/MM a serials de Excel
       const text = new TextDecoder('utf-8').decode(new Uint8Array(ev.target.result)).replace(/^﻿/, '');
       const lines = text.split(/\r?\n/).filter(l => l.trim());
-      const esCSV_viejo    = lines.length > 1 && /\bdate\b/.test(lines[0]) && /\bamount_ars\b/.test(lines[0]);
-      const esCSV_nuevo    = lines.length > 1 && /fecha/.test(lines[0]) && /monto/.test(lines[0]);
-      const esCSV_standard = lines.length > 1 && /TRANSACTION_DATE/i.test(lines[0]) && /TRANSACTION_TYPE/i.test(lines[0]);
-      if (esCSV_viejo || esCSV_nuevo) { _importMPcsv(lines); return; }
-      if (esCSV_standard)             { _importMPStandardLines(lines); return; }
+      const firstLine  = lines[0] || '';
+      const secondLine = lines[1] || '';
+      const esCSV_viejo    = lines.length > 1 && /\bdate\b/.test(firstLine) && /\bamount_ars\b/.test(firstLine);
+      const esCSV_nuevo    = lines.length > 1 && /fecha/i.test(firstLine) && (/monto/i.test(firstLine) || /importe/i.test(firstLine));
+      const esCSV_doble    = lines.length > 2 && firstLine.includes(';') && /fecha/i.test(secondLine) && /importe/i.test(secondLine);
+      const esCSV_standard = lines.length > 1 && /TRANSACTION_DATE/i.test(firstLine) && /TRANSACTION_TYPE/i.test(firstLine);
+      if (esCSV_viejo || esCSV_nuevo || esCSV_doble) { _importMPcsv(lines, tipo); return; }
+      if (esCSV_standard)                            { _importMPStandardLines(lines); return; }
 
       const wb   = XLSX.read(ev.target.result, { type: 'array', codepage: 65001 });
       const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -8420,7 +8457,8 @@ function importMP(e) {
         return d.toISOString().slice(0, 10);
       };
       const norm = s => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-      const existentes = new Set(mpMovs.map(m => m.id));
+      const existentesEg2  = new Set(mpMovs.map(m => m.id));
+      const existentesIng2 = new Set(mpIngMovs.map(m => m.id));
       let added = 0, autoVinculados = 0;
 
       rows.slice(1).forEach((r, i) => {
@@ -8428,38 +8466,48 @@ function importMP(e) {
         if (!isFinite(monto) || monto <= 0) return;
         const fecha = serialToISO(r[iF]);
         if (!fecha) return;
-        const destino  = String(r[iD] || '').trim();
-        const tipo     = String(r[iT] || '').trim();
+        const destino   = String(r[iD] || '').trim();
+        const tipoMov   = String(r[iT] || '').trim();
         const categoria = String(iCat >= 0 ? r[iCat] : '').trim();
         const id = `mp-${fecha}-${monto}-${i}`;
-        if (existentes.has(id)) return;
 
-        const esInterna = /transferencias a cuentas propias/i.test(categoria) || /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
-        const mov = { id, fecha, monto, destino, tipo, categoria, ...(esInterna ? { esInterna: true } : {}) };
-
-        if (!esInterna) {
-          const titNorm = norm(destino);
-          const match = facturas.find(f => {
-            if (f.importeTotal <= 0) return false;
-            const prov = proveedores.find(p => p.id === f.proveedorId);
-            if (!prov) return false;
-            const provNorm = norm(prov.nombre);
-            const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
-              prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
-                .filter(w => w.length > 3).some(w => titNorm.includes(w));
-            return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
-          });
-          if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
+        if (tipo === 'ingreso') {
+          if (existentesIng2.has(id)) return;
+          mpIngMovs.push({ id, fecha, monto, tipo: tipoMov || 'Ingreso MP' });
+          added++;
+        } else {
+          if (existentesEg2.has(id)) return;
+          const esInterna = /transferencias a cuentas propias/i.test(categoria) || /lay.o/i.test(destino) || /diego.*hernan/i.test(destino);
+          const mov = { id, fecha, monto, destino, tipo: tipoMov, categoria, ...(esInterna ? { esInterna: true } : {}) };
+          if (!esInterna) {
+            const titNorm = norm(destino);
+            const match = facturas.find(f => {
+              if (f.importeTotal <= 0) return false;
+              const prov = proveedores.find(p => p.id === f.proveedorId);
+              if (!prov) return false;
+              const provNorm = norm(prov.nombre);
+              const nombreMatch = titNorm.includes(provNorm) || provNorm.includes(titNorm) ||
+                prov.nombre.toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/)
+                  .filter(w => w.length > 3).some(w => titNorm.includes(w));
+              return nombreMatch && Math.round(f.importeTotal) === Math.round(monto);
+            });
+            if (match) { mov.facturaIds = [match.id]; autoVinculados++; }
+          }
+          mpMovs.push(mov);
+          added++;
         }
-
-        mpMovs.push(mov);
-        added++;
       });
 
-      if (added > 0) _irAlPeriodoImportado(mpMovs);
-      persistContable();
+      if (tipo === 'ingreso') {
+        if (added > 0) _irAlPeriodoImportado(mpIngMovs);
+        _persistMPIng();
+      } else {
+        if (added > 0) _irAlPeriodoImportado(mpMovs);
+        _persistMP();
+      }
       renderContable();
-      toast(`${added} movimientos importados${autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : ''}`, 'success');
+      const extra2 = tipo !== 'ingreso' && autoVinculados ? ` · ${autoVinculados} vinculados automáticamente` : '';
+      toast(`${added} movimientos importados${extra2}`, added > 0 ? 'success' : 'info');
     } catch(err) { toast('Error: ' + err.message, 'error'); }
   };
   reader.readAsArrayBuffer(file);
