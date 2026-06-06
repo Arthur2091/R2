@@ -1134,6 +1134,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarGalMes()">Borrar Galicia del mes</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
+    <button class="btn btn-outline" onclick="_importarSueldosMesAnterior()">↩ Sueldos mes ant.</button>
     <button id="btnModoLocal" class="btn btn-outline" onclick="_toggleSyncPaused()">☁ Auto-sync ON</button>
     <button class="btn btn-primary" onclick="_sincronizarTodo()">↑ Sincronizar</button>
   </div>
@@ -9248,6 +9249,21 @@ function deleteSueldo(id) {
   sueldos = sueldos.filter(s => s.id !== id);
   _persistBase();
   renderContable();
+}
+function _importarSueldosMesAnterior() {
+  const actual = _periodoActual();
+  const [y, m] = actual.split('-').map(Number);
+  const prevDate = new Date(y, m - 2, 1); // mes anterior (m-1 es 0-based, -2 = anterior)
+  const anterior = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0');
+  const del_mes_ant = sueldos.filter(s => s.mes === anterior);
+  if (!del_mes_ant.length) { toast('Sin sueldos en ' + anterior, 'info'); return; }
+  const ya_en_actual = new Set(sueldos.filter(s => s.mes === actual).map(s => s.empleado.toLowerCase().trim()));
+  const nuevos = del_mes_ant.filter(s => !ya_en_actual.has(s.empleado.toLowerCase().trim()));
+  if (!nuevos.length) { toast('Los empleados del mes anterior ya están cargados', 'info'); return; }
+  nuevos.forEach(s => sueldos.push({ id: crypto.randomUUID(), empleado: s.empleado, mes: actual, monto: s.monto }));
+  _persistBase();
+  renderContable();
+  toast(`${nuevos.length} empleado${nuevos.length !== 1 ? 's' : ''} importado${nuevos.length !== 1 ? 's' : ''} de ${anterior}`, 'success');
 }
 
 // ── OTROS EGRESOS ──
