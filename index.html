@@ -13625,7 +13625,7 @@ function enviarPedidoWA(provId) {
     const ins = insumos.find(i => i.id === iid);
     if (ins) msg += `• ${ins.nombre}:     ${qty}\n`;
   });
-  msg += `\nLes dejamos un saludo\nR2. Café`;
+  msg += `\n\nLes dejamos un saludo\nPor favor de ser posible mandar la factura por mail\nr2d2@arthur.com.ar\n\nR2. Café`;
 
   // Construir items + guardar pedido como pendiente ANTES de abrir WhatsApp
   const itemsPedido = items.map(([iid, qty]) => {
