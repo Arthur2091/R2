@@ -13625,18 +13625,7 @@ function enviarPedidoWA(provId) {
     const ins = insumos.find(i => i.id === iid);
     if (ins) msg += `• ${ins.nombre}: ${qty}\n`;
   });
-  msg += `\nLes dejamos un saludo,\n\n` +
-    `        .------.\n` +
-    `       /  ◉  ◉  \\\n` +
-    `      |     ▲     |\n` +
-    `      | ─────────|\n` +
-    `      |  ╔═╦═╦═╗  |\n` +
-    `      |  ╠═╬═╬═╣  |\n` +
-    `      |  ╚═╩═╩═╝  |\n` +
-    `     /|           |\\\n` +
-    `    / |___________|  \\\n` +
-    `   (__|     R2    |__)\n` +
-    `       \\_________/`;
+  msg += `\nLes dejamos un saludo R2.`;
 
   // Construir items + guardar pedido como pendiente ANTES de abrir WhatsApp
   const itemsPedido = items.map(([iid, qty]) => {
