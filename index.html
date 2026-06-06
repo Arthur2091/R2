@@ -2344,6 +2344,13 @@ function _importarDatosLegacy(input) {
 }
 
 
+/* ── UTILS ───────────────────────────────────────────────────────── */
+function _h(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 /* ── NAVIGATION ─────────────────────────────────────────────────── */
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -11179,7 +11186,7 @@ function renderRecetas() {
     const gruposHtml = Object.keys(byGrupo).sort().map(g => {
       const grupoRubro = byGrupo[g][0]?.rubro || '';
       const opts = `${!RUBRO_ORDER.includes(grupoRubro) ? '<option value="">⚠️ Sin rubro</option>' : ''}${rubroOpts}`;
-      const safeG = g.replace(/'/g, "\\'");
+      const safeG = _h(g);
       return `
         <div style="margin-bottom:20px">
           <div class="receta-grupo-header">
@@ -11387,10 +11394,9 @@ function _precioVentaHtml(r, real, realMesTxt) {
   const rid = r.id;
   const btnVinc = '<button onclick="_abrirVinculacionVenta(\'' + rid + '\')" style="font-size:12px;padding:4px 10px;border:1px dashed var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--info);margin-top:4px">🔗 ' + (aliases.length ? 'Agregar otro' : 'Vincular ventas') + '</button>';
   const aliasChips = aliases.map(function(p) {
-    const pe = p.replace(/'/g, "\\'");
     return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:2px 7px;margin-top:3px">'
-      + p
-      + '<button onclick="removeVentaAlias(\'' + rid + '\',\'' + pe + '\');_reRenderReceta(\'' + rid + '\')" '
+      + _h(p)
+      + '<button onclick="removeVentaAlias(\'' + _h(rid) + '\',\'' + _h(p) + '\');_reRenderReceta(\'' + _h(rid) + '\')" '
       + 'style="border:none;background:none;cursor:pointer;color:#B91C1C;font-size:12px;font-weight:700;padding:0;line-height:1">✕</button>'
       + '</span>';
   }).join(' ');
@@ -11737,15 +11743,16 @@ function limpiarRecetas() {
 
 /* ── VINCULACION VENTAS ──────────────────────────────────────────── */
 function _vincListItemHtml(recetaId, p, isLinked) {
-  const pe = p.replace(/'/g, "\\'");
+  const hp = _h(p);
+  const hrid = _h(recetaId);
   const style = isLinked
     ? 'text-align:left;padding:6px 10px;border:1px solid #86EFAC;border-radius:6px;background:#F0FDF4;cursor:pointer;font-size:12px;color:var(--ink);display:flex;justify-content:space-between;align-items:center'
     : 'text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)';
   const action = isLinked
-    ? 'removeVentaAlias(\'' + recetaId + '\',\'' + pe + '\');_reRenderReceta(\'' + recetaId + '\');_abrirVinculacionVenta(\'' + recetaId + '\')'
-    : '_seleccionarVenta(\'' + recetaId + '\',\'' + pe + '\')';
+    ? 'removeVentaAlias(\'' + hrid + '\',\'' + hp + '\');_reRenderReceta(\'' + hrid + '\');_abrirVinculacionVenta(\'' + hrid + '\')'
+    : '_seleccionarVenta(\'' + hrid + '\',\'' + hp + '\')';
   return '<button onclick="' + action + '" style="' + style + '">'
-    + p
+    + _h(p)
     + (isLinked ? ' <span style="font-size:10px;color:#16A34A;font-weight:700">✓ vinculado</span>' : '')
     + '</button>';
 }
