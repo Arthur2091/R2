@@ -10196,13 +10196,30 @@ function importarARCA(input) {
         if (match) {
           if (!match.arcaVerificada) { match.arcaVerificada = true; marcadas++; }
         } else if (prov) {
+          // Crear factura sin ítems
+          const nroFmt = String(pv).padStart(4,'0') + '-' + String(nroDesde).padStart(8,'0');
+          facturas.push({
+            id:              crypto.randomUUID(),
+            proveedorId:     prov.id,
+            nroBoleta:       nroFmt,
+            fecha:           fechaISO,
+            hora:            null,
+            importeTotal:    total,
+            items:           [],
+            importadaDeARCA: true,
+            arcaVerificada:  true,
+            cae:             cae,
+            tipoComprobante: tipo.toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                           : tipo.toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                           : 'factura',
+          });
           sinCargar.push({ fecha, tipo, pv, nro: nroDesde, cae, cuitEmisor, nombre: prov.nombre, total });
         } else {
           sinProv.push({ fecha, tipo, pv, nro: nroDesde, cae, cuitEmisor, nombre, total });
         }
       });
 
-      if (marcadas) persist();
+      persist();
 
       _arcaMostrarResultado(marcadas, sinCargar, sinProv, datos.length);
 
@@ -10227,7 +10244,7 @@ function _arcaMostrarResultado(marcadas, sinCargar, sinProv, total) {
       </div>
       <div style="flex:1;min-width:110px;padding:14px;background:#FEE2E2;border-radius:10px;text-align:center">
         <div style="font-size:26px;font-weight:800;color:#991B1B">${sinCargar.length}</div>
-        <div style="font-size:11px;color:#991B1B;font-weight:600">Sin cargar (prov. conocido)</div>
+        <div style="font-size:11px;color:#991B1B;font-weight:600">Dadas de alta sin ítems</div>
       </div>
       <div style="flex:1;min-width:110px;padding:14px;background:#FEF3C7;border-radius:10px;text-align:center">
         <div style="font-size:26px;font-weight:800;color:#92400E">${sinProv.length}</div>
@@ -10236,7 +10253,7 @@ function _arcaMostrarResultado(marcadas, sinCargar, sinProv, total) {
     </div>`;
 
   if (sinCargar.length) {
-    html += `<h3 style="font-size:13px;font-weight:700;color:#991B1B;margin:0 0 8px">⚠ Facturas de proveedores conocidos no cargadas en la app</h3>
+    html += `<h3 style="font-size:13px;font-weight:700;color:#991B1B;margin:0 0 8px">📥 Dadas de alta desde ARCA (sin ítems — completar con foto)</h3>
     <div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto;margin-bottom:16px">`;
     sinCargar.forEach(it => {
       html += `<div style="padding:8px 12px;background:var(--surface);border:1px solid #FECACA;border-radius:8px;font-size:12px">
