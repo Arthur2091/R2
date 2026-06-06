@@ -13620,12 +13620,12 @@ function enviarPedidoWA(provId) {
   if (!items.length) return;
 
   const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
-  let msg = `Hola Buenos días,\nLes dejamos el detalle del pedido.\n\n`;
+  let msg = `Hola Buenos días, "Hola que tengan muy buenos días"\nLes dejamos el detalle del pedido.\n\n`;
   items.forEach(([iid, qty]) => {
     const ins = insumos.find(i => i.id === iid);
     if (ins) msg += `• ${ins.nombre}: ${qty}\n`;
   });
-  msg += `\nLes dejamos un saludo R2.`;
+  msg += `\nLes dejamos un saludo\nR2. Cafetería`;
 
   // Construir items + guardar pedido como pendiente ANTES de abrir WhatsApp
   const itemsPedido = items.map(([iid, qty]) => {
