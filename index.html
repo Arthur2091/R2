@@ -13623,7 +13623,7 @@ function enviarPedidoWA(provId) {
   let msg = `Hola Buenos días, "Hola que tengan muy buenos días"\nLes dejamos el detalle del pedido:\n\n`;
   items.forEach(([iid, qty]) => {
     const ins = insumos.find(i => i.id === iid);
-    if (ins) msg += `• ${ins.nombre}: ${qty}\n`;
+    if (ins) msg += `• ${ins.nombre}:     ${qty}\n`;
   });
   msg += `\nLes dejamos un saludo\nR2. Café`;
 
