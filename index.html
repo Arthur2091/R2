@@ -9368,6 +9368,8 @@ function persistRecetas() {
 
 /* ── TABLERO COMPARATIVO ─────────────────────────────────────── */
 let _tableroTab = 'proveedores';
+let _tableroMeses = [];
+let _tableroVentasMes = {};
 
 function abrirTableroProveedores() {
   const mesesSet = new Set();
@@ -9393,11 +9395,11 @@ function abrirTableroProveedores() {
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <div style="background:var(--surface2);border-radius:8px;padding:3px;display:flex;gap:2px">
-              <button id="_tabBtnProv" onclick="_tableroSetTab('proveedores',${JSON.stringify(meses)},${JSON.stringify(ventasMes)})"
+              <button id="_tabBtnProv" onclick="_tableroSetTab('proveedores')"
                 style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:#FFF;color:var(--ink)">Proveedores</button>
-              <button id="_tabBtnIns" onclick="_tableroSetTab('insumos',${JSON.stringify(meses)},${JSON.stringify(ventasMes)})"
+              <button id="_tabBtnIns" onclick="_tableroSetTab('insumos')"
                 style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Insumos clave</button>
-              <button id="_tabBtnDec" onclick="_tableroSetTab('decisiones',${JSON.stringify(meses)},${JSON.stringify(ventasMes)})"
+              <button id="_tabBtnDec" onclick="_tableroSetTab('decisiones')"
                 style="padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Decisiones</button>
             </div>
             <button onclick="document.getElementById('_tableroModal').remove()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 16px;cursor:pointer;font:600 14px var(--font);color:var(--ink2)">✕</button>
@@ -9409,18 +9411,20 @@ function abrirTableroProveedores() {
     </div>`);
 
   _tableroTab = 'proveedores';
+  _tableroMeses = meses;
+  _tableroVentasMes = ventasMes;
   _renderTablaProveedores(meses, ventasMes);
 }
 
-function _tableroSetTab(tab, meses, ventasMes) {
+function _tableroSetTab(tab) {
   _tableroTab = tab;
   const base = 'padding:6px 14px;border-radius:6px;border:none;font:600 13px var(--font);cursor:pointer;';
   document.getElementById('_tabBtnProv').style.cssText = base + `background:${tab==='proveedores'?'#FFF':'transparent'};color:${tab==='proveedores'?'var(--ink)':'var(--ink2)'}`;
   document.getElementById('_tabBtnIns').style.cssText  = base + `background:${tab==='insumos'?'#FFF':'transparent'};color:${tab==='insumos'?'var(--ink)':'var(--ink2)'}`;
   document.getElementById('_tabBtnDec').style.cssText  = base + `background:${tab==='decisiones'?'#FFF':'transparent'};color:${tab==='decisiones'?'var(--ink)':'var(--ink2)'}`;
-  if (tab === 'proveedores')    _renderTablaProveedores(meses, ventasMes);
-  else if (tab === 'insumos')   _renderTablaInsumos(meses, ventasMes);
-  else                          _renderTablaDecisiones(meses);
+  if (tab === 'proveedores')    _renderTablaProveedores(_tableroMeses, _tableroVentasMes);
+  else if (tab === 'insumos')   _renderTablaInsumos(_tableroMeses, _tableroVentasMes);
+  else                          _renderTablaDecisiones(_tableroMeses);
 }
 
 /* ── TAB 1: Proveedores ──────────────────────────────────────── */
