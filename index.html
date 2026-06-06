@@ -10122,27 +10122,6 @@ function _arcaNroMatch(nroBoleta, pv, nro) {
   return variants.some(v => nb === v || nbN === _arcaNorm(v));
 }
 
-function _arcaLimpiarDuplicados() {
-  const antes = facturas.length;
-  facturas = facturas.filter(f => !f.importadaDeARCA);
-  if (facturas.length < antes) { console.log(`[ARCA] ${antes - facturas.length} duplicados eliminados`); persist(); }
-}
-
-function _arcaCrearFacturas(items, provId) {
-  items.forEach(it => {
-    const nroFmt = String(it.pv).padStart(4,'0') + '-' + String(it.nro).padStart(8,'0');
-    facturas.push({
-      id: crypto.randomUUID(), proveedorId: provId,
-      nroBoleta: nroFmt, fecha: it.fechaISO, hora: null,
-      importeTotal: it.total, items: [],
-      importadaDeARCA: true, arcaVerificada: true, cae: it.cae,
-      tipoComprobante: (it.tipo||'').toLowerCase().includes('nota de crédito') ? 'nota_credito'
-                     : (it.tipo||'').toLowerCase().includes('nota de débito')  ? 'nota_debito'
-                     : 'factura',
-    });
-  });
-}
-
 function importarARCA(input) {
   const file = input.files[0];
   if (!file) return;
@@ -10174,7 +10153,7 @@ function importarARCA(input) {
         const total      = Number(r[29])||0;
         const [d,m,y]    = fecha.split('/');
         const fechaISO   = (y&&m&&d) ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : '';
-        const item       = { fecha, fechaISO, tipo, pv, nro: nroDesde, cae, cuitEmisor, nombre, total };
+        const nroFmt     = String(pv).padStart(4,'0') + '-' + String(nroDesde).padStart(8,'0');
 
         let prov = cuitMap[cuitEmisor] || nombreMap[_arcaNorm(nombre)] || null;
         let match = prov
@@ -10185,13 +10164,23 @@ function importarARCA(input) {
         if (match) {
           if (!match.arcaVerificada) { match.arcaVerificada = true; marcadas++; }
         } else if (prov) {
-          _arcaCrearFacturas([item], prov.id);
-          dadas.push({ ...item, provNombre: prov.nombre });
+          const yaExiste = facturas.find(f => f.proveedorId === prov.id && _arcaNroMatch(f.nroBoleta, pv, nroDesde));
+          if (!yaExiste) {
+            facturas.push({
+              id: crypto.randomUUID(), proveedorId: prov.id,
+              nroBoleta: nroFmt, fecha: fechaISO, hora: null,
+              importeTotal: total, items: [],
+              importadaDeARCA: true, arcaVerificada: true, cae,
+              tipoComprobante: tipo.toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                             : tipo.toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                             : 'factura',
+            });
+            dadas.push({ nombre: prov.nombre, fecha, nroFmt, total });
+          }
         } else {
-          // Evitar duplicados en arcaPendientes por CAE
           const yaEsta = arcaPendientes.find(x => x.cae && x.cae === cae);
-          if (!yaEsta) arcaPendientes.push({ ...item, id: crypto.randomUUID() });
-          sinProv.push(item);
+          if (!yaEsta) arcaPendientes.push({ id: crypto.randomUUID(), fecha, fechaISO, tipo, pv, nro: nroDesde, nroFmt, cae, cuitEmisor, nombre, total });
+          sinProv.push({ nombre, cuitEmisor, fecha, nroFmt, total });
         }
       });
 
@@ -10216,9 +10205,9 @@ function _arcaMostrarResultado(marcadas, dadas, sinProv) {
       <div style="font-size:26px;font-weight:800;color:#065F46">${marcadas}</div>
       <div style="font-size:11px;color:#065F46;font-weight:600">Verificadas ✓ ARCA</div>
     </div>
-    <div style="flex:1;min-width:110px;padding:14px;background:#FEE2E2;border-radius:10px;text-align:center">
-      <div style="font-size:26px;font-weight:800;color:#991B1B">${dadas.length}</div>
-      <div style="font-size:11px;color:#991B1B;font-weight:600">Dadas de alta sin ítems</div>
+    <div style="flex:1;min-width:110px;padding:14px;background:#EDE9FE;border-radius:10px;text-align:center">
+      <div style="font-size:26px;font-weight:800;color:#5B21B6">${dadas.length}</div>
+      <div style="font-size:11px;color:#5B21B6;font-weight:600">Dadas de alta sin ítems</div>
     </div>
     <div style="flex:1;min-width:110px;padding:14px;background:#FEF3C7;border-radius:10px;text-align:center">
       <div style="font-size:26px;font-weight:800;color:#92400E">${sinProv.length}</div>
@@ -10227,10 +10216,10 @@ function _arcaMostrarResultado(marcadas, dadas, sinProv) {
   </div>`;
 
   if (dadas.length) {
-    html += `<p style="font-size:12px;color:var(--ink2);margin-bottom:8px">📥 <strong>${dadas.length}</strong> factura${dadas.length!==1?'s':''} dada${dadas.length!==1?'s':''} de alta sin ítems — completar con foto cuando llegue la factura física.</p>`;
+    html += `<p style="font-size:12px;color:var(--ink2);margin-bottom:8px">📥 <strong>${dadas.length}</strong> factura${dadas.length!==1?'s':''} creada${dadas.length!==1?'s':''} sin ítems — completar con foto cuando llegue la factura física.</p>`;
   }
   if (sinProv.length) {
-    html += `<p style="font-size:12px;color:#92400E;margin-bottom:0">⚠ <strong>${sinProv.length}</strong> factura${sinProv.length!==1?'s':''} de emisores no reconocidos → guardadas en <strong>Compras → 🏛 Para Revisar</strong> para que las vincules.</p>`;
+    html += `<p style="font-size:12px;color:#92400E;margin-bottom:0">⚠ <strong>${sinProv.length}</strong> factura${sinProv.length!==1?'s':''} de emisores no reconocidos → quedan en <strong>Compras → 🏛 Para Revisar</strong>.</p>`;
   }
 
   body.innerHTML = html;
@@ -10248,11 +10237,10 @@ function renderARCAPendientes() {
   if (!screen) return;
 
   if (!arcaPendientes.length) {
-    screen.innerHTML = `<div class="empty-state"><h3>Sin facturas para revisar</h3><p>Cuando importes ARCA con emisores desconocidos, aparecen acá para que los vincules a un proveedor.</p></div>`;
+    screen.innerHTML = `<div class="empty-state"><h3>Sin facturas para revisar</h3><p>Cuando importes ARCA con emisores desconocidos, aparecen acá.</p></div>`;
     return;
   }
 
-  // Agrupar por CUIT
   const grupos = {};
   arcaPendientes.forEach(it => {
     const key = it.cuitEmisor || 'sin_cuit';
@@ -10283,7 +10271,7 @@ function renderARCAPendientes() {
 
   Object.entries(grupos).forEach(([cuit, g]) => {
     const subtotal = g.items.reduce((s,it) => s+(it.total||0), 0);
-    const uid = 'arca_sel_' + cuit.replace(/\D/g,'');
+    const uid = 'arcasel_' + cuit.replace(/\D/g,'_');
     html += `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden">
         <div style="padding:12px 16px;background:var(--surface2)">
@@ -10294,15 +10282,14 @@ function renderARCAPendientes() {
               <option value="">— Seleccioná un proveedor —</option>
               ${provOpts}
             </select>
-            <button class="btn btn-primary btn-sm" onclick="_arcaVincular('${cuit}','${uid}')">Vincular y dar de alta</button>
-            <button class="btn btn-outline btn-sm" onclick="_arcaCrearProvDesdeRevisar('${cuit}','${g.nombre.replace(/'/g,"\\'")}')" style="white-space:nowrap">+ Nuevo proveedor</button>
-            <button class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)" onclick="_arcaIgnorar('${cuit}')">Ignorar</button>
+            <button class="btn btn-primary btn-sm" onclick="_arcaVincular('${cuit}','${uid}')">Vincular</button>
+            <button class="btn btn-outline btn-sm" onclick="_arcaIgnorar('${cuit}')" style="color:var(--danger);border-color:var(--danger)">Ignorar</button>
           </div>
         </div>
         <div style="padding:8px 16px">
           ${g.items.map(it => `
             <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--ink2)">
-              <span>${it.fecha} · ${it.tipo} · N° ${String(it.pv).padStart(4,'0')}-${String(it.nro).padStart(8,'0')}</span>
+              <span>${it.fecha} · ${it.tipo} · N° ${it.nroFmt}</span>
               <span style="font-weight:700;color:var(--ink)">${pesos(it.total)}</span>
             </div>`).join('')}
         </div>
@@ -10315,37 +10302,33 @@ function renderARCAPendientes() {
 function _arcaVincular(cuit, selectId) {
   const sel = document.getElementById(selectId);
   if (!sel || !sel.value) { toast('Seleccioná un proveedor primero', 'error'); return; }
-  const provId = sel.value;
-  const prov   = proveedores.find(p => p.id === provId);
+  const prov = proveedores.find(p => p.id === sel.value);
   if (!prov) return;
-
-  const items = arcaPendientes.filter(it => (it.cuitEmisor || 'sin_cuit') === cuit);
-  _arcaCrearFacturas(items, provId);
-
-  // Guardar CUIT en el proveedor para futuros imports
-  if (cuit && cuit !== 'sin_cuit' && !prov.cuit) {
-    prov.cuit = cuit;
-  }
-
-  arcaPendientes = arcaPendientes.filter(it => (it.cuitEmisor || 'sin_cuit') !== cuit);
+  const items = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') === cuit);
+  items.forEach(it => {
+    const yaExiste = facturas.find(f => f.proveedorId === prov.id && _arcaNroMatch(f.nroBoleta, it.pv, it.nro));
+    if (!yaExiste) {
+      facturas.push({
+        id: crypto.randomUUID(), proveedorId: prov.id,
+        nroBoleta: it.nroFmt, fecha: it.fechaISO, hora: null,
+        importeTotal: it.total, items: [],
+        importadaDeARCA: true, arcaVerificada: true, cae: it.cae,
+        tipoComprobante: (it.tipo||'').toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                       : (it.tipo||'').toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                       : 'factura',
+      });
+    }
+  });
+  if (cuit !== 'sin_cuit' && !prov.cuit) { prov.cuit = cuit; }
+  arcaPendientes = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') !== cuit);
   persist();
   renderARCAPendientes();
   renderProveedores();
   toast(`${items.length} factura${items.length!==1?'s':''} vinculada${items.length!==1?'s':''} a ${prov.nombre}`, 'success');
 }
 
-function _arcaCrearProvDesdeRevisar(cuit, nombre) {
-  openAddProvModal();
-  setTimeout(() => {
-    const n = document.getElementById('pNombre');
-    const c = document.getElementById('pCuit');
-    if (n) n.value = nombre.toUpperCase();
-    if (c) c.value = cuit;
-  }, 60);
-}
-
 function _arcaIgnorar(cuit) {
-  if (!confirm(`¿Ignorar todas las facturas del CUIT ${cuit}? Se eliminarán de Para Revisar.`)) return;
+  if (!confirm(`¿Ignorar todas las facturas del CUIT ${cuit}?`)) return;
   arcaPendientes = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') !== cuit);
   persist();
   renderARCAPendientes();
@@ -12527,7 +12510,6 @@ async function _fbLoad(retry = 0) {
     const bannerApikey = document.getElementById('apikeyBanner');
     if (bannerApikey && getApiKey()) bannerApikey.style.display = 'none';
     if (_bItems.length) _bRenderItems();
-    _arcaLimpiarDuplicados();
     _fbLoaded = true;
     _flushPendingWrites();
   } catch(e) {
