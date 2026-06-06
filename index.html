@@ -1134,7 +1134,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger)" onclick="_borrarGalMes()">Borrar Galicia del mes</button>
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
     <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
-    <button class="btn btn-outline" onclick="_importarSueldosMesAnterior()">↩ Sueldos mes ant.</button>
     <button id="btnModoLocal" class="btn btn-outline" onclick="_toggleSyncPaused()">☁ Auto-sync ON</button>
     <button class="btn btn-primary" onclick="_sincronizarTodo()">↑ Sincronizar</button>
   </div>
@@ -1162,7 +1161,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="contable-section" id="secSueldos">
     <div class="contable-section-header" onclick="toggleSection('secSueldosBody')">
       <h3>Egresos — Sueldos</h3>
-      <div class="section-total" id="totalSueldos" style="color:var(--danger)"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();_importarSueldosMesAnterior()" style="font-size:12px;padding:4px 10px">↩ Mes anterior</button>
+        <div class="section-total" id="totalSueldos" style="color:var(--danger)"></div>
+      </div>
     </div>
     <div id="secSueldosBody" class="contable-section-body" style="display:none"></div>
   </div>
