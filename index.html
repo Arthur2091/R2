@@ -690,6 +690,37 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   .nav-btn { padding: 10px 14px; }
 }
 
+/* ── PEDIDOS MOBILE-FIRST ─────────────────────────────────────── */
+.ped-modal-handle { display:none; }
+@media (max-width: 680px) {
+  /* Lista compacta */
+  .ped-grid { display:flex !important; flex-direction:column; gap:0; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .ped-card { flex-direction:row !important; align-items:center !important; padding:0 !important; gap:0 !important; border:none !important; border-radius:0 !important; box-shadow:none !important; border-bottom:1px solid var(--border) !important; transition:none !important; }
+  .ped-card:last-child { border-bottom:none !important; }
+  .ped-card.has-qty { background:var(--accent-light) !important; }
+  .ped-card-head { flex:1 !important; padding:13px 14px !important; min-width:0; gap:3px !important; }
+  .ped-ins-label { display:none !important; }
+  .ped-sched-row { display:none !important; }
+  .ped-card-actions { padding:10px 12px 10px 0 !important; margin:0 !important; border:none !important; flex-shrink:0; }
+  .ped-card-actions .btn-wa { flex:none !important; font-size:12px !important; padding:10px 12px !important; white-space:nowrap; min-height:40px; border-radius:10px !important; max-width:120px; overflow:hidden; }
+
+  /* Bottom sheet */
+  #pedidoModal { align-items:flex-end !important; padding:0 !important; }
+  #pedidoModal > .modal { max-width:100% !important; width:100%; border-radius:20px 20px 0 0 !important; max-height:88vh !important; padding-top:0 !important; animation:_pedSlideUp .25s cubic-bezier(.32,.72,0,1); }
+  #pedidoModal .modal-actions { padding-bottom:max(16px, env(safe-area-inset-bottom)) !important; }
+  @keyframes _pedSlideUp { from { transform:translateY(60px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+
+  /* Drag handle */
+  .ped-modal-handle { display:flex; justify-content:center; padding:12px 0 8px; }
+  .ped-modal-handle::after { content:''; display:block; width:36px; height:4px; background:var(--border); border-radius:2px; }
+
+  /* Steppers touch-friendly */
+  .ped-stepper button { width:44px !important; height:44px !important; font-size:20px !important; border-radius:8px !important; }
+  .ped-stepper .qty { min-width:36px !important; font-size:15px !important; }
+  .ped-row { padding:10px 4px !important; }
+  .ped-row-name { white-space:normal !important; }
+}
+
 /* SUBNAV COLAPSABLE EN SCROLL — solo mobile */
 @media (max-width: 720px) {
   #subnav {
@@ -845,6 +876,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <!-- MODAL: Pedido a proveedor -->
   <div id="pedidoModal" class="overlay">
     <div class="modal" style="max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+      <div class="ped-modal-handle"></div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px">
         <div style="min-width:0;flex:1">
           <h2 id="pedidoModalTitle" style="margin-bottom:4px">Proveedor</h2>
@@ -13351,6 +13383,7 @@ function renderPedidos() {
       ? (_days < 0 ? 'Vencido' : _days === 0 ? '¡Enviar hoy!' : _days === 1 ? 'Mañana' : _days === 2 ? 'Faltan 2 días' : null)
       : null;
 
+    const _mob = window.innerWidth <= 680;
     cardsHtml += `<div class="ped-card ${itemsConQty > 0 ? 'has-qty' : ''}" onclick="openPedidoModal('${prov.id}')" style="cursor:pointer">
       <div class="ped-card-head">
         <div style="min-width:0;flex:1">
@@ -13359,7 +13392,7 @@ function renderPedidos() {
         </div>
         ${itemsConQty > 0 ? `<span style="font-size:11px;padding:3px 8px;background:var(--accent-light);color:var(--accent);border-radius:999px;font-weight:700;white-space:nowrap">${itemsConQty} ítem${itemsConQty === 1 ? '' : 's'}</span>` : ''}
       </div>
-      <div style="font-size:12px;color:var(--ink2);padding:6px 2px">${insumosLabel}</div>
+      <div class="ped-ins-label" style="font-size:12px;color:var(--ink2);padding:6px 2px">${insumosLabel}</div>
       <div class="ped-sched-row" onclick="event.stopPropagation()">
         <span style="font-size:13px;color:var(--ink3)">📅</span>
         <input type="date" class="ped-sched-input" value="${_schedDates[prov.id]||''}" onchange="setSchedDate('${prov.id}',this.value)">
@@ -13369,13 +13402,13 @@ function renderPedidos() {
         ${(() => {
           const hasTel = !!(prov.telefono || '').replace(/\D/g,'');
           if (itemsConQty > 0) {
-            const lbl = _schedLbl || (hasTel ? '📱 Pedir por WhatsApp' : '✓ Registrar pedido (presencial)');
+            const lbl = _schedLbl || (hasTel ? (_mob ? '📱 Pedir' : '📱 Pedir por WhatsApp') : (_mob ? '✓ Registrar' : '✓ Registrar pedido (presencial)'));
             return `<button class="btn-wa ${_schedClass}" onclick="event.stopPropagation();enviarPedidoWA('${prov.id}')">${lbl}</button>`;
           }
           if (nPend > 0) {
-            return `<button class="btn-wa" onclick="event.stopPropagation();_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}</button>`;
+            return `<button class="btn-wa" onclick="event.stopPropagation();_pedIrAPendientes('${prov.id}')" title="Ver pedidos pendientes">${_mob ? '✓ Ver' : `✓ Pedido enviado · Ver ${nPend > 1 ? `(${nPend})` : ''}`}</button>`;
           }
-          return `<button class="btn-wa" onclick="event.stopPropagation();openPedidoModal('${prov.id}')">+ Hacer pedido</button>`;
+          return `<button class="btn-wa" onclick="event.stopPropagation();openPedidoModal('${prov.id}')">${_mob ? '+ Pedir' : '+ Hacer pedido'}</button>`;
         })()}
       </div>
     </div>`;
