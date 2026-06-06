@@ -10306,18 +10306,25 @@ function _arcaVincular(cuit, selectId) {
   if (!prov) return;
   const items = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') === cuit);
   items.forEach(it => {
-    const yaExiste = facturas.find(f => f.proveedorId === prov.id && _arcaNroMatch(f.nroBoleta, it.pv, it.nro));
-    if (!yaExiste) {
-      facturas.push({
-        id: crypto.randomUUID(), proveedorId: prov.id,
-        nroBoleta: it.nroFmt, fecha: it.fechaISO, hora: null,
-        importeTotal: it.total, items: [],
-        importadaDeARCA: true, arcaVerificada: true, cae: it.cae,
-        tipoComprobante: (it.tipo||'').toLowerCase().includes('nota de crédito') ? 'nota_credito'
-                       : (it.tipo||'').toLowerCase().includes('nota de débito')  ? 'nota_debito'
-                       : 'factura',
-      });
+    const yaExiste = facturas.find(f =>
+      f.proveedorId === prov.id && (
+        _arcaNroMatch(f.nroBoleta, it.pv, it.nro) ||
+        (f.fecha === it.fechaISO && f.importeTotal && Math.abs(Number(f.importeTotal) - it.total) < 1)
+      )
+    );
+    if (yaExiste) {
+      if (!yaExiste.arcaVerificada) { yaExiste.arcaVerificada = true; }
+      return;
     }
+    facturas.push({
+      id: crypto.randomUUID(), proveedorId: prov.id,
+      nroBoleta: it.nroFmt, fecha: it.fechaISO, hora: null,
+      importeTotal: it.total, items: [],
+      importadaDeARCA: true, arcaVerificada: true, cae: it.cae,
+      tipoComprobante: (it.tipo||'').toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                     : (it.tipo||'').toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                     : 'factura',
+    });
   });
   if (cuit !== 'sin_cuit' && !prov.cuit) { prov.cuit = cuit; }
   arcaPendientes = arcaPendientes.filter(it => (it.cuitEmisor||'sin_cuit') !== cuit);
