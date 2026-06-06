@@ -11035,6 +11035,16 @@ function _setRecetaTipo(tipo) {
 function renderRecetas() {
   _navStack = [];
   _currentVerRecetaId = null;
+
+  // Preservar estado visual antes de re-renderizar
+  const _abiertas = new Set(
+    [...document.querySelectorAll('.rubro-section-header')]
+      .filter(h => h.nextElementSibling?.classList.contains('open'))
+      .map(h => h.querySelector('.rubro-label')?.textContent?.trim())
+      .filter(Boolean)
+  );
+  const _scrollY = window.scrollY;
+
   const search = document.getElementById('searchRecetas')?.value.toLowerCase() || '';
 
   // Filtro primario por tipo (venta/fabricacion). Si la receta no tiene tipo, se asume 'venta' (legacy).
@@ -11151,7 +11161,7 @@ function renderRecetas() {
     </div>`;
   };
 
-  document.getElementById('recetasScreen').innerHTML = orden.map(rubro => {
+  const _htmlRubros = orden.map(rubro => {
     const rs    = byRubro[rubro];
     const isSin = rubro === '__sin__';
     const s     = isSin ? { bg:'#FFF7ED', color:'#C2410C', icon:'⚠️' } : RUBRO_STYLES[rubro];
@@ -11200,6 +11210,20 @@ function renderRecetas() {
       <div class="rubro-body">${gruposHtml}${sinGrupoHtml}</div>
     </div>`;
   }).join('');
+
+  document.getElementById('recetasScreen').innerHTML = _htmlRubros;
+
+  if (_abiertas.size) {
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.rubro-section-header').forEach(h => {
+        if (_abiertas.has(h.querySelector('.rubro-label')?.textContent?.trim())) {
+          h.nextElementSibling?.classList.add('open');
+          h.querySelector('.rubro-toggle')?.classList.add('open');
+        }
+      });
+      window.scrollTo(0, _scrollY);
+    });
+  }
 }
 
 function byRubroCount(rubro, lista) {
