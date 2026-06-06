@@ -1180,7 +1180,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   <div class="contable-section" id="secGastosFijos">
     <div class="contable-section-header" onclick="toggleSection('secGastosFijosBody')">
       <h3>Egresos — Gastos fijos del mes</h3>
-      <div class="section-total" id="totalGastosFijos" style="color:var(--danger)"></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="event.stopPropagation();_replicarGastosFijos(_periodoActual())" style="font-size:12px;padding:4px 10px">↩ Mes anterior</button>
+        <div class="section-total" id="totalGastosFijos" style="color:var(--danger)"></div>
+      </div>
     </div>
     <div id="secGastosFijosBody" class="contable-section-body" style="display:none"></div>
   </div>
