@@ -13451,7 +13451,7 @@ function openPedidoModal(provId) {
   document.getElementById('searchInsumosPedido').value = '';
   renderPedidoModalContent();
   document.getElementById('pedidoModal').classList.add('open');
-  setTimeout(() => document.getElementById('searchInsumosPedido').focus(), 60);
+  if (window.innerWidth > 680) setTimeout(() => document.getElementById('searchInsumosPedido').focus(), 60);
 }
 
 function closePedidoModal() {
