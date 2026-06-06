@@ -10436,19 +10436,33 @@ function _finalizarImportRecetas() {
 
 
 /* ── VENTA ALIAS ─────────────────────────────────────────────────── */
-let ventaAlias = JSON.parse(localStorage.getItem('ventaAlias') || '{}');
+// ventaAlias: { recetaId: string[] }  (migra automáticamente desde string)
+let ventaAlias = (() => {
+  const raw = JSON.parse(localStorage.getItem('ventaAlias') || '{}');
+  const out = {};
+  Object.entries(raw).forEach(([k, v]) => { out[k] = Array.isArray(v) ? v : [v]; });
+  return out;
+})();
 function _persistVentaAlias() { localStorage.setItem('ventaAlias', JSON.stringify(ventaAlias)); }
-function setVentaAlias(recetaId, producto) {
-  if (producto) ventaAlias[recetaId] = producto; else delete ventaAlias[recetaId];
+function _ventaAliases(recetaId) { return ventaAlias[recetaId] || []; }
+function addVentaAlias(recetaId, producto) {
+  if (!producto) return;
+  if (!ventaAlias[recetaId]) ventaAlias[recetaId] = [];
+  if (!ventaAlias[recetaId].includes(producto)) ventaAlias[recetaId].push(producto);
   _persistVentaAlias();
 }
-function _ventaTarget(receta) {
-  return ventaAlias[receta.id] || receta.nombre;
+function removeVentaAlias(recetaId, producto) {
+  if (!ventaAlias[recetaId]) return;
+  ventaAlias[recetaId] = ventaAlias[recetaId].filter(p => p !== producto);
+  if (!ventaAlias[recetaId].length) delete ventaAlias[recetaId];
+  _persistVentaAlias();
 }
 function _ventasSugerencias(receta) {
   if (!ventas?.length) return [];
   const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9\s]/g,' ').trim();
-  const target = norm(_ventaTarget(receta));
+  const aliases = _ventaAliases(receta.id);
+  const base = aliases.length ? aliases[0] : receta.nombre;
+  const target = norm(base);
   const palabras = target.split(/\s+/).filter(p => p.length > 2);
   const productos = [...new Set(ventas.map(v => v.producto).filter(Boolean))];
   return productos.map(p => {
@@ -10539,14 +10553,18 @@ function _ventasPorMesReceta(receta) {
   // Devuelve un array de { mes, unidades, total, promedio } ordenado desc por mes.
   if (!receta?.nombre || !ventas?.length) return [];
   const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const alias = ventaAlias[receta.id];
-  const target = norm(alias || receta.nombre);
-  if (!target) return [];
+  const aliases = _ventaAliases(receta.id);
+  const targets = aliases.length ? aliases.map(a => norm(a)) : null;
+  const autoTarget = norm(receta.nombre);
+  if (!autoTarget) return [];
   const porMes = {};
   ventas.forEach(v => {
     const nom = norm(v.producto);
     if (!nom) return;
-    if (alias ? nom !== target : (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom))))) return;
+    const match = targets
+      ? targets.includes(nom)
+      : (nom === autoTarget || (nom.length >= 4 && (nom.includes(autoTarget) || autoTarget.includes(nom))));
+    if (!match) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { mes, unidades: 0, total: 0 };
@@ -10612,15 +10630,19 @@ function _precioVentaReal(receta) {
   // del mes más reciente con ventas. Útil para comparar contra el precio cargado a mano.
   if (!receta?.nombre || !ventas?.length) return null;
   const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
-  const alias = ventaAlias[receta.id];
-  const target = norm(alias || receta.nombre);
-  if (!target) return null;
+  const aliases = _ventaAliases(receta.id);
+  const targets = aliases.length ? aliases.map(a => norm(a)) : null;
+  const autoTarget = norm(receta.nombre);
+  if (!autoTarget) return null;
   // Agrupar ventas matcheadas por mes (YYYY-MM)
   const porMes = {};
   ventas.forEach(v => {
     const nom = norm(v.producto);
     if (!nom) return;
-    if (alias ? nom !== target : (nom !== target && !(nom.length >= 4 && (nom.includes(target) || target.includes(nom))))) return;
+    const match = targets
+      ? targets.includes(nom)
+      : (nom === autoTarget || (nom.length >= 4 && (nom.includes(autoTarget) || autoTarget.includes(nom))));
+    if (!match) return;
     const mes = (v.fecha || '').slice(0, 7);
     if (!mes) return;
     if (!porMes[mes]) porMes[mes] = { unidades: 0, total: 0 };
@@ -11337,23 +11359,33 @@ function _reRenderReceta(id) {
 }
 
 function _precioVentaHtml(r, real, realMesTxt) {
-  const alias = ventaAlias[r.id];
+  const aliases = _ventaAliases(r.id);
   const rid = r.id;
-  const btnDesvinc = '<button onclick="_desvincularVenta(\'' + rid + '\')" style="font-size:11px;padding:3px 8px;border:1px solid #FCA5A5;border-radius:5px;background:#FEF2F2;cursor:pointer;color:#B91C1C;font-weight:600;margin-top:4px">✕ Desvincular</button>';
-  const btnVinc = '<button onclick="_abrirVinculacionVenta(\'' + rid + '\')" style="font-size:12px;padding:4px 10px;border:1px dashed var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--info);margin-top:4px">🔗 ' + (alias ? 'Cambiar v\xednculo' : 'Vincular ventas') + '</button>';
+  const btnVinc = '<button onclick="_abrirVinculacionVenta(\'' + rid + '\')" style="font-size:12px;padding:4px 10px;border:1px dashed var(--border);border-radius:6px;background:none;cursor:pointer;color:var(--info);margin-top:4px">🔗 ' + (aliases.length ? 'Agregar otro' : 'Vincular ventas') + '</button>';
+  const aliasChips = aliases.map(function(p) {
+    const pe = p.replace(/'/g, "\\'");
+    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:4px;padding:2px 7px;margin-top:3px">'
+      + p
+      + '<button onclick="removeVentaAlias(\'' + rid + '\',\'' + pe + '\');_reRenderReceta(\'' + rid + '\')" '
+      + 'style="border:none;background:none;cursor:pointer;color:#B91C1C;font-size:12px;font-weight:700;padding:0;line-height:1">✕</button>'
+      + '</span>';
+  }).join(' ');
+
   if (real) {
     const tot = real.total.toLocaleString('es-AR', {maximumFractionDigits:0});
     return '<div style="text-align:right">'
-      + '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta \xb7 ' + realMesTxt + (alias ? ' 🔗' : '') + '</div>'
+      + '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta \xb7 ' + realMesTxt + (aliases.length ? ' 🔗' : '') + '</div>'
       + '<div style="font-weight:700;font-size:1.1rem;color:var(--accent)" title="' + real.unidades + 'u vendidas \xb7 total $' + tot + '">$' + real.promedio.toFixed(0) + '</div>'
-      + (alias ? '<div style="font-size:11px;color:var(--ink2);margin-top:2px">' + alias + '</div>' + btnDesvinc : btnVinc)
+      + (aliases.length ? '<div style="margin-top:4px">' + aliasChips + '</div>' : '')
+      + btnVinc
       + '</div>';
   }
-  if (alias) {
+  if (aliases.length) {
     return '<div style="text-align:right">'
       + '<div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Precio venta</div>'
-      + '<div style="font-size:12px;color:#B45309;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;padding:4px 8px;margin-top:4px">⚠️ Sin ventas: <b>' + alias + '</b></div>'
-      + btnDesvinc + btnVinc
+      + '<div style="font-size:12px;color:#B45309;background:#FEF3C7;border:1px solid #FDE68A;border-radius:6px;padding:4px 8px;margin-top:4px">⚠️ Sin ventas encontradas</div>'
+      + '<div style="margin-top:4px">' + aliasChips + '</div>'
+      + btnVinc
       + '</div>';
   }
   return '<div style="text-align:right">'
@@ -11680,29 +11712,39 @@ function limpiarRecetas() {
 }
 
 /* ── VINCULACION VENTAS ──────────────────────────────────────────── */
+function _vincListItemHtml(recetaId, p, isLinked) {
+  const pe = p.replace(/'/g, "\\'");
+  const style = isLinked
+    ? 'text-align:left;padding:6px 10px;border:1px solid #86EFAC;border-radius:6px;background:#F0FDF4;cursor:pointer;font-size:12px;color:var(--ink);display:flex;justify-content:space-between;align-items:center'
+    : 'text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)';
+  const action = isLinked
+    ? 'removeVentaAlias(\'' + recetaId + '\',\'' + pe + '\');_reRenderReceta(\'' + recetaId + '\');_abrirVinculacionVenta(\'' + recetaId + '\')'
+    : '_seleccionarVenta(\'' + recetaId + '\',\'' + pe + '\')';
+  return '<button onclick="' + action + '" style="' + style + '">'
+    + p
+    + (isLinked ? ' <span style="font-size:10px;color:#16A34A;font-weight:700">✓ vinculado</span>' : '')
+    + '</button>';
+}
+
 function _abrirVinculacionVenta(recetaId) {
   const r = recetas.find(x => x.id === recetaId);
   if (!r) return;
-  const sugs = _ventasSugerencias(r);
   const wrap = document.getElementById('_vincWrap_' + recetaId.replace(/-/g,'_'));
   if (!wrap) return;
+  const sugs = _ventasSugerencias(r);
+  const aliases = _ventaAliases(recetaId);
   const allProds = [...new Set((ventas||[]).map(v => v.producto).filter(Boolean))].sort();
-  wrap.innerHTML = `
-    <div style="margin-top:8px;padding:10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
-      <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px">Seleccioná el producto de ventas</div>
-      <input id="_vincSearch_${recetaId.replace(/-/g,'_')}" type="text" placeholder="Buscar producto..."
-        oninput="_filtrarVincVenta('${recetaId}')"
-        style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px;box-sizing:border-box">
-      <div id="_vincList_${recetaId.replace(/-/g,'_')}" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto">
-        ${sugs.map(p => `<button onclick="_seleccionarVenta('${recetaId}','${p.replace(/'/g,"\\'")}')"
-          style="text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)">${p}</button>`).join('')}
-        ${!sugs.length ? '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin sugerencias — buscá por nombre</div>' : ''}
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px">
-        <div style="font-size:11px;color:var(--ink3)">${sugs.length} sugerencia${sugs.length!==1?'s':''} · ${allProds.length} productos totales</div>
-        <button onclick="document.getElementById('_vincWrap_${recetaId.replace(/-/g,'_')}').innerHTML=''" style="font-size:11px;border:none;background:none;cursor:pointer;color:var(--ink3)">Cancelar</button>
-      </div>
-    </div>`;
+  const showList = sugs.length
+    ? sugs.map(function(p) { return _vincListItemHtml(recetaId, p, aliases.includes(p)); }).join('')
+    : '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin sugerencias — buscá por nombre</div>';
+  wrap.innerHTML = '<div style="margin-top:8px;padding:10px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">'
+    + '<div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:8px">Seleccioná uno o más productos de ventas</div>'
+    + '<input id="_vincSearch_' + recetaId.replace(/-/g,'_') + '" type="text" placeholder="Buscar producto..." oninput="_filtrarVincVenta(\'' + recetaId + '\')" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-bottom:8px;box-sizing:border-box">'
+    + '<div id="_vincList_' + recetaId.replace(/-/g,'_') + '" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto">' + showList + '</div>'
+    + '<div style="display:flex;justify-content:space-between;margin-top:8px">'
+    + '<div style="font-size:11px;color:var(--ink3)">' + sugs.length + ' sugerencia' + (sugs.length!==1?'s':'') + ' \xb7 ' + allProds.length + ' productos totales</div>'
+    + '<button onclick="document.getElementById(\'_vincWrap_' + recetaId.replace(/-/g,'_') + '\').innerHTML=\'\'" style="font-size:11px;border:none;background:none;cursor:pointer;color:var(--ink3)">Cerrar</button>'
+    + '</div></div>';
 }
 
 function _filtrarVincVenta(recetaId) {
@@ -11710,24 +11752,19 @@ function _filtrarVincVenta(recetaId) {
   const q = (document.getElementById('_vincSearch_' + sid)?.value || '').toLowerCase().trim();
   const lista = document.getElementById('_vincList_' + sid);
   if (!lista) return;
+  const aliases = _ventaAliases(recetaId);
   const allProds = [...new Set((ventas||[]).map(v => v.producto).filter(Boolean))].sort();
-  const filtrados = q ? allProds.filter(p => p.toLowerCase().includes(q)) : allProds;
-  lista.innerHTML = filtrados.slice(0, 30).map(p =>
-    `<button onclick="_seleccionarVenta('${recetaId}','${p.replace(/'/g,"\\'")}')"
-      style="text-align:left;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px;color:var(--ink)">${p}</button>`
-  ).join('') || '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin resultados</div>';
+  const filtrados = q ? allProds.filter(function(p) { return p.toLowerCase().includes(q); }) : allProds;
+  lista.innerHTML = filtrados.slice(0, 40).map(function(p) {
+    return _vincListItemHtml(recetaId, p, aliases.includes(p));
+  }).join('') || '<div style="font-size:12px;color:var(--ink3);text-align:center;padding:8px">Sin resultados</div>';
 }
 
 function _seleccionarVenta(recetaId, producto) {
-  setVentaAlias(recetaId, producto);
-  toast(`Vinculado a "${producto}"`, 'success');
+  addVentaAlias(recetaId, producto);
+  toast('"' + producto + '" vinculado', 'success');
   _reRenderReceta(recetaId);
-}
-
-function _desvincularVenta(recetaId) {
-  setVentaAlias(recetaId, null);
-  toast('Vínculo eliminado', 'info');
-  _reRenderReceta(recetaId);
+  _abrirVinculacionVenta(recetaId);
 }
 
 
