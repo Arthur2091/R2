@@ -753,6 +753,51 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
   .modal-card, .modal-card.modal-closing { animation: none; }
 }
 
+/* ── DARK MODE ──────────────────────────────────────────────────── */
+body.dark {
+  --bg:           #0F0E0D;
+  --surface:      #1A1917;
+  --surface2:     #242220;
+  --ink:          #EDE9E3;
+  --ink2:         #8C8780;
+  --ink3:         #504D4A;
+  --accent:       #52B788;
+  --accent-light: #18302A;
+  --info:         #60A5FA;
+  --info-light:   #1A2E50;
+  --danger:       #F87171;
+  --danger-light: #3B1212;
+  --warn:         #FCD34D;
+  --warn-light:   #382700;
+  --border:       #2A2825;
+  --shadow:       0 1px 3px rgba(0,0,0,.5), 0 4px 16px rgba(0,0,0,.3);
+  --ring-offset:  0 0 0 4px var(--bg);
+  color-scheme: dark;
+}
+body.dark tbody tr:hover                 { background: #242220; }
+body.dark .prec-subtab-active            { background: var(--surface2); box-shadow: 0 1px 2px rgba(0,0,0,.4); }
+body.dark .prec-cell-down,
+body.dark .prec-cell-best               { background: #18302A; color: #52B788; }
+body.dark .prec-cell-up,
+body.dark .prec-cell-worst              { background: #3B1212; color: #F87171; }
+body.dark .ped-stepper button:hover     { background: var(--surface); }
+body.dark .ped-row.has-qty .ped-stepper { background: var(--surface); }
+body.dark .badge--success               { color: #52B788; }
+body.dark .badge--warn                  { color: #FCD34D; }
+body.dark .badge--danger                { color: #F87171; }
+body.dark .badge--info                  { color: #60A5FA; }
+body.dark .btn-primary:hover            { background: #3d9a6e; }
+body.dark .btn-danger:hover             { background: #dc4040; }
+body.dark .extracting-overlay           { background: rgba(15,14,13,.85); }
+body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+#darkToggle {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; padding: 5px 8px; border-radius: 8px;
+  color: var(--ink2); line-height: 1;
+  transition: background var(--motion-fast);
+}
+#darkToggle:hover { background: var(--surface2); color: var(--ink); }
+
 /* ── ROW MENU ⋯ ── */
 .row-menu { position: relative; display: inline-block; }
 .row-menu > summary {
@@ -816,8 +861,10 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
     <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
     <button class="nav-btn" data-view="viewAuditoria" style="display:none">Auditoría</button>
     <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
+    <button class="nav-btn" data-view="viewSeguridad" style="display:none">🔒 Seguridad</button>
   </nav>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+    <button id="darkToggle" onclick="_toggleDark()" title="Modo oscuro / claro">🌙</button>
     <details id="settingsGear" class="row-menu">
       <summary style="font-size:17px;padding:5px 10px">⚙</summary>
       <div class="row-menu__panel" style="right:0;min-width:230px">
@@ -828,6 +875,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
         <button class="row-menu__item" onclick="exportarDatos();document.getElementById('settingsGear').open=false">↓ Backup</button>
         <label class="row-menu__item" style="cursor:pointer">↑ Restaurar<input type="file" accept=".json" onchange="importarDatos(this)" style="display:none"></label>
         <div style="padding:8px 16px;font-size:11px;color:var(--ink3);border-top:1px solid var(--border)">Arthur Coffee · v2.1</div>
+        <button id="changePassBtn" class="row-menu__item" onclick="document.getElementById('settingsGear').open=false;_abrirCambiarPass()" style="display:none">🔑 Cambiar contraseña</button>
         <button id="logoutBtn" class="row-menu__item row-menu__item--danger" onclick="_doLogout()" style="display:none">⎋ Salir</button>
       </div>
     </details>
@@ -2507,6 +2555,7 @@ function _onViewActivate(viewId) {
     viewProduccion:  renderProduccion,
     viewInsumos:     renderInsumos,
     viewUsuarios:    typeof _usrCargar === 'function' ? _usrCargar : null,
+    viewSeguridad:   () => typeof _segCargar === 'function' && _segCargar(),
   };
   try { map[viewId]?.(); } catch (e) { console.warn('view activate error', viewId, e); }
 }
@@ -12974,6 +13023,7 @@ async function _doLogin(e) {
   btn.disabled = true; btn.textContent = 'Ingresando…';
   try {
     await _auth.signInWithEmailAndPassword(email, pass);
+    _regSesion().catch(() => {});
   } catch (err) {
     const map = {
       'auth/invalid-credential': 'Email o contraseña incorrectos.',
@@ -12995,11 +13045,11 @@ function _doLogout() {
   _auth.signOut().then(() => location.reload());
 }
 
-/* ── IDLE AUTO-LOGOUT (40 min sin actividad) ────────────────────── */
-const _IDLE_MS = 40 * 60 * 1000;
+/* ── IDLE AUTO-LOGOUT (5 min sin actividad) ─────────────────────── */
+const _IDLE_MS = 5 * 60 * 1000;
 let _idleTimer = null;
 function _idleLogout() {
-  try { toast('Sesión cerrada por inactividad (40 min)', 'info'); } catch {}
+  try { toast('Sesión cerrada por inactividad (5 min)', 'info'); } catch {}
   _auth.signOut().then(() => location.reload()).catch(() => location.reload());
 }
 function _resetIdleTimer() {
@@ -15527,7 +15577,7 @@ function _bootApp() {
 }
 
 const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
-const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUsuarios'];
+const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUsuarios','viewSeguridad'];
 const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
 let _userPermisos = null; // cache de permisos del usuario actual
 let _permsDefault = null; // cache de permisos por defecto (de Firestore)
@@ -15891,14 +15941,16 @@ async function _doSignup() {
 }
 
 _auth.onAuthStateChanged(async user => {
-  const gate   = document.getElementById('loginGate');
-  const logout = document.getElementById('logoutBtn');
+  const gate     = document.getElementById('loginGate');
+  const logout   = document.getElementById('logoutBtn');
+  const chgPass  = document.getElementById('changePassBtn');
   const emailLbl = document.getElementById('userEmail');
   if (user) {
     await _cargarPermisosUsuario(user);
     _aplicarPermisosUI(user);
     if (gate) gate.style.display = 'none';
     if (logout) logout.style.display = '';
+    if (chgPass) chgPass.style.display = '';
     if (emailLbl) {
       const admin = _isAdmin(user);
       const tag = admin ? ` <span style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:999px;font-size:9px;margin-left:4px;font-weight:700">⚙ ADMIN</span>` : '';
@@ -15916,9 +15968,179 @@ _auth.onAuthStateChanged(async user => {
     _aplicarPermisosUI(null);
     if (gate) gate.style.display = 'flex';
     if (logout) logout.style.display = 'none';
+    if (chgPass) chgPass.style.display = 'none';
     if (emailLbl) { emailLbl.innerHTML = ''; emailLbl.style.display = 'none'; }
   }
 });
+
+/* ── DARK MODE ───────────────────────────────────────────────────── */
+function _applyDark(on) {
+  document.body.classList.toggle('dark', on);
+  const btn = document.getElementById('darkToggle');
+  if (btn) btn.textContent = on ? '☀️' : '🌙';
+}
+function _toggleDark() {
+  const on = !document.body.classList.contains('dark');
+  localStorage.setItem('theme', on ? 'dark' : 'light');
+  _applyDark(on);
+}
+(function() {
+  const saved = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  _applyDark(saved ? saved === 'dark' : prefersDark);
+})();
+
+/* ── CAMBIAR CONTRASEÑA ──────────────────────────────────────────── */
+function _abrirCambiarPass() {
+  ['cpOldPass','cpNewPass','cpConfirm'].forEach(id => document.getElementById(id).value = '');
+  const err = document.getElementById('cpErr');
+  err.style.display = 'none';
+  document.getElementById('cpBtn').disabled = false;
+  document.getElementById('cpBtn').textContent = 'Guardar';
+  const m = document.getElementById('modalCambiarPass');
+  m.style.display = 'flex';
+  document.getElementById('cpOldPass').focus();
+}
+function _cerrarCambiarPass() {
+  document.getElementById('modalCambiarPass').style.display = 'none';
+}
+async function _confirmarCambiarPass() {
+  const oldPass = document.getElementById('cpOldPass').value;
+  const newPass = document.getElementById('cpNewPass').value;
+  const confirm = document.getElementById('cpConfirm').value;
+  const errEl   = document.getElementById('cpErr');
+  const btn     = document.getElementById('cpBtn');
+  errEl.style.display = 'none';
+  if (!oldPass || !newPass || !confirm) { errEl.textContent = 'Completá todos los campos.'; errEl.style.display = 'block'; return; }
+  if (newPass.length < 6) { errEl.textContent = 'La nueva contraseña debe tener al menos 6 caracteres.'; errEl.style.display = 'block'; return; }
+  if (newPass !== confirm) { errEl.textContent = 'Las contraseñas nuevas no coinciden.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const user = _auth.currentUser;
+    const cred = firebase.auth.EmailAuthProvider.credential(user.email, oldPass);
+    await user.reauthenticateWithCredential(cred);
+    await user.updatePassword(newPass);
+    _cerrarCambiarPass();
+    toast('Contraseña actualizada correctamente', 'ok');
+  } catch (err) {
+    const map = {
+      'auth/wrong-password':    'La contraseña actual es incorrecta.',
+      'auth/invalid-credential':'La contraseña actual es incorrecta.',
+      'auth/too-many-requests': 'Demasiados intentos fallidos. Esperá unos minutos.',
+      'auth/weak-password':     'La nueva contraseña es demasiado débil.',
+    };
+    errEl.textContent = map[err.code] || ('Error: ' + err.message);
+    errEl.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+/* ── SEGURIDAD / SESIONES ────────────────────────────────────────── */
+function _parseUA(ua) {
+  const os =
+    /Windows NT 10/.test(ua) ? 'Windows 10/11' :
+    /Windows NT 6\.3/.test(ua) ? 'Windows 8.1' :
+    /Windows NT 6/.test(ua)  ? 'Windows 7/8' :
+    /Windows/.test(ua)       ? 'Windows' :
+    /iPhone/.test(ua)        ? 'iOS (iPhone)' :
+    /iPad/.test(ua)          ? 'iOS (iPad)' :
+    /Android/.test(ua)       ? 'Android' :
+    /Mac OS X/.test(ua)      ? 'macOS' :
+    /Linux/.test(ua)         ? 'Linux' : 'Desconocido';
+
+  const browser =
+    /Edg\//.test(ua)    ? 'Edge' :
+    /OPR\//.test(ua)    ? 'Opera' :
+    /Chrome\//.test(ua) ? 'Chrome' :
+    /Firefox\//.test(ua)? 'Firefox' :
+    /Safari\//.test(ua) ? 'Safari' : 'Desconocido';
+
+  const device =
+    /iPhone|Android.*Mobile|Mobile/.test(ua) ? '📱 Móvil' :
+    /iPad|Android(?!.*Mobile)/.test(ua)      ? '⬛ Tablet' : '💻 Desktop';
+
+  return { os, browser, device };
+}
+
+async function _regSesion() {
+  const user = _auth.currentUser;
+  if (!user) return;
+  let ip = '—';
+  try {
+    const r = await fetch('https://api.ipify.org?format=json');
+    const d = await r.json();
+    ip = d.ip || '—';
+  } catch {}
+  const { os, browser, device } = _parseUA(navigator.userAgent);
+  await _db.collection('sesiones').add({
+    uid:       user.uid,
+    email:     user.email,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    os, browser, device, ip,
+    screen:    `${screen.width}×${screen.height}`,
+    lang:      navigator.language || '—',
+    ua:        navigator.userAgent,
+  });
+}
+
+async function _segCargar() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  const cont = document.getElementById('segContent');
+  if (!cont) return;
+  cont.innerHTML = '<p style="color:var(--ink3);font-size:13px">Cargando…</p>';
+  try {
+    const snap = await _db.collection('sesiones').orderBy('timestamp','desc').limit(200).get();
+    if (snap.empty) {
+      cont.innerHTML = '<p style="color:var(--ink3);font-size:13px">No hay sesiones registradas todavía.</p>';
+      return;
+    }
+    const rows = snap.docs.map(d => {
+      const s = d.data();
+      const ts = s.timestamp ? s.timestamp.toDate() : null;
+      const fecha = ts ? ts.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+      const hora  = ts ? ts.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '—';
+      return `<tr>
+        <td style="font-weight:500">${s.email || '—'}</td>
+        <td>${fecha}<br><span style="font-size:11px;color:var(--ink3)">${hora}</span></td>
+        <td>${s.device || '—'}</td>
+        <td>${s.os || '—'}</td>
+        <td>${s.browser || '—'}</td>
+        <td style="font-family:var(--mono);font-size:12px">${s.ip || '—'}</td>
+        <td style="font-size:11px;color:var(--ink3)">${s.screen || '—'}</td>
+      </tr>`;
+    }).join('');
+    cont.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:2px solid var(--border);text-align:left">
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Usuario</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Fecha</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Dispositivo</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">OS</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Navegador</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">IP</th>
+              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Pantalla</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:12px;font-size:11px;color:var(--ink3)">Últimas 200 sesiones · ordenadas por más reciente.</p>`;
+    cont.querySelectorAll('tbody tr').forEach((tr, i) => {
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface2)';
+    });
+    cont.querySelectorAll('tbody td').forEach(td => {
+      td.style.padding = '10px 12px';
+      td.style.verticalAlign = 'middle';
+    });
+  } catch (e) {
+    cont.innerHTML = `<p style="color:var(--danger);font-size:13px">Error al cargar: ${e.message}</p>`;
+  }
+}
 </script>
 
 
@@ -15943,6 +16165,37 @@ _auth.onAuthStateChanged(async user => {
     <label class="btn btn-outline" style="cursor:pointer">🏛 Importar ARCA<input type="file" accept=".xlsx,.xls" onchange="importarARCA(this)" style="display:none"></label>
   </div>
   <div id="arcaParaRevisarScreen"></div>
+</div>
+
+<!-- SEGURIDAD (solo admin) -->
+<div id="viewSeguridad" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="margin:0 0 4px 0">🔒 Seguridad</h2>
+      <p style="margin:0;font-size:13px;color:var(--ink2)">Historial de conexiones de todos los usuarios.</p>
+    </div>
+    <button class="btn btn-outline" onclick="_segCargar()">↻ Refrescar</button>
+  </div>
+  <div id="segContent"><p style="color:var(--ink3);font-size:13px">Cargando…</p></div>
+</div>
+
+<!-- MODAL: Cambiar contraseña -->
+<div id="modalCambiarPass" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.12)">
+    <h3 style="margin:0 0 4px 0;font-size:16px">Cambiar contraseña</h3>
+    <p style="margin:0 0 20px 0;font-size:13px;color:var(--ink2)">Ingresá tu contraseña actual y la nueva.</p>
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Contraseña actual</label>
+    <input id="cpOldPass" type="password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:14px;background:var(--surface);color:var(--ink);box-sizing:border-box">
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Nueva contraseña</label>
+    <input id="cpNewPass" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:14px;background:var(--surface);color:var(--ink);box-sizing:border-box">
+    <label style="display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Confirmar nueva contraseña</label>
+    <input id="cpConfirm" type="password" autocomplete="new-password" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);margin-bottom:16px;background:var(--surface);color:var(--ink);box-sizing:border-box">
+    <div id="cpErr" style="display:none;padding:8px 12px;background:#FEE2E2;color:#991B1B;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="_cerrarCambiarPass()">Cancelar</button>
+      <button id="cpBtn" class="btn btn-primary" onclick="_confirmarCambiarPass()">Guardar</button>
+    </div>
+  </div>
 </div>
 
 </body>
