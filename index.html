@@ -16131,49 +16131,81 @@ async function _segCargar() {
       cont.innerHTML = '<p style="color:var(--ink3);font-size:13px">No hay sesiones registradas todavía.</p>';
       return;
     }
-    const rows = snap.docs.map(d => {
+
+    // Agrupar por usuario
+    const porUsuario = {};
+    snap.docs.forEach(d => {
       const s = d.data();
-      const ts = s.timestamp ? s.timestamp.toDate() : null;
-      const fecha = ts ? ts.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
-      const hora  = ts ? ts.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '—';
-      return `<tr>
-        <td style="font-weight:500">${s.email || '—'}</td>
-        <td>${fecha}<br><span style="font-size:11px;color:var(--ink3)">${hora}</span></td>
-        <td>${s.device || '—'}</td>
-        <td>${s.os || '—'}</td>
-        <td>${s.browser || '—'}</td>
-        <td style="font-family:var(--mono);font-size:12px">${s.ip || '—'}</td>
-        <td style="font-size:11px;color:var(--ink3)">${s.screen || '—'}</td>
-      </tr>`;
+      const email = s.email || '(sin email)';
+      if (!porUsuario[email]) porUsuario[email] = [];
+      porUsuario[email].push(s);
+    });
+
+    // Ordenar usuarios por sesión más reciente
+    const usuarios = Object.entries(porUsuario).sort((a, b) => {
+      const tsA = a[1][0]?.timestamp?.toDate?.() || 0;
+      const tsB = b[1][0]?.timestamp?.toDate?.() || 0;
+      return tsB - tsA;
+    });
+
+    const bloques = usuarios.map(([email, sesiones], idx) => {
+      const ultima = sesiones[0];
+      const ts = ultima?.timestamp?.toDate?.();
+      const ultimaFecha = ts ? ts.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' +
+        ts.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '—';
+      const uid = `seg-usr-${idx}`;
+
+      const filas = sesiones.map((s, i) => {
+        const t = s.timestamp?.toDate?.();
+        const fecha = t ? t.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+        const hora  = t ? t.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '—';
+        return `<tr style="border-bottom:1px solid var(--border);background:${i%2===0?'transparent':'var(--surface2)'}">
+          <td style="padding:9px 12px">${fecha} <span style="color:var(--ink3);font-size:11px">${hora}</span></td>
+          <td style="padding:9px 12px">${s.device || '—'}</td>
+          <td style="padding:9px 12px">${s.os || '—'}</td>
+          <td style="padding:9px 12px">${s.browser || '—'}</td>
+          <td style="padding:9px 12px;font-family:var(--mono);font-size:12px">${s.ip || '—'}</td>
+          <td style="padding:9px 12px;font-size:11px;color:var(--ink3)">${s.screen || '—'}</td>
+        </tr>`;
+      }).join('');
+
+      return `
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden">
+          <div onclick="document.getElementById('${uid}').style.display=document.getElementById('${uid}').style.display==='none'?'block':'none';this.querySelector('.seg-arrow').textContent=document.getElementById('${uid}').style.display==='none'?'▸':'▾'"
+               style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;transition:background .12s"
+               onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background=''">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="seg-arrow" style="color:var(--ink3);font-size:12px;width:12px">▸</span>
+              <div>
+                <div style="font-weight:600;font-size:14px">${email}</div>
+                <div style="font-size:11px;color:var(--ink3);margin-top:2px">Última: ${ultimaFecha}</div>
+              </div>
+            </div>
+            <span style="background:var(--surface2);color:var(--ink2);font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px">${sesiones.length} sesión${sesiones.length===1?'':'es'}</span>
+          </div>
+          <div id="${uid}" style="display:none">
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border);border-top:1px solid var(--border)">
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Fecha</th>
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Dispositivo</th>
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">OS</th>
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Navegador</th>
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">IP</th>
+                    <th style="padding:7px 12px;color:var(--ink2);font-weight:600;background:var(--surface2);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Pantalla</th>
+                  </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>`;
     }).join('');
-    cont.innerHTML = `
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="border-bottom:2px solid var(--border);text-align:left">
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Usuario</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Fecha</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Dispositivo</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">OS</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Navegador</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">IP</th>
-              <th style="padding:8px 12px;color:var(--ink2);font-weight:600">Pantalla</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
-      </div>
-      <p style="margin-top:12px;font-size:11px;color:var(--ink3)">${snap.docs.length} sesiones · ordenadas por más reciente.</p>`;
-    cont.querySelectorAll('tbody tr').forEach((tr, i) => {
-      tr.style.borderBottom = '1px solid var(--border)';
-      tr.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface2)';
-    });
-    cont.querySelectorAll('tbody td').forEach(td => {
-      td.style.padding = '10px 12px';
-      td.style.verticalAlign = 'middle';
-    });
+
+    cont.innerHTML = bloques +
+      `<p style="margin-top:12px;font-size:11px;color:var(--ink3)">${snap.docs.length} sesiones · ${usuarios.length} usuario${usuarios.length===1?'':'s'} · hacé click en un usuario para ver el detalle.</p>`;
+
   } catch (e) {
     cont.innerHTML = `<p style="color:var(--danger);font-size:13px">Error al cargar: ${e.message}</p>`;
   }
