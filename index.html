@@ -7623,7 +7623,11 @@ function renderContable() {
       </tbody></table>`;
 
   // ── BANCO GALICIA ──
-  const _esImpuestoGal = m => /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(m.descripcion||'');
+  const _esImpuestoGal = m => {
+    const desc = m.descripcion || '';
+    if (/imp\.afip/i.test(desc)) return false;
+    return /imp\.|impuesto|percep|perc\.|percepcion|percepción|iva rg|iibb|ing\.?\s*bruto|alicuota|rg\s+\d{4}/i.test(desc);
+  };
   const galPeriod      = galiciaMovs.filter(m => inPeriod(m.fecha) && !m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const galIngPeriod   = galiciaMovs.filter(m => inPeriod(m.fecha) && m.esIngreso && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const galImpuestos   = galPeriod.filter(m => _esImpuestoGal(m));
