@@ -14593,7 +14593,11 @@ function enviarPedidoWA(provId) {
   let msg = `Hola Buenos días, "Hola que tengan muy buenos días"\nLes dejamos el detalle del pedido:\n\n`;
   items.forEach(([iid, qty]) => {
     const ins = insumos.find(i => i.id === iid);
-    if (ins) msg += `• ${ins.nombre}:     ${qty}\n`;
+    if (!ins) return;
+    const pres = ins.presUnitWeight && ins.presUnitWeightUnit
+      ? ` ${ins.presUnitWeight}${ins.presUnitWeightUnit}`
+      : ins.unidad ? ` (${ins.unidad})` : '';
+    msg += `• ${ins.nombre}${pres}:     ${qty}\n`;
   });
   msg += `\n\nLes dejamos un saludo\nPor favor de ser posible mandar la factura por mail\nr2d2@arthur.com.ar\n\nR2. Café`;
 
