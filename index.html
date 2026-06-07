@@ -16091,9 +16091,28 @@ async function _segCargar() {
   if (!_isAdmin(_auth.currentUser)) return;
   const cont = document.getElementById('segContent');
   if (!cont) return;
+
+  const desdeEl = document.getElementById('segDesde');
+  const hastaEl = document.getElementById('segHasta');
+
+  let query = _db.collection('sesiones').orderBy('timestamp', 'desc');
+
+  if (desdeEl?.value) {
+    const desde = new Date(desdeEl.value);
+    desde.setHours(0, 0, 0, 0);
+    query = query.where('timestamp', '>=', desde);
+  }
+  if (hastaEl?.value) {
+    const hasta = new Date(hastaEl.value);
+    hasta.setHours(23, 59, 59, 999);
+    query = query.where('timestamp', '<=', hasta);
+  }
+
+  query = query.limit(500);
+
   cont.innerHTML = '<p style="color:var(--ink3);font-size:13px">Cargando…</p>';
   try {
-    const snap = await _db.collection('sesiones').orderBy('timestamp','desc').limit(200).get();
+    const snap = await query.get();
     if (snap.empty) {
       cont.innerHTML = '<p style="color:var(--ink3);font-size:13px">No hay sesiones registradas todavía.</p>';
       return;
@@ -16132,7 +16151,7 @@ async function _segCargar() {
           </tbody>
         </table>
       </div>
-      <p style="margin-top:12px;font-size:11px;color:var(--ink3)">Últimas 200 sesiones · ordenadas por más reciente.</p>`;
+      <p style="margin-top:12px;font-size:11px;color:var(--ink3)">${snap.docs.length} sesiones · ordenadas por más reciente.</p>`;
     cont.querySelectorAll('tbody tr').forEach((tr, i) => {
       tr.style.borderBottom = '1px solid var(--border)';
       tr.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface2)';
@@ -16173,12 +16192,19 @@ async function _segCargar() {
 
 <!-- SEGURIDAD (solo admin) -->
 <div id="viewSeguridad" class="view">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
     <div>
       <h2 style="margin:0 0 4px 0">🔒 Seguridad</h2>
       <p style="margin:0;font-size:13px;color:var(--ink2)">Historial de conexiones de todos los usuarios.</p>
     </div>
-    <button class="btn btn-outline" onclick="_segCargar()">↻ Refrescar</button>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+    <label style="font-size:12px;font-weight:600;color:var(--ink2)">Desde</label>
+    <input id="segDesde" type="date" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);background:var(--surface);color:var(--ink)">
+    <label style="font-size:12px;font-weight:600;color:var(--ink2)">Hasta</label>
+    <input id="segHasta" type="date" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);background:var(--surface);color:var(--ink)">
+    <button class="btn btn-primary btn-sm" onclick="_segCargar()">Buscar</button>
+    <button class="btn btn-outline btn-sm" onclick="document.getElementById('segDesde').value='';document.getElementById('segHasta').value='';_segCargar()">Todos</button>
   </div>
   <div id="segContent"><p style="color:var(--ink3);font-size:13px">Cargando…</p></div>
 </div>
