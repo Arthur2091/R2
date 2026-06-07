@@ -2687,6 +2687,8 @@ function toast(msg, type = '', duration = 3000) {
 }
 
 
+let _insumosSearchSaved = ''; // persiste búsqueda al navegar al detalle de proveedor
+
 /* ── IMPORT ─────────────────────────────────────────────────────── */
 function onDrop(e) {
   e.preventDefault();
@@ -3208,6 +3210,7 @@ function _insumosByProv() {
 function renderInsumos() {
   const screen = document.getElementById('insumosScreen');
   if (!screen) return;
+  const _scrollTop = screen.scrollTop;
   if (window._insumosProvId) { _renderInsumosDetalle(window._insumosProvId); return; }
   const search = (document.getElementById('searchInsumos')?.value || '').toLowerCase().trim();
   const insumosByProv = _insumosByProv();
@@ -3253,7 +3256,7 @@ function renderInsumos() {
       .filter(x => x.f > 0)
       .map(x => `<span style="font-size:11px;color:var(--ink2);background:var(--surface2);padding:2px 8px;border-radius:999px;white-space:nowrap">${x.i.nombre} <strong>·${x.f}</strong></span>`)
       .join(' ');
-    return `<div class="ped-card" onclick="window._insumosProvId='${p.id}';const si=document.getElementById('searchInsumos');if(si)si.value='';renderInsumos()" style="cursor:pointer">
+    return `<div class="ped-card" onclick="_insumosSearchSaved=document.getElementById('searchInsumos')?.value||'';window._insumosProvId='${p.id}';renderInsumos()" style="cursor:pointer">
       <div class="ped-card-head">
         <div style="min-width:0;flex:1">
           <div class="ped-prov-name">${p.nombre}</div>
@@ -3275,6 +3278,7 @@ function renderInsumos() {
       </div>` : '';
 
   screen.innerHTML = `<div class="ped-grid">${cards}</div>${toggle}`;
+  requestAnimationFrame(() => { screen.scrollTop = _scrollTop; });
 }
 
 function _renderInsumosDetalle(provId) {
@@ -3326,7 +3330,7 @@ function _renderInsumosDetalle(provId) {
 
   screen.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-      <button class="btn btn-outline btn-sm" onclick="window._insumosProvId=null;renderInsumos()">← Volver</button>
+      <button class="btn btn-outline btn-sm" onclick="window._insumosProvId=null;const si=document.getElementById('searchInsumos');if(si&&_insumosSearchSaved){si.value=_insumosSearchSaved;}renderInsumos();requestAnimationFrame(()=>{const s=document.getElementById('insumosScreen');if(s)s.scrollTop=0;})">← Volver</button>
       <h2 style="margin:0;font-size:1.3rem">${prov.nombre}</h2>
       <span style="color:var(--ink3);font-size:13px">Insumos rankeados por frecuencia de pedido</span>
     </div>
@@ -3544,6 +3548,7 @@ function toggleMostrarBaja() {
 function renderProveedores() {
   _pendViewMode = null;
   const screen = document.getElementById('proveedoresScreen');
+  const _scrollTop = screen?.scrollTop || 0;
   const top    = document.getElementById('provListTop');
   const bot    = document.getElementById('provListBottom');
   if (top) top.style.display = '';
@@ -3655,6 +3660,7 @@ function renderProveedores() {
         </div>`;
       }).join('')}
     </div>`;
+  requestAnimationFrame(() => { if (screen) screen.scrollTop = _scrollTop; });
 }
 
 function openAltaInsumoManualModal(provId) {
@@ -14420,19 +14426,23 @@ function renderPedidos() {
 }
 
 let _pedModalProvId = null;
+const _pedModalSearch = {}; // persiste búsqueda por proveedor entre aperturas
 
 function openPedidoModal(provId) {
   const prov = proveedores.find(p => p.id === provId);
   if (!prov) return;
   _pedModalProvId = provId;
   document.getElementById('pedidoModalTitle').textContent = prov.nombre;
-  document.getElementById('searchInsumosPedido').value = '';
+  document.getElementById('searchInsumosPedido').value = _pedModalSearch[provId] || '';
   renderPedidoModalContent();
   document.getElementById('pedidoModal').classList.add('open');
   if (window.innerWidth > 680) setTimeout(() => document.getElementById('searchInsumosPedido').focus(), 60);
 }
 
 function closePedidoModal() {
+  if (_pedModalProvId) {
+    _pedModalSearch[_pedModalProvId] = document.getElementById('searchInsumosPedido')?.value || '';
+  }
   _pedModalProvId = null;
   document.getElementById('pedidoModal').classList.remove('open');
 }
