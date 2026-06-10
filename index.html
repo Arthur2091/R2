@@ -858,6 +858,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <button class="nav-btn" data-group="stock" data-view="viewDeposito">Stock <span id="depBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px;font-weight:700"></span></button>
     <button class="nav-btn" data-view="viewInsumos">Insumos</button>
     <button class="nav-btn" data-view="viewRecetas">Recetas</button>
+    <button class="nav-btn" data-view="viewEstadisticas">Estadísticas</button>
     <button class="nav-btn" data-view="viewContable" style="display:none">Contable</button>
     <button class="nav-btn" data-view="viewAuditoria" style="display:none">Auditoría</button>
     <button class="nav-btn" data-view="viewProductos" style="display:none">Productos Vendidos</button>
@@ -1477,6 +1478,18 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
       <button id="lpBtnGuardar" class="btn btn-primary" onclick="confirmarListaPrecios()" style="display:none">Guardar lista</button>
     </div>
   </div>
+</div>
+
+<!-- VIEW: Estadísticas -->
+<div id="viewEstadisticas" class="view">
+  <div class="view-header">
+    <h1>Estadísticas</h1>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+    <button id="estTab_consumo"   class="btn" onclick="_estSetTab('consumo')"   style="font-size:13px">Por Insumo</button>
+    <button id="estTab_productos" class="btn" onclick="_estSetTab('productos')" style="font-size:13px">Por Producto</button>
+  </div>
+  <div id="estadisticasScreen"></div>
 </div>
 
 <!-- VIEW: Auditoría -->
@@ -2546,6 +2559,7 @@ function _onViewActivate(viewId) {
     viewBoletas:        initBoletasView,
     viewARCAPendientes:  renderARCAPendientes,
     viewContable:    initContableView,
+    viewEstadisticas: renderEstadisticas,
     viewAuditoria:   renderAuditoria,
     viewProductos:   renderProductos,
     viewRecetas:     renderRecetas,
@@ -9111,6 +9125,381 @@ function renderAuditoria() {
          ${_colHtml(movD, 'Dudoso',  '#FEFCE8', '#FEF08A', '#713F12', '#713F12')}
        </div>`;
 }
+
+/* ESTADÍSTICAS */
+let _estTab = 'consumo';
+
+function _estSetTab(tab) {
+  _estTab = tab;
+  renderEstadisticas();
+}
+
+function _estCalcConsumo() {
+  // Returns Map: key -> { nombre, unidad, sinVincular, porDia: Map(fecha -> qty) }
+  const result = new Map();
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  // Group ventas by fecha+producto
+  const ventasDia = {};
+  ventas.forEach(v => {
+    const f = (v.fecha||'').slice(0,10);
+    if (!f || f.length < 10) return;
+    const p = (v.producto||'').trim();
+    if (!p) return;
+    if (!ventasDia[f]) ventasDia[f] = {};
+    ventasDia[f][p] = (ventasDia[f][p] || 0) + (Number(v.unidades) || 0);
+  });
+  Object.entries(ventasDia).forEach(([fecha, prods]) => {
+    Object.entries(prods).forEach(([producto, unidades]) => {
+      if (!unidades) return;
+      const normProd = norm(producto);
+      const receta = recetas.find(r => {
+        const al = _ventaAliases(r.id);
+        if (al.length) return al.map(a => norm(a)).includes(normProd);
+        const t = norm(r.nombre);
+        return t === normProd || (normProd.length >= 4 && (normProd.includes(t) || t.includes(normProd)));
+      });
+      if (!receta) return;
+      const acc = _consumoTeoricoReceta(receta.id, unidades, new Map(), new Set());
+      acc.forEach((data, key) => {
+        if (!result.has(key)) result.set(key, { nombre: data.nombre, unidad: data.unidad, sinVincular: data.sinVincular, porDia: new Map() });
+        const entry = result.get(key);
+        entry.porDia.set(fecha, (entry.porDia.get(fecha) || 0) + data.cantidad);
+      });
+    });
+  });
+  return result;
+}
+
+function renderEstadisticas() {
+  const screen = document.getElementById('estadisticasScreen');
+  if (!screen) return;
+  ['consumo','productos'].forEach(t => {
+    const btn = document.getElementById('estTab_'+t);
+    if (!btn) return;
+    btn.style.background = _estTab === t ? 'var(--accent)' : '';
+    btn.style.color      = _estTab === t ? '#fff' : '';
+  });
+  if (_estTab === 'consumo')   _renderConsumoInsumos(screen);
+  if (_estTab === 'productos') _renderConsumoPorProducto(screen);
+}
+
+function _renderConsumoPorProducto(screen) {
+  if (!ventas.length || !recetas.length) {
+    screen.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink3);font-size:14px">Necesitás tener ventas y recetas cargadas.</div>';
+    return;
+  }
+
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const fmt  = n => n % 1 === 0 ? String(n) : n.toFixed(2);
+
+  const mesSel   = document.getElementById('estMesProd')?.value  || '';
+  const agrupSel = document.getElementById('estAgrupProd')?.value || 'mes';
+
+  const todosMeses = [...new Set(ventas.map(v=>(v.fecha||'').slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m)))].sort().reverse();
+  const mesOpts = todosMeses.map(m => {
+    const label = new Date(m+'-01T00:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    return `<option value="${m}" ${m===mesSel?'selected':''}>${label}</option>`;
+  }).join('');
+
+  const filtersHtml = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">MES</label>
+        <select id="estMesProd" onchange="renderEstadisticas()" style="font:14px var(--font);padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink)">
+          <option value="">Todos los meses</option>${mesOpts}
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">VER POR</label>
+        <select id="estAgrupProd" onchange="renderEstadisticas()" style="font:14px var(--font);padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink)">
+          <option value="dia"    ${agrupSel==='dia'   ?'selected':''}>Día</option>
+          <option value="semana" ${agrupSel==='semana'?'selected':''}>Semana</option>
+          <option value="mes"    ${agrupSel==='mes'   ?'selected':''}>Mes</option>
+        </select>
+      </div>
+    </div>`;
+
+  const _bucketKey = f => {
+    if (agrupSel === 'mes') return f.slice(0,7);
+    if (agrupSel === 'semana') {
+      const d = new Date(f+'T00:00:00'), day = d.getDay();
+      const mon = new Date(d); mon.setDate(d.getDate()-(day===0?6:day-1));
+      return mon.toISOString().slice(0,10);
+    }
+    return f;
+  };
+  const _bucketLabel = bk => {
+    if (agrupSel === 'mes') return new Date(bk+'-01T00:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    if (agrupSel === 'semana') {
+      const fin = new Date(bk+'T00:00:00'); fin.setDate(fin.getDate()+6);
+      return `${new Date(bk+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})} – ${fin.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})}`;
+    }
+    return new Date(bk+'T00:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit'});
+  };
+
+  // Para cada receta de venta: calcular unidades vendidas y consumo de insumos
+  const recetasVenta = recetas.filter(r => (r.tipo||'venta') === 'venta');
+
+  const cards = recetasVenta.map(r => {
+    // Ventas matcheadas filtradas por mes
+    const ventasFiltradas = ventas.filter(v => {
+      const f = (v.fecha||'').slice(0,10);
+      if (f.length !== 10) return false;
+      if (mesSel && !f.startsWith(mesSel)) return false;
+      const normProd = norm(v.producto||'');
+      const al = _ventaAliases(r.id);
+      if (al.length) return al.map(a=>norm(a)).includes(normProd);
+      const t = norm(r.nombre);
+      return t === normProd || (normProd.length >= 4 && (normProd.includes(t) || t.includes(normProd)));
+    });
+    if (!ventasFiltradas.length) return null;
+
+    const totalUnidades = ventasFiltradas.reduce((s,v) => s+(Number(v.unidades)||0), 0);
+
+    // Agrupar unidades por bucket
+    const byBucket = new Map();
+    ventasFiltradas.forEach(v => {
+      const bk = _bucketKey((v.fecha||'').slice(0,10));
+      byBucket.set(bk, (byBucket.get(bk)||0) + (Number(v.unidades)||0));
+    });
+
+    // Consumo de insumos para el total de unidades vendidas
+    const acc = _consumoTeoricoReceta(r.id, totalUnidades, new Map(), new Set());
+    const insumos_consumo = [...acc.values()].filter(d => !d.sinVincular).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+
+    return { receta: r, totalUnidades, byBucket, insumos_consumo };
+  }).filter(Boolean).sort((a,b) => b.totalUnidades - a.totalUnidades);
+
+  if (!cards.length) {
+    screen.innerHTML = filtersHtml + '<div style="padding:24px;text-align:center;color:var(--ink3);font-size:13px">Sin ventas registradas para el período seleccionado.</div>';
+    return;
+  }
+
+  const cardsHtml = cards.map(({ receta, totalUnidades, byBucket, insumos_consumo }) => {
+    const id = 'estProd_' + receta.id;
+    const sortedBuckets = [...byBucket.entries()].sort((a,b)=>a[0].localeCompare(b[0]));
+    const maxVal = Math.max(...byBucket.values());
+
+    const ventasRows = sortedBuckets.map(([bk, u]) => {
+      const pct = maxVal > 0 ? (u/maxVal)*100 : 0;
+      return `
+        <div style="display:grid;grid-template-columns:120px 1fr 60px;gap:8px;align-items:center;padding:4px 0">
+          <div style="font-size:12px;color:var(--ink2)">${_bucketLabel(bk)}</div>
+          <div style="background:var(--surface2);border-radius:4px;height:8px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--info);border-radius:4px"></div>
+          </div>
+          <div style="font-family:var(--mono);font-size:12px;font-weight:600;text-align:right">${u} u</div>
+        </div>`;
+    }).join('');
+
+    const insumosRows = insumos_consumo.map(d => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px">${d.nombre}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent)">${fmt(Math.round(d.cantidad*100)/100)} ${d.unidad||''}</span>
+      </div>`).join('');
+
+    return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;overflow:hidden">
+        <div onclick="document.getElementById('${id}').style.display=document.getElementById('${id}').style.display==='none'?'block':'none';this.querySelector('.est-toggle').textContent=document.getElementById('${id}').style.display==='none'?'▶':'▼'"
+             style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer;user-select:none">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span class="est-toggle" style="font-size:11px;color:var(--ink3)">▶</span>
+            <span style="font-size:15px;font-weight:700">${receta.nombre}</span>
+            ${receta.rubro ? `<span style="font-size:11px;background:var(--surface2);padding:2px 8px;border-radius:999px;color:var(--ink2)">${receta.rubro}</span>` : ''}
+          </div>
+          <span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--info)">${totalUnidades} u vendidas</span>
+        </div>
+        <div id="${id}" style="display:none;padding:0 16px 14px">
+          <div style="font-size:11px;font-weight:700;color:var(--ink3);margin-bottom:6px">VENTAS</div>
+          ${ventasRows}
+          <div style="font-size:11px;font-weight:700;color:var(--ink3);margin:12px 0 6px">INSUMOS CONSUMIDOS (total período)</div>
+          ${insumosRows || '<div style="font-size:12px;color:var(--ink3)">Sin insumos vinculados</div>'}
+        </div>
+      </div>`;
+  }).join('');
+
+  screen.innerHTML = filtersHtml + cardsHtml;
+}
+
+function _renderConsumoInsumos(screen) {
+  if (!ventas.length || !recetas.length) {
+    screen.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink3);font-size:14px">Necesitás tener ventas y recetas cargadas para ver el consumo.</div>';
+    return;
+  }
+
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+  const fmt = n => n % 1 === 0 ? String(n) : n.toFixed(2);
+
+  // Leer filtros actuales
+  const insumoSel = document.getElementById('estInsumo')?.value || '';
+  const mesSel    = document.getElementById('estMes')?.value    || '';
+  const agrupSel  = document.getElementById('estAgrup')?.value  || 'semana';
+
+  // Construir mapa insumoId -> { nombre, unidad, recetas: [{recetaId, recetaNombre, qtyPorUnidad}] }
+  const insumoInfo = new Map(); // key: 'ins:'+insumoId
+  recetas.filter(r => (r.tipo || 'venta') === 'venta').forEach(r => {
+    const acc = _consumoTeoricoReceta(r.id, 1, new Map(), new Set());
+    acc.forEach((data, key) => {
+      if (data.sinVincular) return;
+      if (!insumoInfo.has(key)) insumoInfo.set(key, { nombre: data.nombre, unidad: data.unidad, recetas: [] });
+      insumoInfo.get(key).recetas.push({ recetaId: r.id, recetaNombre: r.nombre, qtyPorUnidad: data.cantidad });
+    });
+  });
+
+  if (!insumoInfo.size) {
+    screen.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ink3);font-size:14px">No se encontró consumo. Revisá que las recetas tengan insumos vinculados.</div>';
+    return;
+  }
+
+  const todosMeses = [...new Set(ventas.map(v => (v.fecha||'').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m)))].sort().reverse();
+  const todasFechas = [...new Set(ventas.map(v => (v.fecha||'').slice(0,10)).filter(f => f.length===10))].sort();
+  const fechaMin = todasFechas[0] || '';
+  const fechaMax = todasFechas[todasFechas.length-1] || '';
+
+  const insumoOpts = [...insumoInfo.entries()]
+    .sort((a,b) => a[1].nombre.localeCompare(b[1].nombre,'es'))
+    .map(([key, d]) => `<option value="${key}" ${key===insumoSel?'selected':''}>${d.nombre}</option>`)
+    .join('');
+
+  const mesOpts = todosMeses.map(m => {
+    const label = new Date(m+'-01T00:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    return `<option value="${m}" ${m===mesSel?'selected':''}>${label}</option>`;
+  }).join('');
+
+  const filtersHtml = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">INSUMO</label>
+        <select id="estInsumo" onchange="renderEstadisticas()" style="font:14px var(--font);padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);min-width:200px">
+          <option value="">— Elegí un insumo —</option>
+          ${insumoOpts}
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">MES</label>
+        <select id="estMes" onchange="renderEstadisticas()" style="font:14px var(--font);padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink)">
+          <option value="">Todos los meses</option>
+          ${mesOpts}
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--ink3);font-weight:600">VER POR</label>
+        <select id="estAgrup" onchange="renderEstadisticas()" style="font:14px var(--font);padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink)">
+          <option value="dia"    ${agrupSel==='dia'   ?'selected':''}>Día</option>
+          <option value="semana" ${agrupSel==='semana'?'selected':''}>Semana</option>
+          <option value="mes"    ${agrupSel==='mes'   ?'selected':''}>Mes</option>
+        </select>
+      </div>
+      ${fechaMin ? `<div style="font-size:12px;color:var(--ink3);padding-bottom:6px">${fechaMin} → ${fechaMax}</div>` : ''}
+    </div>`;
+
+  if (!insumoSel || !insumoInfo.has(insumoSel)) {
+    screen.innerHTML = filtersHtml + '<div style="padding:24px;text-align:center;color:var(--ink3);font-size:14px">Seleccioná un insumo para ver el análisis.</div>';
+    return;
+  }
+
+  const data = insumoInfo.get(insumoSel);
+
+  // --- Sección 1: productos que usan este insumo ---
+  const productosHtml = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--ink3);margin-bottom:10px">PRODUCTOS QUE USAN ESTE INSUMO</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${data.recetas.sort((a,b)=>a.recetaNombre.localeCompare(b.recetaNombre,'es')).map(r => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:8px">
+            <span style="font-size:14px;font-weight:500">${r.recetaNombre}</span>
+            <span style="font-family:var(--mono);font-size:13px;color:var(--ink2)">${fmt(r.qtyPorUnidad)} ${data.unidad||''} / unidad</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  // --- Sección 2: consumo por período ---
+  const _bucketKey = f => {
+    if (agrupSel === 'mes') return f.slice(0,7);
+    if (agrupSel === 'semana') {
+      const d = new Date(f+'T00:00:00'), day = d.getDay();
+      const mon = new Date(d); mon.setDate(d.getDate() - (day===0?6:day-1));
+      return mon.toISOString().slice(0,10);
+    }
+    return f;
+  };
+  const _bucketLabel = bk => {
+    if (agrupSel === 'mes') return new Date(bk+'-01T00:00:00').toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+    if (agrupSel === 'semana') {
+      const fin = new Date(bk+'T00:00:00'); fin.setDate(fin.getDate()+6);
+      return `${new Date(bk+'T00:00:00').toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})} – ${fin.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})}`;
+    }
+    return new Date(bk+'T00:00:00').toLocaleDateString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit'});
+  };
+
+  // Acumular consumo por bucket
+  const byBucket = new Map();
+  const byBucketPorReceta = new Map(); // bk -> { recetaNombre: qty }
+
+  ventas.forEach(v => {
+    const f = (v.fecha||'').slice(0,10);
+    if (f.length !== 10) return;
+    if (mesSel && !f.startsWith(mesSel)) return;
+    const normProd = norm(v.producto||'');
+    const unidades = Number(v.unidades) || 0;
+    if (!unidades) return;
+    const receta = data.recetas.find(r => {
+      const al = _ventaAliases(r.recetaId);
+      if (al.length) return al.map(a => norm(a)).includes(normProd);
+      const t = norm(r.recetaNombre);
+      return t === normProd || (normProd.length >= 4 && (normProd.includes(t) || t.includes(normProd)));
+    });
+    if (!receta) return;
+    const qty = receta.qtyPorUnidad * unidades;
+    const bk = _bucketKey(f);
+    byBucket.set(bk, (byBucket.get(bk)||0) + qty);
+    if (!byBucketPorReceta.has(bk)) byBucketPorReceta.set(bk, {});
+    byBucketPorReceta.get(bk)[receta.recetaNombre] = (byBucketPorReceta.get(bk)[receta.recetaNombre]||0) + qty;
+  });
+
+  if (!byBucket.size) {
+    screen.innerHTML = filtersHtml + productosHtml + '<div style="padding:16px;text-align:center;color:var(--ink3);font-size:13px">Sin ventas registradas para estos productos.</div>';
+    return;
+  }
+
+  const sortedBuckets = [...byBucket.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+  const total = [...byBucket.values()].reduce((s,v)=>s+v,0);
+  const promedio = total / byBucket.size;
+  const maxVal = Math.max(...byBucket.values());
+
+  const timelineHtml = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:var(--ink3)">CONSUMO POR ${agrupSel.toUpperCase()}</div>
+        <div style="display:flex;gap:16px;font-size:12px;color:var(--ink2)">
+          <span>Total: <strong style="font-family:var(--mono)">${fmt(total)} ${data.unidad||''}</strong></span>
+          <span>Prom: <strong style="font-family:var(--mono)">${fmt(Math.round(promedio*100)/100)} ${data.unidad||''}/${agrupSel}</strong></span>
+        </div>
+      </div>
+      ${sortedBuckets.map(([bk, qty]) => {
+        const pct = maxVal > 0 ? (qty/maxVal)*100 : 0;
+        const detalle = byBucketPorReceta.get(bk) || {};
+        const detalleStr = Object.entries(detalle)
+          .sort((a,b)=>b[1]-a[1])
+          .map(([nombre,q]) => `${nombre}: ${fmt(Math.round(q*100)/100)} ${data.unidad||''}`)
+          .join(' · ');
+        return `
+          <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+            <div style="display:grid;grid-template-columns:120px 1fr 80px;gap:8px;align-items:center;margin-bottom:3px">
+              <div style="font-size:12px;font-weight:600;color:var(--ink2)">${_bucketLabel(bk)}</div>
+              <div style="background:var(--surface2);border-radius:4px;height:10px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:4px"></div>
+              </div>
+              <div style="font-family:var(--mono);font-size:13px;font-weight:700;text-align:right">${fmt(Math.round(qty*100)/100)} ${data.unidad||''}</div>
+            </div>
+            ${detalleStr ? `<div style="font-size:11px;color:var(--ink3);padding-left:128px">${detalleStr}</div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  screen.innerHTML = filtersHtml + productosHtml + timelineHtml;
+}
+
 function _desvincularGal(id) {
   const m = galiciaMovs.find(x=>x.id===id); if(!m) return;
   (m.facturaIds || []).forEach(fId => {
