@@ -16749,43 +16749,63 @@ function _segListenPresencia() {
   const UMBRAL_MS = 3 * 60 * 1000;
   _presenciaUnsub = _db.collection('presence').onSnapshot(snap => {
     const ahora = Date.now();
-    // Agrupar sesiones activas por email
     const porEmail = {};
+    const kickeados = [];
+
     snap.forEach(doc => {
       const d = doc.data();
-      if (d.offline) return;
       const ls = d.lastSeen?.toDate?.();
-      if (!ls || (ahora - ls.getTime()) >= UMBRAL_MS) return;
+      if (!ls || (ahora - ls.getTime()) >= UMBRAL_MS) return; // stale / sin lastSeen
+      if (d.offline) return;
+      if (d.kicked) { kickeados.push(d); return; }
       const key = d.email || doc.id;
       if (!porEmail[key]) porEmail[key] = [];
       porEmail[key].push(d);
     });
+
     const emails = Object.keys(porEmail);
-    if (emails.length === 0) { el.innerHTML = ''; return; }
+    if (emails.length === 0 && kickeados.length === 0) { el.innerHTML = ''; return; }
+
+    const deviceRow = (d, bg, border, dot, textColor, ipColor) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${bg};border:1px solid ${border};border-radius:8px">
+        <span style="width:7px;height:7px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+        <span style="font-size:11px;color:${textColor}">${d.device||'—'} · ${d.os||'—'} · ${d.browser||'—'} · <span onclick="_abrirIP('${d.ip}')" style="font-family:monospace;cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:${ipColor}">${d.ip||'—'}</span></span>
+      </div>`;
 
     const totalSesiones = Object.values(porEmail).reduce((s, a) => s + a.length, 0);
-    const cards = emails.map(email => {
+    const cardsActivos = emails.map(email => {
       const sesiones = porEmail[email];
-      const dispositivos = sesiones.map(d => `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#D1FAE5;border:1px solid #A7F3D0;border-radius:8px">
-          <span style="width:7px;height:7px;border-radius:50%;background:#10B981;flex-shrink:0"></span>
-          <span style="font-size:11px;color:#047857">${d.device || '—'} · ${d.os || '—'} · ${d.browser || '—'} · <span onclick="_abrirIP('${d.ip}')" style="font-family:monospace;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${d.ip || '—'}</span></span>
-        </div>`).join('');
+      const disp = sesiones.length > 1
+        ? `<div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">${sesiones.map(d => deviceRow(d,'#D1FAE5','#A7F3D0','#10B981','#047857','#047857')).join('')}</div>`
+        : `<div style="padding-left:17px;margin-top:4px">${deviceRow(sesiones[0],'#D1FAE5','#A7F3D0','#10B981','#047857','#047857')}</div>`;
       return `
         <div style="background:#ECFDF5;border:1px solid #6EE7B7;border-radius:10px;padding:10px 14px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:${sesiones.length>1?'8px':'0'}">
+          <div style="display:flex;align-items:center;gap:8px">
             <span style="width:9px;height:9px;border-radius:50%;background:#10B981;flex-shrink:0;box-shadow:0 0 0 2px #6EE7B7"></span>
             <span style="font-size:13px;font-weight:700;color:#065F46">${email}</span>
             ${sesiones.length > 1 ? `<span style="background:#6EE7B7;color:#065F46;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px">${sesiones.length} dispositivos</span>` : ''}
           </div>
-          ${sesiones.length > 1 ? `<div style="display:flex;flex-direction:column;gap:4px">${dispositivos}</div>` : `<div style="font-size:11px;color:#047857;padding-left:17px">${sesiones[0].device||'—'} · ${sesiones[0].os||'—'} · ${sesiones[0].browser||'—'} · <span onclick="_abrirIP('${sesiones[0].ip}')" style="font-family:monospace;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${sesiones[0].ip||'—'}</span></div>`}
+          ${disp}
         </div>`;
     }).join('');
 
-    el.innerHTML = `<div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:#065F46;margin-bottom:8px">🟢 En línea ahora · ${emails.length} usuario${emails.length===1?'':'s'} · ${totalSesiones} sesión${totalSesiones===1?'':'es'} abiertas</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>
-    </div>`;
+    const cardsKick = kickeados.length === 0 ? '' : `
+      <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:10px 14px">
+        <div style="font-size:11px;font-weight:700;color:#991B1B;margin-bottom:6px">⛔ Sesiones cerradas (se desconectarán en instantes)</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${kickeados.map(d => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#FEE2E2;border:1px solid #FECACA;border-radius:8px">
+              <span style="width:7px;height:7px;border-radius:50%;background:#EF4444;flex-shrink:0"></span>
+              <span style="font-size:11px;color:#991B1B"><strong>${d.email||'—'}</strong> · ${d.device||'—'} · ${d.ip||'—'}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    const header = emails.length > 0
+      ? `<div style="font-size:12px;font-weight:700;color:#065F46;margin-bottom:8px">🟢 En línea ahora · ${emails.length} usuario${emails.length===1?'':'s'} · ${totalSesiones} sesión${totalSesiones===1?'':'es'} abiertas</div>`
+      : '';
+
+    el.innerHTML = `<div style="margin-bottom:16px">${header}<div style="display:flex;flex-wrap:wrap;gap:8px">${cardsActivos}${cardsKick}</div></div>`;
   });
 }
 
@@ -16852,6 +16872,7 @@ async function _segKillSesiones() {
       const ls = d.lastSeen?.toDate?.();
       if (!ls || (ahora - ls.getTime()) >= UMBRAL_MS) return; // ya inactiva
       batch.set(_db.collection('kicks').doc(doc.id), { kickedAt: ts, by: admin.email });
+      batch.update(_db.collection('presence').doc(doc.id), { kicked: true });
       count++;
     });
     if (count === 0) { toast('No hay otras sesiones activas', 'info'); return; }
