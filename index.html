@@ -2569,7 +2569,7 @@ function _onViewActivate(viewId) {
     viewProduccion:  renderProduccion,
     viewInsumos:     renderInsumos,
     viewUsuarios:    typeof _usrCargar === 'function' ? _usrCargar : null,
-    viewSeguridad:   () => typeof _segCargar === 'function' && _segCargar(),
+    viewSeguridad:   () => { if (typeof _segCargar === 'function') { _segCargar(); _segListenPresencia(); } },
   };
   try { map[viewId]?.(); } catch (e) { console.warn('view activate error', viewId, e); }
 }
@@ -16085,8 +16085,10 @@ const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUs
 const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
 let _userPermisos = null; // cache de permisos del usuario actual
 let _permsDefault = null; // cache de permisos por defecto (de Firestore)
-let _sessionStart = null;
-let _kickUnsub    = null;
+let _sessionStart    = null;
+let _kickUnsub       = null;
+let _presenceTimer   = null;
+let _presenciaUnsub  = null;
 
 function _isAdmin(user) {
   return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
@@ -16467,6 +16469,7 @@ _auth.onAuthStateChanged(async user => {
       emailLbl.style.display = '';
     }
     _sessionStart = new Date();
+    _startPresence(user);
     _kickUnsub?.();
     _kickUnsub = _db.collection('kicks').doc(user.uid).onSnapshot(snap => {
       if (!snap.exists) return;
@@ -16482,6 +16485,9 @@ _auth.onAuthStateChanged(async user => {
     _kickUnsub?.();
     _kickUnsub = null;
     _sessionStart = null;
+    _stopPresence(null);
+    _presenciaUnsub?.();
+    _presenciaUnsub = null;
     _stopIdleWatcher();
     _userPermisos = null;
     _aplicarPermisosUI(null);
@@ -16712,6 +16718,47 @@ async function _segCargar() {
   }
 }
 
+function _startPresence(user) {
+  const ref = _db.collection('presence').doc(user.uid);
+  const write = () => ref.set({ email: user.email, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  write();
+  clearInterval(_presenceTimer);
+  _presenceTimer = setInterval(write, 60000);
+  window.addEventListener('beforeunload', () => ref.set({ email: user.email, lastSeen: firebase.firestore.FieldValue.serverTimestamp(), offline: true }, { merge: true }));
+}
+
+function _stopPresence(user) {
+  clearInterval(_presenceTimer);
+  _presenceTimer = null;
+  if (user) _db.collection('presence').doc(user.uid).set({ offline: true, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+}
+
+function _segListenPresencia() {
+  _presenciaUnsub?.();
+  const el = document.getElementById('segPresencia');
+  if (!el) return;
+  const UMBRAL_MS = 2 * 60 * 1000;
+  _presenciaUnsub = _db.collection('presence').onSnapshot(snap => {
+    const ahora = Date.now();
+    const activos = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.offline) return;
+      const ls = d.lastSeen?.toDate?.();
+      if (ls && (ahora - ls.getTime()) < UMBRAL_MS) activos.push(d.email || doc.id);
+    });
+    if (activos.length === 0) {
+      el.innerHTML = '';
+      return;
+    }
+    const chips = activos.map(e => `<span style="display:inline-flex;align-items:center;gap:6px;background:#D1FAE5;color:#065F46;border:1px solid #6EE7B7;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600"><span style="width:8px;height:8px;border-radius:50%;background:#10B981;display:inline-block;box-shadow:0 0 0 2px #6EE7B7"></span>${e}</span>`).join('');
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:var(--radius);margin-bottom:16px">
+      <span style="font-size:12px;font-weight:700;color:#065F46;white-space:nowrap">🟢 En línea ahora</span>
+      ${chips}
+    </div>`;
+  });
+}
+
 async function _segKillSesiones() {
   const admin = _auth.currentUser;
   if (!_isAdmin(admin)) return;
@@ -16810,6 +16857,7 @@ async function _segDescargar() {
     </div>
     <button class="btn btn-sm" onclick="_segKillSesiones()" style="background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;font-weight:600" onmouseenter="this.style.background='#FECACA'" onmouseleave="this.style.background='#FEE2E2'">⚡ Cerrar sesiones activas</button>
   </div>
+  <div id="segPresencia"></div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
     <label style="font-size:12px;font-weight:600;color:var(--ink2)">Desde</label>
     <input id="segDesde" type="date" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);background:var(--surface);color:var(--ink)">
