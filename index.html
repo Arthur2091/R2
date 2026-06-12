@@ -16472,7 +16472,7 @@ _auth.onAuthStateChanged(async user => {
     _sessionStart = new Date();
     _startPresence(user);
     _kickUnsub?.();
-    _kickUnsub = _db.collection('kicks').doc(user.uid).onSnapshot(snap => {
+    _kickUnsub = _db.collection('kicks').doc(_presenceDocId).onSnapshot(snap => {
       if (!snap.exists) return;
       const kt = snap.data().kickedAt?.toDate?.();
       if (kt && _sessionStart && kt > _sessionStart) {
@@ -16836,18 +16836,27 @@ async function _abrirIP(ip) {
 async function _segKillSesiones() {
   const admin = _auth.currentUser;
   if (!_isAdmin(admin)) return;
-  if (!confirm('¿Cerrar las sesiones activas de todos los usuarios (excepto la tuya)?')) return;
+  if (!confirm('¿Cerrar todas las sesiones activas excepto esta?')) return;
 
   try {
-    const snap = await _db.collection('usuarios').get();
+    const UMBRAL_MS = 3 * 60 * 1000;
+    const ahora = Date.now();
+    const snap = await _db.collection('presence').get();
     const batch = _db.batch();
     const ts = firebase.firestore.FieldValue.serverTimestamp();
+    let count = 0;
     snap.forEach(doc => {
-      if (doc.id === admin.uid) return;
+      if (doc.id === _presenceDocId) return; // conservar esta sesión exacta
+      const d = doc.data();
+      if (d.offline) return;
+      const ls = d.lastSeen?.toDate?.();
+      if (!ls || (ahora - ls.getTime()) >= UMBRAL_MS) return; // ya inactiva
       batch.set(_db.collection('kicks').doc(doc.id), { kickedAt: ts, by: admin.email });
+      count++;
     });
+    if (count === 0) { toast('No hay otras sesiones activas', 'info'); return; }
     await batch.commit();
-    toast('Sesiones cerradas correctamente', 'success');
+    toast(`${count} sesión${count===1?'':'es'} cerrada${count===1?'':'s'}`, 'success');
   } catch (e) {
     toast('Error: ' + e.message, 'error');
   }
