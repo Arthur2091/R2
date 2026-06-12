@@ -16723,7 +16723,7 @@ async function _startPresence(user) {
   const { os, browser, device } = _parseUA(navigator.userAgent);
   let ip = '—';
   try { const r = await fetch('https://api.ipify.org?format=json'); const d = await r.json(); ip = d.ip || '—'; } catch {}
-  const base = { email: user.email, device, os, browser, ip };
+  const base = { email: user.email, device, os, browser, ip, offline: false };
   const write = () => ref.set({ ...base, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
   write();
   clearInterval(_presenceTimer);
