@@ -16796,11 +16796,12 @@ async function _abrirIP(ip) {
   document.getElementById('modalIPSub').textContent = 'Consultando…';
   document.getElementById('modalIPBody').innerHTML = '<p style="color:var(--ink3);font-size:13px;text-align:center;padding:20px 0">Cargando datos…</p>';
   try {
-    const r = await fetch(`https://ipwho.is/${ip}`);
+    const r = await fetch(`https://ipinfo.io/${ip}/json`);
     const d = await r.json();
-    if (!d.success) throw new Error(d.message || 'IP privada o no resoluble');
+    if (d.error) throw new Error(d.error.message || 'IP no resoluble');
 
-    const flag = d.country_code ? String.fromCodePoint(...[...d.country_code].map(c => 0x1F1E6 - 65 + c.charCodeAt(0))) : '';
+    const cc = d.country || '';
+    const flag = cc.length === 2 ? String.fromCodePoint(...[...cc].map(c => 0x1F1E6 - 65 + c.charCodeAt(0))) : '';
     document.getElementById('modalIPSub').textContent = `${flag} ${d.country || ''}`;
 
     const row = (label, val, mono) => (val !== undefined && val !== null && val !== '') ? `
@@ -16809,32 +16810,22 @@ async function _abrirIP(ip) {
         <span style="font-size:13px;${mono?'font-family:var(--mono);':''}color:var(--ink)">${val}</span>
       </div>` : '';
 
-    const badges = [
-      d.type === 'private' ? `<span style="background:#F3F4F6;color:#374151;border:1px solid #D1D5DB;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🏠 IP privada</span>` : '',
-      d.connection?.isp?.toLowerCase().includes('vpn') || d.security?.vpn ? `<span style="background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🔀 VPN</span>` : '',
-      d.security?.proxy ? `<span style="background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🔀 Proxy</span>` : '',
-      d.security?.tor   ? `<span style="background:#1F2937;color:#F9FAFB;border:1px solid #374151;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🧅 Tor</span>` : '',
-      d.security?.hosting ? `<span style="background:#EDE9FE;color:#5B21B6;border:1px solid #DDD6FE;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🖥 Hosting/DC</span>` : '',
-    ].filter(Boolean).join('');
-
-    const mapsUrl = `https://www.google.com/maps?q=${d.latitude},${d.longitude}`;
-    const coords = (d.latitude && d.longitude) ? `<a href="${mapsUrl}" target="_blank" style="color:var(--info);text-decoration:none">${d.latitude}, ${d.longitude} 🗺</a>` : '';
+    const [lat, lon] = (d.loc || '').split(',');
+    const mapsUrl = lat && lon ? `https://www.google.com/maps?q=${lat},${lon}` : null;
+    const coords = mapsUrl ? `<a href="${mapsUrl}" target="_blank" style="color:var(--info);text-decoration:none">${lat}, ${lon} 🗺</a>` : '';
+    const isPrivate = ['10.', '192.168.', '172.'].some(p => ip.startsWith(p)) || ip === '127.0.0.1';
 
     document.getElementById('modalIPBody').innerHTML = `
-      ${badges ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">${badges}</div>` : ''}
+      ${isPrivate ? `<div style="display:flex;gap:6px;margin-bottom:16px"><span style="background:#F3F4F6;color:#374151;border:1px solid #D1D5DB;border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700">🏠 IP privada / local</span></div>` : ''}
       ${row('IP', d.ip, true)}
-      ${row('Tipo', d.type)}
+      ${row('Hostname', d.hostname, true)}
       ${row('País', `${flag} ${d.country}`)}
       ${row('Región', d.region)}
       ${row('Ciudad', d.city)}
       ${row('Código postal', d.postal)}
       ${row('Coordenadas', coords)}
-      ${row('Zona horaria', d.timezone?.id)}
-      ${row('Hora local', d.timezone?.current_time)}
-      ${row('ISP', d.connection?.isp)}
-      ${row('Organización', d.connection?.org)}
-      ${row('ASN', d.connection?.asn ? 'AS' + d.connection.asn : '')}
-      ${row('Dominio', d.connection?.domain)}
+      ${row('Zona horaria', d.timezone)}
+      ${row('Organización / ISP', d.org)}
     `;
   } catch (e) {
     document.getElementById('modalIPSub').textContent = 'Sin datos';
