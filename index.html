@@ -16085,6 +16085,8 @@ const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUs
 const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
 let _userPermisos = null; // cache de permisos del usuario actual
 let _permsDefault = null; // cache de permisos por defecto (de Firestore)
+let _sessionStart = null;
+let _kickUnsub    = null;
 
 function _isAdmin(user) {
   return !!(user && user.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
@@ -16464,9 +16466,22 @@ _auth.onAuthStateChanged(async user => {
       emailLbl.onclick = admin ? _abrirUsuarios : null;
       emailLbl.style.display = '';
     }
+    _sessionStart = new Date();
+    _kickUnsub?.();
+    _kickUnsub = _db.collection('kicks').doc(user.uid).onSnapshot(snap => {
+      if (!snap.exists) return;
+      const kt = snap.data().kickedAt?.toDate?.();
+      if (kt && _sessionStart && kt > _sessionStart) {
+        try { toast('Tu sesión fue cerrada por el administrador.', 'info'); } catch {}
+        _auth.signOut().then(() => location.reload()).catch(() => location.reload());
+      }
+    });
     _bootApp();
     _startIdleWatcher();
   } else {
+    _kickUnsub?.();
+    _kickUnsub = null;
+    _sessionStart = null;
     _stopIdleWatcher();
     _userPermisos = null;
     _aplicarPermisosUI(null);
@@ -16696,6 +16711,70 @@ async function _segCargar() {
     cont.innerHTML = `<p style="color:var(--danger);font-size:13px">Error al cargar: ${e.message}</p>`;
   }
 }
+
+async function _segKillSesiones() {
+  const admin = _auth.currentUser;
+  if (!_isAdmin(admin)) return;
+  if (!confirm('¿Cerrar las sesiones activas de todos los usuarios (excepto la tuya)?')) return;
+
+  try {
+    const snap = await _db.collection('usuarios').get();
+    const batch = _db.batch();
+    const ts = firebase.firestore.FieldValue.serverTimestamp();
+    snap.forEach(doc => {
+      if (doc.id === admin.uid) return;
+      batch.set(_db.collection('kicks').doc(doc.id), { kickedAt: ts, by: admin.email });
+    });
+    await batch.commit();
+    toast('Sesiones cerradas correctamente', 'success');
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
+async function _segDescargar() {
+  if (!_isAdmin(_auth.currentUser)) return;
+  const desdeEl = document.getElementById('segDesde');
+  const hastaEl = document.getElementById('segHasta');
+
+  let query = _db.collection('sesiones').orderBy('timestamp', 'desc');
+  if (desdeEl?.value) {
+    const desde = new Date(desdeEl.value);
+    desde.setHours(0, 0, 0, 0);
+    query = query.where('timestamp', '>=', desde);
+  }
+  if (hastaEl?.value) {
+    const hasta = new Date(hastaEl.value);
+    hasta.setHours(23, 59, 59, 999);
+    query = query.where('timestamp', '<=', hasta);
+  }
+  query = query.limit(500);
+
+  try {
+    const snap = await query.get();
+    if (snap.empty) { alert('No hay sesiones para descargar.'); return; }
+
+    const filas = snap.docs.map(d => {
+      const s = d.data();
+      const t = s.timestamp?.toDate?.();
+      const fecha = t ? t.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
+      const hora  = t ? t.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }) : '';
+      const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      return [esc(s.email), esc(fecha), esc(hora), esc(s.device), esc(s.os), esc(s.browser), esc(s.ip), esc(s.screen)].join(',');
+    });
+
+    const csv = ['Email,Fecha,Hora,Dispositivo,OS,Navegador,IP,Pantalla', ...filas].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sesiones_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Error al descargar: ' + e.message);
+  }
+}
 </script>
 
 
@@ -16729,6 +16808,7 @@ async function _segCargar() {
       <h2 style="margin:0 0 4px 0">🔒 Seguridad</h2>
       <p style="margin:0;font-size:13px;color:var(--ink2)">Historial de conexiones de todos los usuarios.</p>
     </div>
+    <button class="btn btn-sm" onclick="_segKillSesiones()" style="background:#FEE2E2;color:#991B1B;border:1px solid #FECACA;font-weight:600" onmouseenter="this.style.background='#FECACA'" onmouseleave="this.style.background='#FEE2E2'">⚡ Cerrar sesiones activas</button>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
     <label style="font-size:12px;font-weight:600;color:var(--ink2)">Desde</label>
@@ -16737,6 +16817,7 @@ async function _segCargar() {
     <input id="segHasta" type="date" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);background:var(--surface);color:var(--ink)">
     <button class="btn btn-primary btn-sm" onclick="_segCargar()">Buscar</button>
     <button class="btn btn-outline btn-sm" onclick="document.getElementById('segDesde').value='';document.getElementById('segHasta').value='';_segCargar()">Todos</button>
+    <button class="btn btn-outline btn-sm" onclick="_segDescargar()">⬇ Descargar CSV</button>
   </div>
   <div id="segContent"><p style="color:var(--ink3);font-size:13px">Cargando…</p></div>
 </div>
