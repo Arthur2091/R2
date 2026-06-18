@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <style>
 :root {
@@ -988,6 +989,39 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
   </div>
 
   <!-- MODAL: Alta insumo manual a proveedor -->
+  <div id="modalQuickInsumo" class="overlay">
+    <div class="modal" style="max-width:420px">
+      <h2>Insumo no encontrado</h2>
+      <p class="modal-sub">Completá los datos para crearlo y continuar con el envío.</p>
+      <div class="row">
+        <div class="field" style="flex:2">
+          <label>Nombre</label>
+          <input id="qiNombre" type="text" placeholder="Nombre del insumo">
+        </div>
+        <div class="field">
+          <label>Unidad</label>
+          <input id="qiUnidad" type="text" placeholder="ej. kg">
+        </div>
+      </div>
+      <div class="field">
+        <label>Categoría</label>
+        <select id="qiCategoria">
+          <option value="">— Sin categoría —</option>
+          <option>Lácteos</option><option>Harinas y Cereales</option><option>Huevos</option>
+          <option>Carnes y Fiambres</option><option>Frutas y Verduras</option>
+          <option>Aceites y Condimentos</option><option>Azúcares y Dulces</option>
+          <option>Chocolates y Coberturas</option><option>Café e Infusiones</option>
+          <option>Bebidas</option><option>Panadería</option><option>Congelados</option>
+          <option>Limpieza</option><option>Descartables</option><option>Otros</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal('modalQuickInsumo')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveQuickInsumo()">Crear y enviar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="altaInsumoManualModal" class="overlay">
     <div class="modal" style="max-width:640px">
       <h2>Agregar insumo a <span id="aimProvNombre"></span></h2>
@@ -1102,6 +1136,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <button id="btnConfirmar" class="btn btn-primary" onclick="confirmarBoleta()" style="display:none;background:var(--info)">✓ Confirmar y guardar</button>
     <button id="btnDescartar" class="btn btn-outline" onclick="resetBoleta()" style="display:none;color:var(--danger);border-color:var(--danger)">✕ Descartar boleta</button>
     <label class="btn btn-outline" style="cursor:pointer;margin-left:auto" title="Cruzar con ARCA">🏛 Cruzar ARCA<input type="file" accept=".xlsx,.xls" onchange="importarARCA(this)" style="display:none"></label>
+    <button id="btnDrive" class="btn btn-outline" onclick="conectarDrive()" title="Guardar boletas en Google Drive" style="white-space:nowrap">📁 Drive</button>
   </div>
   <div id="boletaQueueBar" style="display:none;flex-direction:column;gap:6px;padding:10px 0">
     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)">
@@ -5135,7 +5170,10 @@ function renderFacturaDetalle(facturaId, provId) {
       </div>
       <button onclick="eliminarFactura('${f.id}','${provId}')" style="background:none;border:1px solid var(--danger);color:var(--danger);border-radius:var(--radius);padding:.5rem .9rem;cursor:pointer;font-size:.85rem;white-space:nowrap;align-self:flex-start">Eliminar</button>
     </div>
-    <button onclick="openEditFactura('${facturaId}','${provId}')" style="margin-bottom:.75rem;background:var(--info);color:#fff;border:none;border-radius:var(--radius);padding:.5rem 1.2rem;cursor:pointer;font:600 14px var(--font)">Editar boleta</button>
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">
+      <button onclick="openEditFactura('${facturaId}','${provId}')" style="background:var(--info);color:#fff;border:none;border-radius:var(--radius);padding:.5rem 1.2rem;cursor:pointer;font:600 14px var(--font)">Editar boleta</button>
+      ${f.driveFileUrl ? `<a href="${f.driveFileUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:#E8F0FE;color:#1A73E8;border:1px solid #C5D8FB;border-radius:var(--radius);padding:.5rem 1.2rem;text-decoration:none;font:600 14px var(--font)">📁 Ver en Drive</a>` : ''}
+    </div>
     <div style="display:flex;flex-direction:column;gap:.5rem">
       ${f.items.map(item => `
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem">
@@ -5390,6 +5428,68 @@ function saveEditFactura() {
 
 /* ── BOLETAS ────────────────────────────────────────────────────── */
 let _bImg64 = null, _bImgMime = null, _bFile = null;
+
+/* ── GOOGLE DRIVE ── */
+const _GDRIVE_CLIENT_ID = '76868751469-crj6vav4f66tp58q74kpegtqepctc0s0.apps.googleusercontent.com';
+let _driveToken = null;
+let _driveTokenClient = null;
+
+function conectarDrive() {
+  if (!window.google?.accounts?.oauth2) { toast('Cargando Drive, intentá en un segundo', 'info'); return; }
+  if (!_driveTokenClient) {
+    _driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: _GDRIVE_CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: resp => {
+        if (resp.error) { toast('Drive: error de autenticación', 'error'); return; }
+        _driveToken = resp.access_token;
+        const btn = document.getElementById('btnDrive');
+        if (btn) { btn.textContent = '✓ Drive'; btn.style.background = 'var(--accent-light)'; btn.style.color = 'var(--accent)'; btn.style.borderColor = 'var(--accent)'; }
+        toast('Conectado a Google Drive — las boletas se guardarán automáticamente', 'success');
+      }
+    });
+  }
+  if (_driveToken) { toast('Ya estás conectado a Drive', 'success'); return; }
+  _driveTokenClient.requestAccessToken();
+}
+
+async function _driveGetFolderId(name) {
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`, { headers: { Authorization: `Bearer ${_driveToken}` } });
+  const data = await res.json();
+  if (data.files?.length) return data.files[0].id;
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${_driveToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder' })
+  });
+  return (await cr.json()).id;
+}
+
+async function _driveUploadBoleta(img64, mime, facturaId, fileName) {
+  try {
+    const folderId = await _driveGetFolderId('R2 Facturas');
+    const ext = mime === 'application/pdf' ? 'pdf' : 'jpg';
+    const byteStr = atob(img64);
+    const ab = new ArrayBuffer(byteStr.length);
+    const ia = new Uint8Array(ab); for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+    const blob = new Blob([ab], { type: mime });
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: fileName + '.' + ext, parents: [folderId] })], { type: 'application/json' }));
+    form.append('file', blob);
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST', headers: { Authorization: `Bearer ${_driveToken}` }, body: form
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const { id, webViewLink } = await res.json();
+    const f = facturas.find(f => f.id === facturaId);
+    if (f) { f.driveFileId = id; f.driveFileUrl = webViewLink; persist(); }
+    toast('📁 Boleta guardada en Drive', 'success');
+  } catch(e) {
+    console.warn('Drive upload error:', e);
+    toast('Drive: no se pudo subir el archivo', 'error');
+  }
+}
 let _bItems = [], _bProvId = null, _bProvName = null;
 let _bQueue = [], _bQueueResolve = null;
 
@@ -6183,6 +6283,11 @@ function confirmarBoleta() {
   if (_bFile) {
     const arr = JSON.parse(localStorage.getItem('boletaArchivos') || '[]');
     if (!arr.includes(_bFile)) { arr.push(_bFile); localStorage.setItem('boletaArchivos', JSON.stringify(arr)); }
+  }
+  if (_driveToken && _bImg64) {
+    const _i = _bImg64, _m = _bImgMime, _fid = facturaGuardada.id;
+    const _fn = [prov.nombre, fecha, nroBoleta].filter(Boolean).join('_').replace(/[\s/\\]/g,'_');
+    _driveUploadBoleta(_i, _m, _fid, _fn);
   }
   resetBoleta();
 }
@@ -14689,6 +14794,7 @@ function renderPrecComp() {
 
 let _pedQty        = {};
 let _pedProvForTel = null;
+let _pendingWASend = null;
 let _schedDates    = {};
 const _pedDraftTimers = {};
 
@@ -15119,6 +15225,19 @@ function enviarPedidoWA(provId) {
   const items = Object.entries(qtyMap).filter(([_, v]) => v > 0);
   if (!items.length) return;
 
+  // Verificar insumos faltantes antes de enviar
+  const missingEntry = items.find(([iid]) => !insumos.find(i => i.id === iid));
+  if (missingEntry) {
+    const [iid] = missingEntry;
+    const provItem = prov.items?.find(it => it.insumoId === iid);
+    _pendingWASend = { provId, missingIid: iid };
+    document.getElementById('qiNombre').value  = provItem?.nombreBoleta || '';
+    document.getElementById('qiUnidad').value  = provItem?.unidad || '';
+    document.getElementById('qiCategoria').value = '';
+    openModal('modalQuickInsumo');
+    return;
+  }
+
   const fecha = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
   let msg = `Hola Buenos días, "Hola que tengan muy buenos días"\nLes dejamos el detalle del pedido:\n\n`;
   items.forEach(([iid, qty]) => {
@@ -15168,6 +15287,29 @@ function enviarPedidoWA(provId) {
   const telFinal = telNorm.startsWith('54') ? telNorm : '54' + telNorm;
   const url = `https://wa.me/${telFinal}?text=${encodeURIComponent(msg)}`;
   window.open(url, '_blank');
+}
+
+function saveQuickInsumo() {
+  const nombre = document.getElementById('qiNombre').value.trim();
+  if (!nombre) { document.getElementById('qiNombre').focus(); return; }
+  const { provId, missingIid } = _pendingWASend;
+  const prov = proveedores.find(p => p.id === provId);
+  const unidad = document.getElementById('qiUnidad').value.trim();
+  const categoria = document.getElementById('qiCategoria').value;
+  insumos.push({
+    id: missingIid, nombre, unidad, categoria,
+    precioConIVA: null, precioSinIVA: null,
+    presQty: null, presUnit: null, presUnitWeight: null, presUnitWeightUnit: null,
+    precioPresOverride: null, observaciones: '', aliases: []
+  });
+  if (prov && !prov.items?.find(it => it.insumoId === missingIid)) {
+    if (!prov.items) prov.items = [];
+    prov.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId: missingIid, unidad });
+  }
+  persist();
+  closeModal('modalQuickInsumo');
+  _pendingWASend = null;
+  enviarPedidoWA(provId);
 }
 
 function _pedIrAPendientes(provId) {
