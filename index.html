@@ -3578,8 +3578,7 @@ function renderProveedores() {
 
   const q      = (document.getElementById('searchProveedores')?.value || '').toLowerCase().trim();
   let   lista  = [...proveedores]
-    .filter(p => _showBaja ? p.baja : !p.baja)
-    .sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
+    .filter(p => _showBaja ? p.baja : !p.baja);
 
   if (!lista.length) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin proveedores</h3><p>Cargá una boleta para dar de alta el primero.</p></div>`;
@@ -3596,6 +3595,37 @@ function renderProveedores() {
       return;
     }
   }
+
+  // Pre-computar stats para ordenar y filtrar
+  const _pStats = {};
+  lista.forEach(p => {
+    const fp = facturas.filter(f => f.proveedorId === p.id);
+    const ul = fp.slice().sort((a,b) => b.fecha.localeCompare(a.fecha))[0];
+    const ad = fp.reduce((s, f) => {
+      if (f.pagado) return s;
+      const tipo = f.tipoComprobante || (f.esNotaCredito ? 'nota_credito' : 'factura');
+      if (tipo === 'nota_credito' && f.notaCreditoSobre) return s;
+      return s + _netoFactura(f);
+    }, 0);
+    _pStats[p.id] = { nFacturas: fp.length, ultimaFecha: ul?.fecha || null, adeudado: ad };
+  });
+
+  // Sin búsqueda: ocultar proveedores sin facturas ni deuda
+  if (!q) lista = lista.filter(p => _pStats[p.id].nFacturas > 0 || _pStats[p.id].adeudado > 0);
+
+  if (!lista.length) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin actividad</h3><p>Ningún proveedor tiene facturas cargadas aún.</p></div>`;
+    return;
+  }
+
+  // Ordenar: con facturas primero (por fecha desc), luego por adeudado desc
+  lista.sort((a, b) => {
+    const sa = _pStats[a.id], sb = _pStats[b.id];
+    if (sa.nFacturas > 0 && sb.nFacturas === 0) return -1;
+    if (sa.nFacturas === 0 && sb.nFacturas > 0) return 1;
+    if (sa.nFacturas > 0 && sb.nFacturas > 0) return (sb.ultimaFecha || '').localeCompare(sa.ultimaFecha || '');
+    return sb.adeudado - sa.adeudado;
+  });
 
   const hoy = _hoyISO();
   screen.innerHTML = `
