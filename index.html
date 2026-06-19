@@ -5475,7 +5475,7 @@ async function _driveGetFolderId(name, parentId = null) {
 
 async function _driveListPendientes() {
   const rootId = await _driveGetFolderId('R2 Facturas');
-  const porProcesarId = await _driveGetFolderId('Por Procesar', rootId);
+  const porProcesarId = await _driveGetFolderId('Facturas Nuevas', rootId);
   const q = encodeURIComponent(`'${porProcesarId}' in parents and trashed=false`);
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,createdTime)&orderBy=createdTime`, { headers: { Authorization: `Bearer ${_driveToken}` } });
   const data = await res.json();
