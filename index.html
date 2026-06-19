@@ -4950,6 +4950,12 @@ function _dupSeleccionar(cual) {
   // Redirigir todas las referencias del eliminado al conservado
   proveedores.forEach(p => {
     (p.items || []).forEach(it => { if (it.insumoId === eliminar.id) it.insumoId = conservar.id; });
+    // Deduplicar items que ahora apuntan al mismo insumoId
+    const vistos = new Set();
+    p.items = (p.items || []).filter(it => {
+      if (!it.insumoId || !vistos.has(it.insumoId)) { vistos.add(it.insumoId); return true; }
+      return false;
+    });
   });
   precios.forEach(pr => { if (pr.insumoId === eliminar.id) pr.insumoId = conservar.id; });
 
