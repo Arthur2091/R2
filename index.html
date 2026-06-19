@@ -4895,12 +4895,18 @@ const _jaccard = (a, b) => {
 
 
 function buscarDuplicados() {
-  if (insumos.length < 2) { toast('No hay suficientes insumos para comparar', 'warn'); return; }
+  let lista = insumos;
+  if (window._insumosProvId) {
+    const prov = proveedores.find(p => p.id === window._insumosProvId);
+    const ids = new Set((prov?.items || []).map(it => it.insumoId).filter(Boolean));
+    lista = insumos.filter(i => ids.has(i.id));
+  }
+  if (lista.length < 2) { toast('No hay suficientes insumos para comparar', 'warn'); return; }
   _dupPares = [];
   const vistos = new Set();
-  for (let i = 0; i < insumos.length; i++) {
-    for (let j = i + 1; j < insumos.length; j++) {
-      const a = insumos[i], b = insumos[j];
+  for (let i = 0; i < lista.length; i++) {
+    for (let j = i + 1; j < lista.length; j++) {
+      const a = lista[i], b = lista[j];
       const key = [a.id, b.id].sort().join('|');
       if (vistos.has(key)) continue;
       vistos.add(key);
