@@ -16372,7 +16372,7 @@ function _bootApp() {
 }
 
 const ADMIN_EMAILS = ['hernan.layno@gmail.com'];
-const ADMIN_ONLY_VIEWS = ['viewContable','viewAuditoria','viewProductos','viewUsuarios','viewSeguridad'];
+const ADMIN_ONLY_VIEWS = ['viewAuditoria','viewProductos','viewUsuarios','viewSeguridad'];
 const PERMS_DEFAULT_INICIAL = ['viewPedidos','viewProveedores'];
 let _userPermisos = null; // cache de permisos del usuario actual
 let _permsDefault = null; // cache de permisos por defecto (de Firestore)
@@ -16517,7 +16517,8 @@ const VIEWS_LABELS = {
   viewRecetas: 'Recetas',
   viewBoletas: 'Cargar Boletas',
   viewDeposito: 'Depósito',
-  viewProduccion: 'Producción'
+  viewProduccion: 'Producción',
+  viewContable: 'Contable'
 };
 
 async function _usrCargar() {
