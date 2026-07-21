@@ -6516,7 +6516,7 @@ function persistContable() {
     ventasPorMes[mes].push(v);
   });
   const writes = [
-    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, formaCobroMovs, productosRubros }),
     _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
     _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
     ...Object.entries(ventasPorMes).map(([mes, items]) =>
@@ -13856,7 +13856,7 @@ function _sincronizarTodo() {
     ventasPorMes[mes].push(v);
   });
   Promise.all([
-    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, productosRubros }),
+    _db.collection('data').doc('contable').set({ sueldos, otrosEgresos, gastosFijos, formaCobroMovs, productosRubros }),
     _db.collection('data').doc('contable_mp').set({ items: mpMovs }),
     _db.collection('data').doc('contable_mp_ing').set({ items: mpIngMovs }),
     _db.collection('data').doc('contable_gal').set({ items: galiciaMovs }),
