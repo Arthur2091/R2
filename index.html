@@ -1439,9 +1439,16 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <h2>Nuevo Sueldo</h2>
     <div class="field"><label>Empleado</label><input id="sEmpleado" type="text" placeholder="Nombre"></div>
     <div class="row">
+      <div class="field"><label>Tipo</label>
+        <select id="sTipo" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#fff;color:var(--ink)">
+          <option value="sueldo">Sueldo</option>
+          <option value="aguinaldo">Aguinaldo</option>
+          <option value="vacaciones">Vacaciones</option>
+        </select>
+      </div>
       <div class="field"><label>Mes/Año</label><input id="sMes" type="month"></div>
-      <div class="field"><label>Monto</label><input id="sMonto" type="number" min="0" step="0.01" placeholder="0.00"></div>
     </div>
+    <div class="field"><label>Monto</label><input id="sMonto" type="number" min="0" step="0.01" placeholder="0.00"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalSueldo')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveSueldo()">Guardar</button>
@@ -7750,7 +7757,7 @@ function renderContable() {
           ? `<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:999px;font-weight:700;cursor:pointer" onclick="_editSueldoEfectivo('${s.id}',${efect})" title="Click para editar">💵 ${pesos(efect)}</span>`
           : `<button class="btn btn-ghost btn-sm" style="font-size:11px;color:#92400E" onclick="_editSueldoEfectivo('${s.id}',${pendEfect})">+ Efectivo</button>`;
         return `<tr>
-          <td>${_h(s.empleado)}${transf > 0 ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ extracto</span>` : ''}</td>
+          <td>${_h(s.empleado)}${s.tipo && s.tipo !== 'sueldo' ? `<span style="font-size:11px;background:${s.tipo==='aguinaldo'?'#FEF3C7':'#EDE9FE'};color:${s.tipo==='aguinaldo'?'#92400E':'#5B21B6'};padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">${s.tipo==='aguinaldo'?'Aguinaldo':'Vacaciones'}</span>` : ''}${transf > 0 ? `<span style="font-size:11px;background:#D1FAE5;color:#065F46;padding:1px 7px;border-radius:999px;font-weight:700;margin-left:6px">✓ extracto</span>` : ''}</td>
           <td style="text-align:right;font-family:var(--mono)">${pesos(s.monto)}</td>
           <td style="text-align:right;font-family:var(--mono);color:${transf>0?'#065F46':'var(--ink3)'}">${transf > 0 ? pesos(transf) : '—'}</td>
           <td style="text-align:right">${efectBtn}</td>
@@ -10556,9 +10563,10 @@ function saveSueldo() {
   const empleado = document.getElementById('sEmpleado').value.trim();
   const mes      = document.getElementById('sMes').value;
   const monto    = parseFloat(document.getElementById('sMonto').value);
+  const tipo     = document.getElementById('sTipo').value || 'sueldo';
   if (!empleado) { toast('Ingresá el nombre', 'error'); return; }
   if (!monto)    { toast('Ingresá el monto', 'error'); return; }
-  sueldos.push({ id: crypto.randomUUID(), empleado, mes, monto });
+  sueldos.push({ id: crypto.randomUUID(), empleado, mes, monto, tipo });
   _persistBase();
   renderContable();
   closeModal('modalSueldo');
@@ -10586,7 +10594,7 @@ function _importarSueldosMesAnterior() {
   const [y, m] = actual.split('-').map(Number);
   const prevDate = new Date(y, m - 2, 1); // mes anterior (m-1 es 0-based, -2 = anterior)
   const anterior = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0');
-  const del_mes_ant = sueldos.filter(s => s.mes === anterior);
+  const del_mes_ant = sueldos.filter(s => s.mes === anterior && (!s.tipo || s.tipo === 'sueldo'));
   if (!del_mes_ant.length) { toast('Sin sueldos en ' + anterior, 'info'); return; }
   const ya_en_actual = new Set(sueldos.filter(s => s.mes === actual).map(s => s.empleado.toLowerCase().trim()));
   const nuevos = del_mes_ant.filter(s => !ya_en_actual.has(s.empleado.toLowerCase().trim()));
