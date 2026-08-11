@@ -3615,7 +3615,8 @@ function renderProveedores() {
 
   const q      = (document.getElementById('searchProveedores')?.value || '').toLowerCase().trim();
   let   lista  = [...proveedores]
-    .filter(p => _showBaja ? p.baja : !p.baja);
+    .filter(p => _showBaja ? p.baja : !p.baja)
+    .filter(p => !p.ocultarEnPedidos);
 
   if (!lista.length) {
     screen.innerHTML = `<div class="empty-state"><h3>Sin proveedores</h3><p>Cargá una boleta para dar de alta el primero.</p></div>`;
