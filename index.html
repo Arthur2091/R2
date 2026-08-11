@@ -1281,7 +1281,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     </div>
 
     <button class="btn btn-outline" onclick="openModal('modalEgreso')">+ Egreso</button>
-    <button class="btn btn-outline" onclick="openModal('modalSueldo')">+ Sueldo</button>
+    <button class="btn btn-outline" onclick="openSueldoModal()">+ Sueldo</button>
     <button id="btnModoLocal" class="btn btn-outline" onclick="_toggleSyncPaused()">☁ Auto-sync ON</button>
     <button class="btn btn-primary" onclick="_sincronizarTodo()">↑ Sincronizar</button>
   </div>
@@ -7762,7 +7762,7 @@ function renderContable() {
           <td style="text-align:right;font-family:var(--mono);color:${transf>0?'#065F46':'var(--ink3)'}">${transf > 0 ? pesos(transf) : '—'}</td>
           <td style="text-align:right">${efectBtn}</td>
           <td style="text-align:right;font-family:var(--mono)">${cubierto > 0 ? diffStr : '—'}</td>
-          <td><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
+          <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" style="color:var(--info)" onclick="openSueldoModal('${s.id}')">✎</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
         </tr>`;
       }).join('')}
       <tr style="font-weight:600;background:var(--surface2)">
@@ -10559,6 +10559,19 @@ function importVentas(e) {
 }
 
 // ── SUELDOS ──
+let _editSueldoId = null;
+
+function openSueldoModal(id) {
+  _editSueldoId = id || null;
+  const s = id ? sueldos.find(x => x.id === id) : null;
+  document.getElementById('sEmpleado').value = s?.empleado || '';
+  document.getElementById('sMes').value      = s?.mes || '';
+  document.getElementById('sMonto').value    = s?.monto || '';
+  document.getElementById('sTipo').value     = s?.tipo || 'sueldo';
+  document.querySelector('#modalSueldo h2').textContent = s ? 'Editar Sueldo' : 'Nuevo Sueldo';
+  openModal('modalSueldo');
+}
+
 function saveSueldo() {
   const empleado = document.getElementById('sEmpleado').value.trim();
   const mes      = document.getElementById('sMes').value;
@@ -10566,7 +10579,12 @@ function saveSueldo() {
   const tipo     = document.getElementById('sTipo').value || 'sueldo';
   if (!empleado) { toast('Ingresá el nombre', 'error'); return; }
   if (!monto)    { toast('Ingresá el monto', 'error'); return; }
-  sueldos.push({ id: crypto.randomUUID(), empleado, mes, monto, tipo });
+  if (_editSueldoId) {
+    const s = sueldos.find(x => x.id === _editSueldoId);
+    if (s) { s.empleado = empleado; s.mes = mes; s.monto = monto; s.tipo = tipo; }
+  } else {
+    sueldos.push({ id: crypto.randomUUID(), empleado, mes, monto, tipo });
+  }
   _persistBase();
   renderContable();
   closeModal('modalSueldo');
