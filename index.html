@@ -7762,7 +7762,7 @@ function renderContable() {
           <td style="text-align:right;font-family:var(--mono);color:${transf>0?'#065F46':'var(--ink3)'}">${transf > 0 ? pesos(transf) : '—'}</td>
           <td style="text-align:right">${efectBtn}</td>
           <td style="text-align:right;font-family:var(--mono)">${cubierto > 0 ? diffStr : '—'}</td>
-          <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" style="color:var(--info)" onclick="openSueldoModal('${s.id}')">✎</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
+          <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" style="color:var(--info)" onclick="openSueldoModal('${s.id}')">✎</button><button class="btn btn-ghost btn-sm" style="color:var(--ink2);font-size:11px" onclick="openSueldoModalExtra('${s.empleado.replace(/'/g,"\\'").replace(/"/g,'&quot;')}','${s.mes}')">+ Extra</button><button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteSueldo('${s.id}')">✕</button></td>
         </tr>`;
       }).join('')}
       <tr style="font-weight:600;background:var(--surface2)">
@@ -10560,6 +10560,16 @@ function importVentas(e) {
 
 // ── SUELDOS ──
 let _editSueldoId = null;
+
+function openSueldoModalExtra(empleado, mes) {
+  _editSueldoId = null;
+  document.getElementById('sEmpleado').value = empleado;
+  document.getElementById('sMes').value      = mes;
+  document.getElementById('sMonto').value    = '';
+  document.getElementById('sTipo').value     = 'aguinaldo';
+  document.querySelector('#modalSueldo h2').textContent = 'Nuevo Extra';
+  openModal('modalSueldo');
+}
 
 function openSueldoModal(id) {
   _editSueldoId = id || null;
