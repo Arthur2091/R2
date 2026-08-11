@@ -9102,6 +9102,48 @@ function importMP(e, tipo) {
       if (rows.length < 2) { toast('Archivo vacío', 'error'); return; }
 
       const headers = rows[0].map(h => String(h).trim());
+
+      // Formato reporte transacciones MP (xlsx descargado del portal)
+      const iOpId     = headers.findIndex(h => /operation_id/i.test(h));
+      const iStatus   = headers.findIndex(h => /\bstatus\b/i.test(h) && !/detail/i.test(h));
+      const iNetAmt   = headers.findIndex(h => /net_received_amount/i.test(h));
+      const iDateMP   = headers.findIndex(h => /date_created/i.test(h));
+      const iReason   = headers.findIndex(h => /reason/i.test(h));
+      const iOpType   = headers.findIndex(h => /operation_type/i.test(h));
+      const iTxAmt    = headers.findIndex(h => /transaction_amount/i.test(h));
+      if (iOpId >= 0 && iNetAmt >= 0) {
+        const parseFechaMP = s => {
+          if (!s) return null;
+          // "DD/MM/YYYY HH:MM:SS"
+          const m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+          if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+          if (String(s).match(/^\d{4}-\d{2}-\d{2}/)) return String(s).slice(0,10);
+          return null;
+        };
+        const existentes = new Set(mpIngMovs.map(m => m.id));
+        let added = 0;
+        rows.slice(1).forEach(r => {
+          if (iStatus >= 0 && String(r[iStatus]).toLowerCase() !== 'approved') return;
+          const opId  = String(r[iOpId] || '').trim();
+          if (!opId) return;
+          const id    = `mp-tx-${opId}`;
+          if (existentes.has(id)) return;
+          const fecha = parseFechaMP(r[iDateMP]);
+          if (!fecha) return;
+          const monto = parseFloat(r[iNetAmt]);
+          if (!isFinite(monto) || monto <= 0) return;
+          const concepto  = String(r[iReason] || '').trim() || 'Ingreso MP';
+          const tipoOp    = String(r[iOpType] || '').trim();
+          const montoB    = parseFloat(r[iTxAmt]) || monto;
+          mpIngMovs.push({ id, fecha, monto, montoB, tipo: tipoOp || 'Ingreso MP', concepto });
+          added++;
+        });
+        _persistMPIng();
+        renderContable();
+        toast(`${added} ingreso${added !== 1 ? 's' : ''} importado${added !== 1 ? 's' : ''} de MP`, 'success');
+        return;
+      }
+
       const iF   = headers.findIndex(h => /fecha/i.test(h));
       const iD   = headers.findIndex(h => /destino/i.test(h));
       const iT   = headers.findIndex(h => /^tipo$/i.test(h));
