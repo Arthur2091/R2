@@ -4616,8 +4616,9 @@ function _abrirVincularArcaModal(pedidoId) {
   const prov = proveedores.find(p => p.id === ped.proveedorId);
   if (!prov) return;
 
+  const _normCuit = c => (c || '').replace(/\D/g, '');
   const arcaDisp = prov.cuit
-    ? arcaPendientes.filter(it => it.cuitEmisor === prov.cuit)
+    ? arcaPendientes.filter(it => _normCuit(it.cuitEmisor) === _normCuit(prov.cuit))
     : arcaPendientes;
 
   if (!arcaDisp.length) {
