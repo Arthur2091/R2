@@ -4165,7 +4165,8 @@ function renderProveedorFacturas(provId, subtab) {
               ? `<button class="btn btn-primary btn-sm" style="background:var(--accent)" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
               : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
                  ${esperando
-                   ? `<button class="btn btn-primary btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>`
+                   ? `<button class="btn btn-outline btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>
+                      <button class="btn btn-primary btn-sm" style="background:var(--info)" onclick="_abrirVincularArcaModal('${ped.id}')">🔗 Vincular con ARCA</button>`
                    : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
           </div>
         </div>`;
@@ -4500,7 +4501,8 @@ function renderPendientesGlobal() {
               ? `<button class="btn btn-primary btn-sm" style="background:var(--accent)" onclick="cerrarPedidoVinculado('${ped.id}')">✓ OK, cerrar pedido</button>`
               : `<button class="btn btn-outline btn-sm" onclick="cancelarPedidoPendiente('${ped.id}')" style="color:var(--danger);border-color:var(--danger)">Cancelar pedido</button>
                  ${esperando
-                   ? `<button class="btn btn-primary btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>`
+                   ? `<button class="btn btn-outline btn-sm" onclick="vincularFacturaAPedido('${ped.id}')">📄 Vincular factura</button>
+                      <button class="btn btn-primary btn-sm" style="background:var(--info)" onclick="_abrirVincularArcaModal('${ped.id}')">🔗 Vincular con ARCA</button>`
                    : `<button class="btn btn-primary btn-sm" onclick="marcarPedidoRecibido('${ped.id}')">Marcar como recibido</button>`}`}
           </div>
         </div>`;
@@ -4606,6 +4608,192 @@ function cerrarPedidoVinculado(pedidoId) {
   if (_pendViewMode === 'global') renderPendientesGlobal();
   else renderProveedorFacturas(provId, 'pend');
   toast('Pedido cerrado', 'success');
+}
+
+function _abrirVincularArcaModal(pedidoId) {
+  const ped  = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped)  return;
+  const prov = proveedores.find(p => p.id === ped.proveedorId);
+  if (!prov) return;
+
+  const arcaDisp = prov.cuit
+    ? arcaPendientes.filter(it => it.cuitEmisor === prov.cuit)
+    : arcaPendientes;
+
+  if (!arcaDisp.length) {
+    toast('No hay boletas ARCA pendientes para este proveedor', 'error');
+    return;
+  }
+
+  const items = ped.items.map(it => {
+    const ins    = insumos.find(i => i.id === it.insumoId);
+    const ultimo = _ultimoPrecio(prov.id, it.insumoId);
+    const precioSugerido = it.precioRefAlPedir || (ultimo ? ultimo.precio : ins?.precioConIVA || 0);
+    return {
+      insumoId: it.insumoId,
+      nombre: ins?.nombre || '?',
+      unidad: ins?.unidad || null,
+      cantidad: it.cantidad,
+      ultimoPrecio: ultimo ? ultimo.precio : null,
+      precioSugerido: precioSugerido || 0
+    };
+  });
+
+  const arcaOpts = arcaDisp.map(it =>
+    `<option value="${it.id}">${_h(it.tipo)} N° ${_h(it.nroFmt)} · ${_h(it.fecha)} · ${pesos(it.total)}</option>`
+  ).join('');
+
+  const rowsHtml = items.map((it, i) => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 0">${_h(it.nombre)}</td>
+      <td style="text-align:center;padding:8px 0;font-weight:600">${it.cantidad}</td>
+      <td style="text-align:right;padding:8px 0;color:var(--ink3);font-size:12px">${it.ultimoPrecio ? _fmtMoney(it.ultimoPrecio) : '—'}</td>
+      <td style="text-align:right;padding:8px 0">
+        <input type="number" id="arcaprecio_${i}" value="${it.precioSugerido || ''}"
+          style="width:110px;text-align:right;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font:13px var(--font)"
+          oninput="_recalcArcaTotal()" min="0" step="0.01">
+      </td>
+      <td style="text-align:right;padding:8px 0;font-weight:600" id="arcasubt_${i}">${it.precioSugerido ? _fmtMoney(it.precioSugerido * it.cantidad) : '—'}</td>
+    </tr>`).join('');
+
+  window._arcaModalItems    = items;
+  window._arcaModalPedidoId = pedidoId;
+
+  const html = `<div class="overlay open" id="vincularArcaModal" style="display:flex">
+    <div class="modal" style="max-width:700px">
+      <h2>Vincular boleta ARCA → Pedido</h2>
+      <p class="modal-sub">Seleccioná la boleta y confirmá los precios del remito. Se crea la factura con los ítems del pedido.</p>
+      <div style="margin-bottom:16px">
+        <label style="font-size:12px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Boleta ARCA</label>
+        <select id="arcaBoletaSel" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font);background:#FFF" onchange="_onArcaBoletaChange()">
+          ${arcaOpts}
+        </select>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;padding:8px 12px;background:#EFF6FF;border-radius:8px">
+          <span style="font-size:12px;color:var(--info);font-weight:600">Total ARCA (referencia)</span>
+          <span id="arcaRefTotal" style="font-size:14px;font-weight:800;color:var(--info)">${pesos(arcaDisp[0].total)}</span>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px">Precios del remito</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">
+        <thead><tr style="color:var(--ink2);font-size:11px;font-weight:600;border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:6px 0">Insumo</th>
+          <th style="text-align:center;padding:6px 0">Cant.</th>
+          <th style="text-align:right;padding:6px 0">Último precio</th>
+          <th style="text-align:right;padding:6px 0">Precio actual</th>
+          <th style="text-align:right;padding:6px 0">Subtotal</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:2px solid var(--border)">
+        <span style="font-size:13px;font-weight:600;color:var(--ink2)">Total calculado</span>
+        <span id="arcaTotalCalc" style="font-size:17px;font-weight:800;color:var(--ink)">—</span>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="document.getElementById('vincularArcaModal').remove();window._arcaModalItems=null;window._arcaModalPedidoId=null">Cancelar</button>
+        <button class="btn btn-primary" onclick="_confirmarVincularArca()">Vincular y crear factura</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  _makeDraggable(document.getElementById('vincularArcaModal'));
+  _recalcArcaTotal();
+}
+
+function _onArcaBoletaChange() {
+  const sel     = document.getElementById('arcaBoletaSel');
+  if (!sel) return;
+  const arcaItem = arcaPendientes.find(it => it.id === sel.value);
+  const el = document.getElementById('arcaRefTotal');
+  if (el && arcaItem) el.textContent = pesos(arcaItem.total);
+}
+
+function _recalcArcaTotal() {
+  const items = window._arcaModalItems;
+  if (!items) return;
+  let total = 0;
+  items.forEach((it, i) => {
+    const inp   = document.getElementById(`arcaprecio_${i}`);
+    const precio = inp ? (parseFloat(inp.value) || 0) : 0;
+    const subt   = precio * it.cantidad;
+    total += subt;
+    const el = document.getElementById(`arcasubt_${i}`);
+    if (el) el.textContent = subt ? _fmtMoney(subt) : '—';
+  });
+  const el = document.getElementById('arcaTotalCalc');
+  if (el) el.textContent = total ? pesos(total) : '—';
+}
+
+function _confirmarVincularArca() {
+  const pedidoId = window._arcaModalPedidoId;
+  const items    = window._arcaModalItems;
+  if (!pedidoId || !items) return;
+  const sel = document.getElementById('arcaBoletaSel');
+  if (!sel?.value) { toast('Seleccioná una boleta', 'error'); return; }
+  const arcaItem = arcaPendientes.find(it => it.id === sel.value);
+  if (!arcaItem) { toast('Boleta no encontrada', 'error'); return; }
+  const ped  = pedidosPendientes.find(p => p.id === pedidoId);
+  if (!ped)  return;
+  const prov = proveedores.find(p => p.id === ped.proveedorId);
+  if (!prov) return;
+
+  const fecha        = arcaItem.fechaISO;
+  const itemsFactura = items.map((it, i) => {
+    const inp        = document.getElementById(`arcaprecio_${i}`);
+    const precioUnit = parseFloat(inp?.value) || 0;
+    return {
+      nombre: it.nombre, cantidad: it.cantidad, unidad: it.unidad,
+      peso_por_unidad: null, unidad_peso: null,
+      precio_unitario: precioUnit, precio_total: precioUnit * it.cantidad,
+      iva: null, insumoId: it.insumoId
+    };
+  });
+
+  const factura = {
+    id: crypto.randomUUID(), proveedorId: prov.id,
+    nroBoleta: arcaItem.nroFmt, fecha, hora: null,
+    importeTotal: arcaItem.total,
+    items: itemsFactura,
+    creadaEn: new Date().toISOString(),
+    fuente: 'arca_pedido',
+    importadaDeARCA: true, arcaVerificada: true, cae: arcaItem.cae,
+    tipoComprobante: (arcaItem.tipo || '').toLowerCase().includes('nota de crédito') ? 'nota_credito'
+                   : (arcaItem.tipo || '').toLowerCase().includes('nota de débito')  ? 'nota_debito'
+                   : 'factura'
+  };
+  facturas.push(factura);
+
+  itemsFactura.forEach(it => {
+    if (!it.insumoId || !it.precio_unitario) return;
+    precios.push({
+      id: crypto.randomUUID(), insumoId: it.insumoId, proveedorId: prov.id,
+      fecha, nroBoleta: arcaItem.nroFmt, nombreBoleta: it.nombre,
+      cantidad: it.cantidad, unidad: it.unidad,
+      pesoPorUnidad: null, unidadPeso: null,
+      precioUnitario: it.precio_unitario, precioTotal: it.precio_total,
+      fuente: 'arca_pedido'
+    });
+  });
+
+  ped.estado        = 'vinculado';
+  ped.facturaId     = factura.id;
+  ped.nroBoleta     = arcaItem.nroFmt;
+  ped.fechaBoleta   = fecha;
+  ped.fechaVinculado = new Date().toISOString();
+  ped.fechaRecibido  = ped.fechaRecibido || new Date().toISOString();
+
+  arcaPendientes = arcaPendientes.filter(it => it.id !== arcaItem.id);
+  if (arcaItem.cuitEmisor && !prov.cuit) prov.cuit = arcaItem.cuitEmisor;
+
+  persist();
+  document.getElementById('vincularArcaModal')?.remove();
+  window._arcaModalItems    = null;
+  window._arcaModalPedidoId = null;
+
+  if (_pendViewMode === 'global') renderPendientesGlobal();
+  else renderProveedorFacturas(prov.id, 'pend');
+  renderProveedores();
+  toast(`Factura ${arcaItem.nroFmt} creada con ${itemsFactura.length} ítem${itemsFactura.length !== 1 ? 's' : ''}. Dale OK para cerrar el pedido.`, 'success');
 }
 
 function marcarPedidoRecibido(pedidoId) {
