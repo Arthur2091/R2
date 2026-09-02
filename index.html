@@ -8003,6 +8003,8 @@ function renderContable() {
   const mpPeriod    = mpMovs.filter(m => inPeriod(m.fecha) && m.gasto !== 'H' && m.gasto !== 'L' && m.gasto !== 'D');
   const mpGastos    = mpPeriod.filter(m => !m.facturaIds?.length && !m.esInterna && !m.gastoFijoId && !m.sueldoId);
   const totalMP     = mpGastos.reduce((s, m) => s + (m.monto || 0), 0);
+  const mpHLD       = mpMovs.filter(m => inPeriod(m.fecha) && (m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D'));
+  const totalMPHLD  = mpHLD.reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_H   = mpGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalMP_L   = mpGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalMP').textContent = pesos(totalMP);
@@ -8109,6 +8111,8 @@ function renderContable() {
   const totalGal_H     = galGastos.filter(m => m.gasto === 'H').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGal_L     = galGastos.filter(m => m.gasto === 'L').reduce((s, m) => s + (m.monto || 0), 0);
   const totalGalImp    = galImpuestos.reduce((s, m) => s + (m.monto || 0), 0);
+  const galHLD         = galiciaMovs.filter(m => inPeriod(m.fecha) && !m.esIngreso && (m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D'));
+  const totalGalHLD    = galHLD.reduce((s, m) => s + (m.monto || 0), 0);
   document.getElementById('totalGalicia').textContent = pesos(totalGal);
   const elGH = document.getElementById('totalGal_H'); elGH.textContent = `H: ${pesos(totalGal_H)}`; elGH.style.display = totalGal_H ? '' : 'none';
   const elGL = document.getElementById('totalGal_L'); elGL.textContent = `L: ${pesos(totalGal_L)}`; elGL.style.display = totalGal_L ? '' : 'none';
@@ -8400,7 +8404,7 @@ function renderContable() {
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
   const comprasAdeudadas = comprasPeriod.filter(f => !f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
-  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP + totalGal;
+  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP + totalGal + totalMPHLD + totalGalHLD;
   const totalAdeudado  = comprasAdeudadas + adeudadoFijos;
   const totalEgresos   = totalPagado + totalAdeudado;
   const resultado      = totalIngresos - totalEgresos;
