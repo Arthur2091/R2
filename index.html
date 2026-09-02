@@ -8404,7 +8404,7 @@ function renderContable() {
   // ── BALANCE CARDS ──
   const comprasPagadas   = comprasPeriod.filter(f => f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
   const comprasAdeudadas = comprasPeriod.filter(f => !f.pagado).reduce((s,f) => s + (f.importeTotal||0), 0);
-  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMP + totalGal + totalMPHLD + totalGalHLD;
+  const totalPagado    = comprasPagadas + totalSueldos + totalOtros + pagadoFijos + totalMPHLD + totalGalHLD;
   const totalAdeudado  = comprasAdeudadas + adeudadoFijos;
   const totalEgresos   = totalPagado + totalAdeudado;
   const resultado      = totalIngresos - totalEgresos;
