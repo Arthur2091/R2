@@ -10705,6 +10705,15 @@ function importVentas(e) {
           if (m1) return { mes: parseInt(m1[1], 10), anio: parseInt(m1[2], 10) };
           const m2 = t.match(/\b(20\d{2})[-\/](0?[1-9]|1[0-2])\b/);
           if (m2) return { mes: parseInt(m2[2], 10), anio: parseInt(m2[1], 10) };
+          // Patrón "MES" solo sin año — infiere el año más reciente para ese mes
+          for (const [nombre, num] of Object.entries(MESES_ES)) {
+            const re = new RegExp(`\\b${nombre}\\b`, 'i');
+            if (re.test(t)) {
+              const hoy = new Date();
+              const anio = num > hoy.getMonth() + 1 ? hoy.getFullYear() - 1 : hoy.getFullYear();
+              return { mes: num, anio };
+            }
+          }
           return null;
         };
 
