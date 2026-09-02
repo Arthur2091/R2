@@ -13932,7 +13932,11 @@ function verConsolidado() {
   const byCategoria  = {};
   otrosPeriod.forEach(e => { const k=e.categoria||'Otros'; if(!byCategoria[k])byCategoria[k]=0; byCategoria[k]+=e.monto||0; });
 
-  const totalEgresos = totalCompras + totalSueldos + totalOtros;
+  const galHLDPeriod = galiciaMovs.filter(m => inPeriod(m.fecha) && !m.esIngreso && (m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D'));
+  const totalGalHLD  = galHLDPeriod.reduce((s, m) => s + (m.monto || 0), 0);
+  const mpHLDPeriod  = mpMovs.filter(m => inPeriod(m.fecha) && (m.gasto === 'H' || m.gasto === 'L' || m.gasto === 'D'));
+  const totalMPHLD   = mpHLDPeriod.reduce((s, m) => s + (m.monto || 0), 0);
+  const totalEgresos = totalCompras + totalSueldos + totalOtros + totalGalHLD + totalMPHLD;
   const resultado    = totalIngresos - totalEgresos;
   const resColor     = resultado >= 0 ? 'var(--accent)' : 'var(--danger)';
   const margen       = totalIngresos > 0 ? (resultado/totalIngresos*100).toFixed(1) : '—';
@@ -13950,7 +13954,7 @@ function verConsolidado() {
       <div style="background:var(--surface2);border-radius:var(--radius);padding:16px;text-align:center">
         <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Egresos</div>
         <div style="font-size:1.3rem;font-weight:700;color:var(--danger);font-family:'DM Mono',monospace">${pesos(totalEgresos)}</div>
-        <div style="font-size:12px;color:var(--ink3);margin-top:4px">Compras · Sueldos · Otros</div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:4px">Compras · Sueldos · Otros · H/L/D</div>
       </div>
       <div style="background:var(--surface2);border-radius:var(--radius);padding:16px;text-align:center;border:2px solid ${resColor}">
         <div style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Resultado neto</div>
