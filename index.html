@@ -7005,7 +7005,7 @@ function renderProductosRubro(key, rubro) {
   const rubroLabel = esSin ? 'Sin categoría' : `${s?.icon||'📦'} ${rubro}`;
   const color   = esSin ? 'var(--ink2)' : s.color;
 
-  const todosProds = Object.entries(d.productos).sort((a, b) => b[1].total - a[1].total);
+  const todosProds = Object.entries(d.productos).sort((a, b) => b[1].unidades - a[1].unidades);
 
   const items = todosProds.filter(([nombre]) => {
     const r = productosRubros[nombre];
@@ -7016,9 +7016,9 @@ function renderProductosRubro(key, rubro) {
 
   if (!esSin) {
     const top10  = items.slice(0, 10);
-    const maxTop = top10[0]?.[1].total || 1;
+    const maxTop = top10[0]?.[1].unidades || 1;
     const graficoHtml = top10.map(([nombre, pd], i) => {
-      const pct  = Math.round((pd.total / maxTop) * 100);
+      const pct  = Math.round((pd.unidades / maxTop) * 100);
       const slug = `prod_${i}_${key}`;
       return `<div style="display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:.75rem;padding:.4rem 0;cursor:pointer" onclick="toggleSection('${slug}')">
         <span style="font-size:.82rem;font-weight:600;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</span>
