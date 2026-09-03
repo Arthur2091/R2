@@ -6923,8 +6923,8 @@ function renderProductosMes(key) {
   const [y, m] = key.split('-');
   const label  = MESES_NOMBRES[parseInt(m) - 1] + ' ' + y;
 
-  const todosProds = Object.entries(d.productos).sort((a, b) => b[1].total - a[1].total);
-  const maxTotal   = todosProds[0]?.[1].total || 1;
+  const todosProds = Object.entries(d.productos).sort((a, b) => b[1].unidades - a[1].unidades);
+  const maxTotal   = todosProds[0]?.[1].unidades || 1;
 
   const grupoRubros = {};
   const sinCat = [];
@@ -6935,7 +6935,7 @@ function renderProductosMes(key) {
   });
 
   const productoHtml = ([nombre, pd]) => {
-    const pct = Math.round((pd.total / maxTotal) * 100);
+    const pct = Math.round((pd.unidades / maxTotal) * 100);
     const s   = RUBRO_STYLES_C[productosRubros[nombre]] || null;
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.6rem 1rem">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.3rem">
