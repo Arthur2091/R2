@@ -14891,8 +14891,9 @@ function _lpNormStr(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 }
 
+const _LP_STOP = new Set(['de','del','la','el','los','las','un','una','en','con','por','para','y','e','o','al','lo']);
 function _lpTokens(s) {
-  return new Set(_lpNormStr(s).split(' ').filter(t => t.length >= 2));
+  return new Set(_lpNormStr(s).split(' ').filter(t => t.length >= 2 && !_LP_STOP.has(t)));
 }
 
 function _lpSim(a, b) {
