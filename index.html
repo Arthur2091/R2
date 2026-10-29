@@ -14830,6 +14830,41 @@ function _lpParseExcel(rows) {
       break;
     }
   }
+  // Fallback heurístico: si no hubo header con keywords, detectar columnas por datos
+  if (headerIdx === -1) {
+    const sample = rows.slice(0, Math.min(rows.length, 60));
+    const colStats = {};
+    sample.forEach(row => {
+      (row || []).forEach((v, c) => {
+        if (!colStats[c]) colStats[c] = { bigNums: 0, texts: 0, totalLen: 0, count: 0 };
+        if (v == null || v === '') return;
+        colStats[c].count++;
+        const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[^\d.]/g, ''));
+        if (!isNaN(n) && n >= 100 && n <= 500000) colStats[c].bigNums++;
+        if (typeof v === 'string' && v.trim()) { colStats[c].texts++; colStats[c].totalLen += v.trim().length; }
+      });
+    });
+    let bestPrice = -1, bestPriceScore = 0, bestNombre = -1, bestNombreLen = 0;
+    Object.entries(colStats).forEach(([c, s]) => {
+      const ci = Number(c);
+      const priceRatio = s.count > 0 ? s.bigNums / sample.length : 0;
+      if (priceRatio > bestPriceScore) { bestPriceScore = priceRatio; bestPrice = ci; }
+      const avgLen = s.texts > 0 ? s.totalLen / s.texts : 0;
+      if (ci !== bestPrice && avgLen > bestNombreLen && avgLen > 5) { bestNombreLen = avgLen; bestNombre = ci; }
+    });
+    if (bestNombre === -1 && bestPrice !== -1) {
+      Object.entries(colStats).forEach(([c, s]) => {
+        const ci = Number(c); if (ci === bestPrice) return;
+        const avgLen = s.texts > 0 ? s.totalLen / s.texts : 0;
+        if (avgLen > bestNombreLen && avgLen > 5) { bestNombreLen = avgLen; bestNombre = ci; }
+      });
+    }
+    if (bestNombre !== -1 && bestPrice !== -1) {
+      headerIdx = 0;
+      cols = { nombre: bestNombre, precio: bestPrice, precioCon: -1, unidad: -1, peso: -1 };
+      console.log('[lp-excel] heuristic cols:', cols, 'priceScore:', bestPriceScore);
+    }
+  }
   if (headerIdx === -1) return { items: [] };
 
   // Parsear filas debajo del header
