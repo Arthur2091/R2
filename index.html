@@ -15358,12 +15358,19 @@ async function icExtraer() {
         local = _lpParseExcel(rows);
         if (local.items.length) break;
       }
-      if (!local.items.length) throw new Error('No se reconoció la estructura del Excel. Verificá que tenga columnas de nombre y precio.');
+      if (!local.items.length) {
+        statusEl.innerHTML = `<span style="color:var(--danger)">❌ Parser local: no detectó estructura. Hojas: ${wb.SheetNames.join(', ')}. Probá pegar el texto manualmente.</span>`;
+        btnEx.disabled = false; return;
+      }
       const items = local.items.filter(it => it.nombre && it.precio_unitario != null && it.precio_unitario <= LP_PRECIO_MAX);
-      if (!items.length) throw new Error('No se reconocieron ítems con precio válido en el Excel.');
+      if (!items.length) {
+        statusEl.innerHTML = `<span style="color:var(--danger)">❌ Parser local encontró ${local.items.length} ítems pero todos fuera de rango. Primer precio: ${local.items[0]?.precio_unitario}</span>`;
+        btnEx.disabled = false; return;
+      }
+      const sample3 = items.slice(0, 3).map(it => `${it.nombre} → $${it.precio_unitario}`).join(' | ');
+      statusEl.innerHTML = `<span style="color:var(--accent)">✓ Parser local: ${items.length} ítems. Muestra: ${sample3}</span>`;
       _icExtraido = { items };
-      statusEl.textContent = '';
-      _icRenderMatchInline();
+      setTimeout(() => { statusEl.textContent = ''; _icRenderMatchInline(); }, 2000);
       return;
     } else if (file && /\.pdf$/i.test(file.name)) {
       statusEl.textContent = 'Leyendo PDF…';
