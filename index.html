@@ -15423,34 +15423,32 @@ function _icRenderMatchInline() {
       }))
       .concat(['<option disabled>──────────────</option>'])
       .concat(insOrdenados.filter(i => !rankedIds.has(i.id)).map(i => `<option value="${i.id}">${i.nombre}</option>`));
-    const conIva = it.precio_unitario != null
-      ? `<span style="font-size:10px;color:var(--ink3);font-family:var(--mono);margin-left:6px">c/IVA ${_fmtMoney(it.precio_unitario * 1.21)}</span>` : '';
-    const matchInfo = cand.top ? scoreBadge(cand.top.score, cand.top.fuente)
-      : `<span style="font-size:10px;padding:2px 6px;background:var(--surface2);color:var(--ink3);border-radius:4px">sin match</span>`;
+    const matchBadge = cand.top ? scoreBadge(cand.top.score, cand.top.fuente)
+      : `<span style="font-size:10px;padding:2px 5px;background:var(--surface2);color:var(--ink3);border-radius:4px">sin match</span>`;
     const rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
-    return `<div style="padding:8px 12px;border-bottom:1px solid var(--border);background:${rowBg}">
-      <div style="display:grid;grid-template-columns:1.2fr 1fr auto;gap:10px;align-items:center">
-        <div style="min-width:0">
-          <div style="font-weight:600;font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${it.nombre.replace(/"/g,'&quot;')}">${it.nombre}</div>
-          <div style="margin-top:2px">${matchInfo}</div>
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:${rowBg}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+        <div style="font-weight:600;font-size:13px;color:var(--ink);line-height:1.3">${it.nombre}</div>
+        <div style="white-space:nowrap;text-align:right;flex-shrink:0">
+          <span style="font-weight:700;font-family:var(--mono);font-size:14px;color:var(--accent)">${_fmtMoney(it.precio_unitario)}</span>
+          ${it.precio_unitario != null ? `<div style="font-size:10px;color:var(--ink3);font-family:var(--mono)">c/IVA ${_fmtMoney(it.precio_unitario * 1.21)}</div>` : ''}
         </div>
-        <select data-ic-idx="${idx}" style="width:100%;font-size:12px;padding:5px 8px;min-width:0">${opciones.join('')}</select>
-        <div style="text-align:right;white-space:nowrap">
-          <span style="font-weight:700;font-family:var(--mono);font-size:13px;color:var(--accent)">${_fmtMoney(it.precio_unitario)}</span>
-          ${conIva}
-        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${matchBadge}
+        <select data-ic-idx="${idx}" style="flex:1;min-width:180px;font-size:12px;padding:5px 8px">${opciones.join('')}</select>
       </div>
     </div>`;
   }).join('');
 
   inline.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)">
-        <div style="font-size:15px;font-weight:700">${prov?.nombre || 'Proveedor'}</div>
-        <div style="font-size:11px;color:var(--ink2);margin-top:1px">${_icExtraido.items.length} ítems extraídos · ${preMatched} auto-match · revisá y ajustá los dropdowns</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1.2fr 1fr auto;gap:10px;padding:6px 12px;font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;border-bottom:1px solid var(--border);background:var(--bg)">
-        <div>Producto de lista</div><div>Insumo del sistema</div><div style="text-align:right">Precio</div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:15px;font-weight:700">${prov?.nombre || 'Proveedor'}</div>
+          <div style="font-size:11px;color:var(--ink2);margin-top:1px">${_icExtraido.items.length} productos · ${preMatched} auto-match</div>
+        </div>
+        <div style="font-size:12px;color:var(--ink2)">Precio · Asignar insumo del sistema</div>
       </div>
       ${rows}
     </div>`;
