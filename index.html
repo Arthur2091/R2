@@ -983,33 +983,15 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
       <div style="font-weight:700;font-size:15px;margin-bottom:14px">Cargar lista para comparar</div>
       <div style="display:flex;flex-direction:column;gap:14px">
         <div>
-          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Proveedor</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="icProveedor" style="flex:1"></select>
-            <button class="btn btn-outline btn-sm" onclick="_icToggleNewProv()">+ Nuevo</button>
-          </div>
-          <div id="icNuevoProvForm" style="display:none;margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
-            <div style="font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:8px">Nuevo proveedor</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <input id="icNuevoNombre" type="text" placeholder="Nombre del proveedor" style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
-              <input id="icNuevoTel" type="text" placeholder="Teléfono (opcional)" style="width:160px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
-              <button class="btn btn-primary btn-sm" onclick="_icCrearProv()">Crear y seleccionar</button>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Archivo (xlsx, pdf, imagen) — opcional</label>
+          <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">Archivo (xlsx, pdf, imagen)</label>
           <input id="icFile" type="file" accept=".xlsx,.xls,.csv,.pdf,image/*" style="width:100%">
         </div>
         <div>
           <label style="font-size:13px;font-weight:600;color:var(--ink2);display:block;margin-bottom:6px">O pegá el texto de la lista</label>
-          <textarea id="icTexto" rows="5" placeholder="Ej:&#10;Harina 000 25kg — $30000&#10;Manteca 200g — $1500" style="width:100%;font-family:var(--mono);font-size:13px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical"></textarea>
+          <textarea id="icTexto" rows="4" placeholder="Ej:&#10;Harina 000 25kg — $30000&#10;Manteca 200g — $1500" style="width:100%;font-family:var(--mono);font-size:13px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical"></textarea>
         </div>
         <div id="icStatus" style="font-size:13px;color:var(--ink2);min-height:18px"></div>
-        <div style="display:flex;gap:8px">
-          <button id="icBtnExtraer" class="btn btn-primary" onclick="icExtraer()">✦ Extraer con IA</button>
-          <button id="icBtnGuardar" class="btn btn-primary" onclick="icConfirmar()" style="display:none">Guardar y ver comparativa</button>
-        </div>
+        <button id="icBtnExtraer" class="btn btn-primary" onclick="icExtraer()">✦ Extraer con IA</button>
       </div>
     </div>
     <div id="icMatchInline" style="display:none;margin-bottom:18px"></div>
@@ -15319,8 +15301,6 @@ function _icCandidatosGlobal(nombreLista) {
 }
 
 async function icExtraer() {
-  const provId = document.getElementById('icProveedor').value;
-  if (!provId) { toast('Elegí un proveedor primero', 'error'); return; }
   const file    = document.getElementById('icFile').files[0];
   const texto   = document.getElementById('icTexto').value.trim();
   if (!file && !texto) { toast('Subí un archivo o pegá el texto', 'error'); return; }
@@ -15343,7 +15323,7 @@ async function icExtraer() {
       if (local.items.length) {
         const items = local.items.filter(it => it.nombre && it.precio_unitario != null && it.precio_unitario <= LP_PRECIO_MAX);
         if (!items.length) throw new Error('No se reconocieron ítems con precio válido en el Excel.');
-        _icExtraido = { proveedorId: provId, items };
+        _icExtraido = { items };
         statusEl.textContent = '';
         _icRenderMatchInline();
         return;
@@ -15382,7 +15362,7 @@ async function icExtraer() {
     }).filter(it => it.nombre && it.precio_unitario != null && it.precio_unitario <= LP_PRECIO_MAX);
 
     if (!items.length) throw new Error('No se reconocieron ítems válidos en la lista.');
-    _icExtraido = { proveedorId: provId, items };
+    _icExtraido = { items };
     statusEl.textContent = '';
     _icRenderMatchInline();
   } catch(e) {
@@ -15441,16 +15421,25 @@ function _icRenderMatchInline() {
     </div>`;
   }).join('');
 
+  const provOpts = ['<option value="">— Proveedor existente —</option>']
+    .concat([...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
+      .map(p => `<option value="${p.id}">${p.nombre}</option>`));
+
   inline.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:15px;font-weight:700">${prov?.nombre || 'Proveedor'}</div>
-          <div style="font-size:11px;color:var(--ink2);margin-top:1px">${_icExtraido.items.length} productos · ${preMatched} auto-match</div>
-        </div>
-        <div style="font-size:12px;color:var(--ink2)">Precio · Asignar insumo del sistema</div>
+        <div style="font-size:11px;color:var(--ink2)">${_icExtraido.items.length} productos extraídos · ${preMatched} auto-match · revisá y ajustá</div>
       </div>
       ${rows}
+      <div style="padding:14px 16px;background:var(--bg);border-top:2px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:8px">¿A qué proveedor corresponde esta lista?</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select id="icProvSave" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">${provOpts.join('')}</select>
+          <span style="color:var(--ink3);font-size:13px">o nuevo:</span>
+          <input id="icProvNuevo" type="text" placeholder="Nombre del proveedor nuevo" style="flex:2;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font:14px var(--font)">
+          <button class="btn btn-primary" onclick="icConfirmar()">Guardar y ver comparativa</button>
+        </div>
+      </div>
     </div>`;
   inline.style.display = 'block';
   btnEx.style.display  = 'none';
@@ -15474,7 +15463,20 @@ function icConfirmar() {
   });
   if (!items.length) { toast('Asigná al menos un insumo en los dropdowns', 'error'); return; }
 
-  const provId = _icExtraido.proveedorId;
+  // Resolver proveedor: existente o nuevo
+  let provId = document.getElementById('icProvSave')?.value || '';
+  const nuevoNombre = document.getElementById('icProvNuevo')?.value.trim() || '';
+  if (!provId && !nuevoNombre) { toast('Indicá el proveedor antes de guardar', 'error'); return; }
+  if (!provId) {
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g,'');
+    const dup = proveedores.find(p => norm(p.nombre) === norm(nuevoNombre));
+    if (dup) { provId = dup.id; }
+    else {
+      provId = crypto.randomUUID();
+      proveedores.push({ id: provId, nombre: nuevoNombre, telefono: '', cuit: '', email: '', notas: '', pago: 'transferencia', items: [] });
+    }
+  }
+
   listasPrecios = listasPrecios.filter(l => l.proveedorId !== provId);
   listasPrecios.push({ id: crypto.randomUUID(), proveedorId: provId, fecha: new Date().toISOString().slice(0,10), items });
   persist();
@@ -15482,7 +15484,6 @@ function icConfirmar() {
   document.getElementById('icMatchInline').style.display = 'none';
   document.getElementById('icBtnExtraer').style.display = 'inline-flex';
   document.getElementById('icBtnExtraer').disabled = false;
-  document.getElementById('icBtnGuardar').style.display = 'none';
   _icExtraido = null;
 
   renderInsumosCompMatrix();
