@@ -15315,20 +15315,21 @@ async function icExtraer() {
     let content;
     if (file && /\.(xlsx|xls|csv)$/i.test(file.name)) {
       statusEl.textContent = 'Leyendo Excel…';
-      const buf  = await file.arrayBuffer();
-      const wb   = XLSX.read(buf, { type: 'array' });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-      const local = _lpParseExcel(rows);
-      if (local.items.length) {
-        const items = local.items.filter(it => it.nombre && it.precio_unitario != null && it.precio_unitario <= LP_PRECIO_MAX);
-        if (!items.length) throw new Error('No se reconocieron ítems con precio válido en el Excel.');
-        _icExtraido = { items };
-        statusEl.textContent = '';
-        _icRenderMatchInline();
-        return;
+      const buf = await file.arrayBuffer();
+      const wb  = XLSX.read(buf, { type: 'array' });
+      let local = { items: [] };
+      for (const sheetName of wb.SheetNames) {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: null });
+        local = _lpParseExcel(rows);
+        if (local.items.length) break;
       }
-      content = [{ type: 'text', text: _LP_PROMPT + '\n\nLISTA:\n' + XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]) }];
+      if (!local.items.length) throw new Error('No se reconoció la estructura del Excel. Verificá que tenga columnas de nombre y precio.');
+      const items = local.items.filter(it => it.nombre && it.precio_unitario != null && it.precio_unitario <= LP_PRECIO_MAX);
+      if (!items.length) throw new Error('No se reconocieron ítems con precio válido en el Excel.');
+      _icExtraido = { items };
+      statusEl.textContent = '';
+      _icRenderMatchInline();
+      return;
     } else if (file && /\.pdf$/i.test(file.name)) {
       statusEl.textContent = 'Leyendo PDF…';
       const b64 = await _fileToBase64(file);
@@ -15378,7 +15379,11 @@ function _icRenderMatchInline() {
   const prov     = proveedores.find(p => p.id === _icExtraido.proveedorId);
 
   _icExtraido.match = _icExtraido.items.map(it => _icCandidatosGlobal(it.nombre));
-  const preMatched = _icExtraido.match.filter(m => m.top).length;
+  const totalExtraidos = _icExtraido.items.length;
+  const matchedIdxs = _icExtraido.items
+    .map((it, idx) => ({ it, idx, cand: _icExtraido.match[idx] }))
+    .filter(({ cand }) => cand.top !== null);
+  const hiddenCount = totalExtraidos - matchedIdxs.length;
 
   const scoreBadge = (score, fuente) => {
     if (!score) return '';
@@ -15390,9 +15395,8 @@ function _icRenderMatchInline() {
 
   const insOrdenados = [...insumos].sort((a,b) => a.nombre.localeCompare(b.nombre, 'es'));
 
-  const rows = _icExtraido.items.map((it, idx) => {
-    const cand   = _icExtraido.match[idx];
-    const topId  = cand.top ? cand.top.insumo.id : '';
+  const rows = matchedIdxs.map(({ it, idx, cand }, rowN) => {
+    const topId  = cand.top.insumo.id;
     const ranked = cand.ranked.slice(0, 12);
     const rankedIds = new Set(ranked.map(c => c.insumo.id));
     const opciones = ['<option value="">— No incluir —</option>']
@@ -15403,9 +15407,7 @@ function _icRenderMatchInline() {
       }))
       .concat(['<option disabled>──────────────</option>'])
       .concat(insOrdenados.filter(i => !rankedIds.has(i.id)).map(i => `<option value="${i.id}">${i.nombre}</option>`));
-    const matchBadge = cand.top ? scoreBadge(cand.top.score, cand.top.fuente)
-      : `<span style="font-size:10px;padding:2px 5px;background:var(--surface2);color:var(--ink3);border-radius:4px">sin match</span>`;
-    const rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
+    const rowBg = rowN % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
     return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);background:${rowBg}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
         <div style="font-weight:600;font-size:13px;color:var(--ink);line-height:1.3">${it.nombre}</div>
@@ -15415,7 +15417,7 @@ function _icRenderMatchInline() {
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        ${matchBadge}
+        ${scoreBadge(cand.top.score, cand.top.fuente)}
         <select data-ic-idx="${idx}" style="flex:1;min-width:180px;font-size:12px;padding:5px 8px">${opciones.join('')}</select>
       </div>
     </div>`;
@@ -15425,10 +15427,15 @@ function _icRenderMatchInline() {
     .concat([...proveedores].sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
       .map(p => `<option value="${p.id}">${p.nombre}</option>`));
 
+  const hiddenNote = hiddenCount > 0
+    ? `<div style="font-size:11px;color:var(--ink3);margin-top:4px">${hiddenCount} productos sin match en tus insumos (ocultos)</div>`
+    : '';
+
   inline.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <div style="font-size:11px;color:var(--ink2)">${_icExtraido.items.length} productos extraídos · ${preMatched} auto-match · revisá y ajustá</div>
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)">
+        <div style="font-size:11px;color:var(--ink2)">${matchedIdxs.length} de ${totalExtraidos} productos matchean tus insumos</div>
+        ${hiddenNote}
       </div>
       ${rows}
       <div style="padding:14px 16px;background:var(--bg);border-top:2px solid var(--border)">
