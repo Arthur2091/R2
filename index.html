@@ -16476,9 +16476,10 @@ function _areaAbrirLoc(locId) {
         </div>
         <p class="modal-sub" style="margin-bottom:10px">${cfg.label} · ${tipoInfo.label}</p>
         <div style="overflow-y:auto;flex:1">${body}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('modalAreaLoc').remove();_areaAbrirTransfInsumo('${locId}')">↓ Insumo</button>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove();_areaAbrirTransfProducto('${locId}')">↓ Producto</button>
+          <button class="btn btn-outline btn-sm" onclick="_areaEditarLoc('${locId}')" title="Editar">✏️</button>
           <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaEliminarLoc('${locId}')">🗑</button>
         </div>
       </div>
@@ -16863,6 +16864,53 @@ function _areaConfirmarSacar() {
   closeModal('modalAreaSacar');
   toast(_destLocIdFinal === '__merma__' ? '🗑 Merma registrada' : _destNombreFinal ? `Enviado → ${_destNombreFinal}` : 'Sacado', 'success');
   _depSwitchSub(area === 'deposito' ? 'stock' : area);
+}
+
+/* ── EDITAR UBICACIÓN ───────────────────────────────────────────── */
+
+function _areaEditarLoc(locId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  if (!loc) return;
+  const tipoOpts = Object.entries(_LOC_TIPOS).map(([k, v]) =>
+    `<option value="${k}" ${loc.tipo === k ? 'selected' : ''}>${v.emoji} ${v.label}</option>`
+  ).join('');
+  document.getElementById('modalAreaLoc')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modalAreaEditLoc" class="overlay open" style="display:flex" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:380px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h2 style="margin:0">Editar ubicación</h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaEditLoc').remove();_areaAbrirLoc('${locId}')">✕</button>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Nombre</label>
+          <input id="areaEditLocNombre" class="input" value="${loc.nombre}" style="width:100%">
+        </div>
+        <div class="field" style="margin-bottom:20px">
+          <label>Tipo</label>
+          <select id="areaEditLocTipo" class="input" style="width:100%">${tipoOpts}</select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaEditLoc').remove();_areaAbrirLoc('${locId}')">Cancelar</button>
+          <button class="btn btn-primary btn-sm" onclick="_areaGuardarEditLoc('${locId}')">Guardar</button>
+        </div>
+      </div>
+    </div>`);
+  setTimeout(() => document.getElementById('areaEditLocNombre')?.focus(), 50);
+}
+
+function _areaGuardarEditLoc(locId) {
+  const loc    = areaLocaciones.find(l => l.id === locId);
+  if (!loc) return;
+  const nombre = document.getElementById('areaEditLocNombre')?.value.trim();
+  const tipo   = document.getElementById('areaEditLocTipo')?.value;
+  if (!nombre) { toast('El nombre no puede estar vacío', 'error'); return; }
+  loc.nombre = nombre;
+  loc.tipo   = tipo;
+  document.getElementById('modalAreaEditLoc')?.remove();
+  persist();
+  toast('Ubicación actualizada', 'success');
+  _areaAbrirLoc(locId);
 }
 
 /* ── ELIMINAR UBICACIÓN ──────────────────────────────────────────── */
