@@ -1719,6 +1719,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
 <div id="viewDeposito" class="view">
   <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;align-items:center">
     <button class="dep-subtab dep-subtab-active" data-dep-sub="stock" onclick="_depSwitchSub('stock')">Depósito</button>
+    <button class="dep-subtab" data-dep-sub="dep_ubic" onclick="_depSwitchSub('dep_ubic')">🏪 Ubic.</button>
     <button class="dep-subtab" data-dep-sub="fabrica" onclick="_depSwitchSub('fabrica')">🏭 Fábrica</button>
     <button class="dep-subtab" data-dep-sub="cocina" onclick="_depSwitchSub('cocina')">🍳 Cocina</button>
     <button class="dep-subtab" data-dep-sub="barra" onclick="_depSwitchSub('barra')">🥤 Barra</button>
@@ -1759,19 +1760,32 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
 
 <!-- MODAL: Transferir insumo desde Depósito a ubicación -->
 <div id="modalAreaTransfInsumo" class="overlay">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:460px">
     <h2>Transferir insumo</h2>
     <p class="modal-sub" id="areaTrLocLabel"></p>
+    <input type="hidden" id="areaTrInsumoId">
     <div class="field">
-      <label>Insumo</label>
-      <select id="areaTrInsumo" style="width:100%" onchange="_areaTrOnInsumoChange()">
-        <option value="">— Elegí un insumo —</option>
-      </select>
+      <label>🔍 Buscar insumo</label>
+      <input id="areaTrBuscar" type="search" placeholder="Escribí el nombre…" autocomplete="off"
+        oninput="_areaTrFiltrar(this.value)"
+        style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;box-sizing:border-box">
+      <div id="areaTrResultados" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-top:4px;display:none"></div>
+      <div id="areaTrSeleccionado" style="display:none;margin-top:6px;padding:8px 12px;background:var(--accent-light);border-radius:8px;font-size:13px;font-weight:600;color:var(--accent)"></div>
       <div id="areaTrStock" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
-    <div class="field">
-      <label>Cantidad de presentaciones</label>
-      <input id="areaTrCantidad" type="number" min="0.001" step="any" style="width:100%">
+    <div class="field" id="areaTrCantField" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1">
+          <label id="areaTrCantLabel">Cantidad</label>
+          <input id="areaTrCantidad" type="number" min="0.001" step="any" style="width:100%">
+        </div>
+        <div id="areaTrUnidadWrap" style="display:none;padding-top:18px">
+          <select id="areaTrUnidad" onchange="_areaTrOnUnidadChange()" style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+            <option value="pres">presentaciones</option>
+          </select>
+        </div>
+      </div>
+      <div id="areaTrConversion" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalAreaTransfInsumo')">Cancelar</button>
@@ -2612,6 +2626,8 @@ let _syncPaused  = false;
 function persist() {
   if (_syncPaused) { _syncChip('paused'); return; }
   if (!_fbLoaded) { _pendingWrites.add(persist); _syncChip('syncing'); return; }
+  // Snapshot local — protección contra falla de Firebase
+  try { localStorage.setItem('_bk_snap', JSON.stringify({ ts: Date.now(), insumos })); } catch {}
   _syncChip('syncing');
   Promise.all([
     _fbWrite('insumos',       { items: insumos }),
@@ -2624,7 +2640,10 @@ function persist() {
     _fbWrite('produccion',        { stock: stockBarra, movs: produccionMovs }),
     _fbWrite('arca_pendientes',   { items: arcaPendientes }),
     _fbWrite('areas',             { locaciones: areaLocaciones, stock: areaStock, movs: areaMovs }),
-  ]).then(() => _syncChip('ok')).catch(() => {});
+  ]).then(() => {
+    _syncChip('ok');
+    try { localStorage.setItem('_bk_ok_ts', String(Date.now())); } catch {}
+  }).catch(() => {});
 }
 
 function hydrate() {
@@ -13653,6 +13672,7 @@ async function _fbLoad(retry = 0) {
       }
     });
     _migrarRecetasFlat();
+    _fbCheckRecovery();
     renderInsumos();
     renderProveedores();
     renderRecetas();
@@ -13709,6 +13729,42 @@ async function _borrarTodo() {
   renderInsumos(); renderProveedores(); renderRecetas(); initContableView(); _actualizarBannerVencimientos();
   toast('Todo borrado. Base limpia.', 'success');
   console.log('✓ Firebase data cleared');
+}
+
+/* ── RECOVERY LOCAL BACKUP ──────────────────────────────────────── */
+function _fbCheckRecovery() {
+  try {
+    const snap  = JSON.parse(localStorage.getItem('_bk_snap') || 'null');
+    const okTs  = Number(localStorage.getItem('_bk_ok_ts') || 0);
+    if (!snap?.ts || !Array.isArray(snap.insumos) || !snap.insumos.length) return;
+    // Si el snapshot local es posterior al último write confirmado → hay riesgo de pérdida
+    if (snap.ts <= okTs + 5000) return;
+    // Solo mostrar si el snapshot es de las últimas 48hs
+    if (snap.ts < Date.now() - 48 * 60 * 60 * 1000) return;
+    const mins  = Math.round((Date.now() - snap.ts) / 60000);
+    const dif   = snap.insumos.length - insumos.length;
+    const label = mins < 60 ? `${mins} min` : `${Math.round(mins/60)}h`;
+    const banner = document.createElement('div');
+    banner.id = '_recBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#FEF3C7;border-bottom:2px solid #F59E0B;padding:10px 16px;display:flex;align-items:center;gap:12px;font:14px var(--font);flex-wrap:wrap';
+    banner.innerHTML = `
+      <span style="flex:1">⚠️ <strong>Respaldo local detectado</strong> — ${snap.insumos.length} insumos guardados hace ${label}${dif > 0 ? ` (${dif} más que Firebase)` : ' (mismo nro. — puede tener nombres editados)'}.</span>
+      <button onclick="_fbRestoreBackup()" style="padding:6px 14px;background:#D97706;color:#fff;border:none;border-radius:7px;cursor:pointer;font:600 13px var(--font)">Restaurar respaldo</button>
+      <button onclick="document.getElementById('_recBanner').remove()" style="padding:6px 12px;background:none;border:1px solid #D97706;border-radius:7px;cursor:pointer;font:13px var(--font)">Ignorar</button>`;
+    document.body.prepend(banner);
+  } catch {}
+}
+
+function _fbRestoreBackup() {
+  try {
+    const snap = JSON.parse(localStorage.getItem('_bk_snap') || 'null');
+    if (!snap?.insumos?.length) { toast('Respaldo vacío', 'error'); return; }
+    insumos = snap.insumos;
+    persist();
+    document.getElementById('_recBanner')?.remove();
+    toast(`${insumos.length} insumos restaurados desde respaldo local`, 'success');
+    renderInsumos();
+  } catch { toast('Error al restaurar', 'error'); }
 }
 
 /* ── BACKUP ─────────────────────────────────────────────────────── */
@@ -15118,6 +15174,7 @@ let _depCargaMode       = 'manual';
 let _depCargaSearch     = '';
 let _depPlanillaPreview = [];   // [{ nombre, cantidad, insumoId, insumoNombre, score, esNuevo }]
 let _depCargaOpen       = null;  // key del proveedor actualmente desplegado (uno solo a la vez)
+let _depCargaDestinos   = {};   // { [insumoId]: locacionId | '' } — '' = Depósito (default)
 
 // Usuario actual (placeholder hasta tener login multi-rol)
 function _depUsuario() {
@@ -15169,13 +15226,14 @@ function renderDeposito() {
   _depBadgeUpdate();
   const screen = document.getElementById('depositoScreen');
   if (!screen) return;
-  if (_depSubtab === 'stock') return _depRenderStock(screen);
+  if (_depSubtab === 'stock')     return _depRenderStock(screen);
+  if (_depSubtab === 'dep_ubic')  return _areaRender(screen, 'deposito');
   if (_depSubtab === 'pendientes') return _depRenderPendientes(screen);
-  if (_depSubtab === 'movs') return _depRenderMovs(screen);
-  if (_depSubtab === 'carga')   return _depRenderCarga(screen);
-  if (_depSubtab === 'fabrica') return _areaRender(screen, 'fabrica');
-  if (_depSubtab === 'cocina')  return _areaRender(screen, 'cocina');
-  if (_depSubtab === 'barra')   return _areaRender(screen, 'barra');
+  if (_depSubtab === 'movs')      return _depRenderMovs(screen);
+  if (_depSubtab === 'carga')     return _depRenderCarga(screen);
+  if (_depSubtab === 'fabrica')   return _areaRender(screen, 'fabrica');
+  if (_depSubtab === 'cocina')    return _areaRender(screen, 'cocina');
+  if (_depSubtab === 'barra')     return _areaRender(screen, 'barra');
 }
 
 function _depStockGrupos() {
@@ -15659,29 +15717,54 @@ function _depRenderCargaManual() {
   const gruposSorted = Object.values(grupos).sort((a, b) =>
     (a.prov?.nombre || 'z').localeCompare(b.prov?.nombre || 'z', 'es'));
 
+  // Opciones de destino: Depósito + todas las ubicaciones configuradas
+  const optsDestino = (() => {
+    const grupos = { fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
+    let html = '<option value="">📦 Depósito</option>';
+    ['fabrica','cocina','barra'].forEach(area => {
+      const locs = areaLocaciones.filter(l => l.area === area);
+      if (!locs.length) return;
+      html += `<optgroup label="${grupos[area]}">`;
+      locs.forEach(l => {
+        const t = _LOC_TIPOS?.[l.tipo]?.emoji || '📌';
+        html += `<option value="${l.id}">${t} ${l.nombre}</option>`;
+      });
+      html += '</optgroup>';
+    });
+    return html;
+  })();
+
   const stepper = (ins) => {
-    const qty = _depCargaItems[ins.id] || 0;
-    const pres = _depPresentacionLabel(ins);
-    return `<div style="display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0;margin-right:4px">
-        <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ins.nombre}</div>
-        ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
+    const qty     = _depCargaItems[ins.id] || 0;
+    const destino = _depCargaDestinos[ins.id] || '';
+    const pres    = _depPresentacionLabel(ins);
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ins.nombre}</div>
+          ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;flex-shrink:0">
+          <button onclick="_depCargaStep('${ins.id}',-1)"
+            style="width:34px;height:34px;border:1px solid var(--border);border-radius:7px 0 0 7px;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--ink2);display:flex;align-items:center;justify-content:center">−</button>
+          <input type="number" min="0" step="1" value="${qty}" data-carga-id="${ins.id}"
+            oninput="_depCargaItems['${ins.id}']=Math.max(0,parseInt(this.value)||0);_depCargaUpdateFooter()"
+            style="width:42px;height:34px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;text-align:center;font-family:var(--mono);font-size:14px;font-weight:700;background:var(--surface)">
+          <button onclick="_depCargaStep('${ins.id}',+1)"
+            style="width:34px;height:34px;border:1px solid var(--border);border-radius:0 7px 7px 0;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
+        </div>
+        <button onclick="_depCargaEditarInsumo('${ins.id}')" title="Editar"
+          style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
+          onmouseover="this.style.color='var(--info)'" onmouseout="this.style.color='var(--ink3)'">✏️</button>
+        <button onclick="_depCargaDarDeBaja('${ins.id}')" title="Dar de baja"
+          style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
+          onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink3)'">🗑</button>
       </div>
-      <div style="display:flex;align-items:center;flex-shrink:0">
-        <button onclick="_depCargaStep('${ins.id}',-1)"
-          style="width:34px;height:34px;border:1px solid var(--border);border-radius:7px 0 0 7px;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--ink2);display:flex;align-items:center;justify-content:center">−</button>
-        <input type="number" min="0" step="1" value="${qty}" data-carga-id="${ins.id}"
-          oninput="_depCargaItems['${ins.id}']=Math.max(0,parseInt(this.value)||0);_depCargaUpdateFooter()"
-          style="width:42px;height:34px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;text-align:center;font-family:var(--mono);font-size:14px;font-weight:700;background:var(--surface)">
-        <button onclick="_depCargaStep('${ins.id}',+1)"
-          style="width:34px;height:34px;border:1px solid var(--border);border-radius:0 7px 7px 0;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
-      </div>
-      <button onclick="_depCargaEditarInsumo('${ins.id}')" title="Editar"
-        style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
-        onmouseover="this.style.color='var(--info)'" onmouseout="this.style.color='var(--ink3)'">✏️</button>
-      <button onclick="_depCargaDarDeBaja('${ins.id}')" title="Dar de baja"
-        style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
-        onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink3)'">🗑</button>
+      <select data-destino-id="${ins.id}"
+        onchange="_depCargaDestinos['${ins.id}']=this.value"
+        style="margin-top:5px;width:100%;font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:${destino ? '#EDE9FE' : 'var(--surface2)'};color:${destino ? '#5B21B6' : 'var(--ink3)'};cursor:pointer">
+        ${optsDestino}
+      </select>
     </div>`;
   };
 
@@ -16029,6 +16112,7 @@ function _depNuevoInsumoInlineGuardar() {
   }
 
   _depCargaItems[insumoId] = 1;
+  _depCargaSearch = '';
   persist();
   closeModal('modalDepNuevoInsumo');
   toast(`"${nombre}" creado y agregado`, 'success');
@@ -16046,10 +16130,20 @@ function _depConfirmarCargaInicial() {
     Object.entries(_depCargaItems).forEach(([insumoId, cant]) => {
       cant = Number(cant);
       if (!isFinite(cant) || cant <= 0) return;
-      deposito[insumoId] = (deposito[insumoId] || 0) + cant;
-      depositoMovs.push({ id: crypto.randomUUID(), insumoId, tipo: 'ingreso', cantidad: cant,
-        estado: 'confirmado', fecha: nowIso, solicitadoPor: usuario, aprobadoPor: usuario,
-        motivo: 'Stock inicial', origen: { tipo: 'stock_inicial' } });
+      const locId = _depCargaDestinos[insumoId] || '';
+      if (locId) {
+        const s = _areaLocStock(locId);
+        s.insumos[insumoId] = Number(((s.insumos[insumoId] || 0) + cant).toFixed(3));
+        const loc = areaLocaciones.find(l => l.id === locId);
+        areaMovs.push({ id: crypto.randomUUID(), tipo: 'stock_inicial', locacionId: locId,
+          area: loc?.area, insumoId, cantidad: cant, fecha: nowIso,
+          solicitadoPor: usuario, motivo: 'Stock inicial', origen: { tipo: 'stock_inicial' } });
+      } else {
+        deposito[insumoId] = (deposito[insumoId] || 0) + cant;
+        depositoMovs.push({ id: crypto.randomUUID(), insumoId, tipo: 'ingreso', cantidad: cant,
+          estado: 'confirmado', fecha: nowIso, solicitadoPor: usuario, aprobadoPor: usuario,
+          motivo: 'Stock inicial', origen: { tipo: 'stock_inicial' } });
+      }
       total += cant;
     });
   } else {
@@ -16073,7 +16167,7 @@ function _depConfirmarCargaInicial() {
 
   if (!total) { toast('No hay cantidades para cargar', 'error'); return; }
 
-  _depCargaItems = {}; _depPlanillaPreview = []; _depCargaSearch = '';
+  _depCargaItems = {}; _depPlanillaPreview = []; _depCargaSearch = ''; _depCargaDestinos = {};
   _depSubtab = 'stock';
   persist();
   _depBadgeUpdate();
@@ -16096,9 +16190,10 @@ async function _depBorrarTodo() {
 /* ── ÁREAS: FÁBRICA / COCINA / BARRA ────────────────────────────── */
 
 const _AREA_CFG = {
-  fabrica: { label: 'Fábrica', emoji: '🏭', color: '#FFE4E6', ink: '#9F1239' },
-  cocina:  { label: 'Cocina',  emoji: '🍳', color: '#FEF3C7', ink: '#92400E' },
-  barra:   { label: 'Barra',   emoji: '🥤', color: '#DBEAFE', ink: '#1E40AF' },
+  deposito: { label: 'Depósito', emoji: '🏪', color: '#F0FDF4', ink: '#166534' },
+  fabrica:  { label: 'Fábrica',  emoji: '🏭', color: '#FFE4E6', ink: '#9F1239' },
+  cocina:   { label: 'Cocina',   emoji: '🍳', color: '#FEF3C7', ink: '#92400E' },
+  barra:    { label: 'Barra',    emoji: '🥤', color: '#DBEAFE', ink: '#1E40AF' },
 };
 
 const _LOC_TIPOS = {
@@ -16267,68 +16362,136 @@ function _areaAbrirLoc(locId) {
 
 /* ── TRANSFERIR INSUMO DESDE DEPÓSITO ───────────────────────────── */
 
+let _areaTrInsumosList = [];
+
 function _areaAbrirTransfInsumo(locId) {
   const loc = areaLocaciones.find(l => l.id === locId);
   if (!loc) return;
   _areaCtx = { locId, modo: 'insumo' };
 
-  const conStock = Object.entries(deposito)
+  _areaTrInsumosList = Object.entries(deposito)
     .filter(([, qty]) => qty > 0)
-    .sort(([a], [b]) => (insumos.find(i=>i.id===a)?.nombre||'').localeCompare(insumos.find(i=>i.id===b)?.nombre||'','es'));
+    .map(([insId, qty]) => ({ insId, qty, ins: insumos.find(i => i.id === insId) }))
+    .filter(r => r.ins)
+    .sort((a, b) => a.ins.nombre.localeCompare(b.ins.nombre, 'es'));
 
-  if (!conStock.length) { toast('El Depósito está vacío', 'error'); return; }
+  if (!_areaTrInsumosList.length) { toast('El Depósito está vacío', 'error'); return; }
 
   const cfg = _AREA_CFG[loc.area];
-  const sel = document.getElementById('areaTrInsumo');
-  sel.innerHTML = '<option value="">— Elegí un insumo —</option>' +
-    conStock.map(([insId, qty]) => {
-      const ins  = insumos.find(i => i.id === insId);
-      const pres = _depPresentacionLabel(ins);
-      return `<option value="${insId}">${ins?.nombre || insId} · ${qty} disp.${pres ? ' · '+pres : ''}</option>`;
-    }).join('');
-
   document.getElementById('areaTrLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
-  document.getElementById('areaTrCantidad').value  = '';
+  document.getElementById('areaTrBuscar').value = '';
+  document.getElementById('areaTrInsumoId').value = '';
+  document.getElementById('areaTrResultados').style.display = 'none';
+  document.getElementById('areaTrResultados').innerHTML = '';
+  document.getElementById('areaTrSeleccionado').style.display = 'none';
   document.getElementById('areaTrStock').textContent = '';
+  document.getElementById('areaTrCantField').style.display = 'none';
+  document.getElementById('areaTrCantidad').value = '';
   openModal('modalAreaTransfInsumo');
+  setTimeout(() => document.getElementById('areaTrBuscar').focus(), 100);
 }
 
-function _areaTrOnInsumoChange() {
-  const insId = document.getElementById('areaTrInsumo').value;
-  const qty   = deposito[insId] || 0;
-  const ins   = insumos.find(i => i.id === insId);
-  const pres  = _depPresentacionLabel(ins);
-  document.getElementById('areaTrStock').textContent = insId
-    ? `Disponible en Depósito: ${qty}${pres ? ' ' + pres : ''}`
-    : '';
-  document.getElementById('areaTrCantidad').value = '';
+function _areaTrFiltrar(q) {
+  const lista = document.getElementById('areaTrResultados');
+  q = (q || '').toLowerCase().trim();
+  const filtrados = q
+    ? _areaTrInsumosList.filter(r => r.ins.nombre.toLowerCase().includes(q))
+    : _areaTrInsumosList;
+  if (!filtrados.length) {
+    lista.innerHTML = '<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados</div>';
+    lista.style.display = 'block';
+    return;
+  }
+  lista.innerHTML = filtrados.slice(0, 20).map(r => {
+    const pres = _depPresentacionLabel(r.ins);
+    return `<div onclick="_areaTrSeleccionar('${r.insId}')"
+      style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <strong>${r.ins.nombre}</strong>
+      <span style="color:var(--ink3);margin-left:8px">${r.qty} disp.${pres ? ' · ' + pres : ''}</span>
+    </div>`;
+  }).join('');
+  lista.style.display = 'block';
+}
+
+function _areaTrSeleccionar(insId) {
+  const r = _areaTrInsumosList.find(x => x.insId === insId);
+  if (!r) return;
+  document.getElementById('areaTrInsumoId').value = insId;
+  document.getElementById('areaTrBuscar').value   = r.ins.nombre;
+  document.getElementById('areaTrResultados').style.display = 'none';
+
+  const pres = _depPresentacionLabel(r.ins);
+  document.getElementById('areaTrSeleccionado').textContent = `✓ ${r.ins.nombre}`;
+  document.getElementById('areaTrSeleccionado').style.display = 'block';
+  document.getElementById('areaTrStock').textContent = `Disponible: ${r.qty}${pres ? ' ' + pres : ' ud.'}`;
+  document.getElementById('areaTrCantidad').value   = '';
+  document.getElementById('areaTrConversion').textContent = '';
+
+  const uWrap = document.getElementById('areaTrUnidadWrap');
+  const uSel  = document.getElementById('areaTrUnidad');
+  uSel.innerHTML = '<option value="pres">presentaciones</option>';
+  if (r.ins.presQty && r.ins.presUnit) {
+    const opt = document.createElement('option');
+    opt.value = r.ins.presUnit;
+    opt.textContent = r.ins.presUnit;
+    uSel.appendChild(opt);
+    uWrap.style.display = 'block';
+  } else {
+    uWrap.style.display = 'none';
+  }
+  document.getElementById('areaTrCantField').style.display = 'block';
+  document.getElementById('areaTrCantidad').focus();
+}
+
+function _areaTrOnUnidadChange() {
+  const insId = document.getElementById('areaTrInsumoId').value;
+  const r = _areaTrInsumosList.find(x => x.insId === insId);
+  if (!r) return;
+  const unidad = document.getElementById('areaTrUnidad').value;
+  const cant   = parseFloat(document.getElementById('areaTrCantidad').value);
+  if (unidad === 'pres' || !isFinite(cant) || !r.ins.presQty) {
+    document.getElementById('areaTrConversion').textContent = '';
+    return;
+  }
+  const pres = cant / r.ins.presQty;
+  document.getElementById('areaTrConversion').textContent = `= ${pres.toFixed(4)} presentaciones`;
 }
 
 function _areaConfirmarTransfInsumo() {
   if (!_areaCtx?.locId) return;
-  const insId = document.getElementById('areaTrInsumo').value;
-  const cant  = parseFloat(document.getElementById('areaTrCantidad').value);
+  const insId = document.getElementById('areaTrInsumoId').value;
   if (!insId) { toast('Elegí un insumo', 'error'); return; }
-  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
-  if ((deposito[insId] || 0) < cant) { toast('Stock insuficiente en Depósito', 'error'); return; }
-
-  const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
-  deposito[insId] = Number(((deposito[insId] || 0) - cant).toFixed(3));
-  if (deposito[insId] <= 0) delete deposito[insId];
-
-  const s = _areaLocStock(_areaCtx.locId);
-  s.insumos[insId] = Number(((s.insumos[insId] || 0) + cant).toFixed(3));
+  const unidad  = document.getElementById('areaTrUnidad')?.value || 'pres';
+  const cantRaw = parseFloat(document.getElementById('areaTrCantidad').value);
+  if (!isFinite(cantRaw) || cantRaw <= 0) { toast('Cantidad inválida', 'error'); return; }
 
   const ins = insumos.find(i => i.id === insId);
+  let cantPres = cantRaw;
+  if (unidad !== 'pres' && ins?.presQty) {
+    cantPres = Number((cantRaw / ins.presQty).toFixed(6));
+  }
+
+  if ((deposito[insId] || 0) < cantPres - 0.0001) { toast('Stock insuficiente en Depósito', 'error'); return; }
+
+  const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
+  deposito[insId] = Number(((deposito[insId] || 0) - cantPres).toFixed(6));
+  if (deposito[insId] <= 0.0001) delete deposito[insId];
+
+  const s = _areaLocStock(_areaCtx.locId);
+  s.insumos[insId] = Number(((s.insumos[insId] || 0) + cantPres).toFixed(6));
+
+  const label = unidad === 'pres' ? `${cantPres} pres.` : `${cantRaw}${unidad}`;
   areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in', locacionId: _areaCtx.locId,
-    area: loc?.area, insumoId: insId, cantidad: cant, fecha: new Date().toISOString(),
-    solicitadoPor: _depUsuario(), motivo: `Depósito → ${loc?.nombre}`, origen: { tipo: 'deposito' } });
+    area: loc?.area, insumoId: insId, cantidad: cantPres, cantidadOriginal: cantRaw, unidadOriginal: unidad,
+    fecha: new Date().toISOString(), solicitadoPor: _depUsuario(),
+    motivo: `Depósito → ${loc?.nombre}`, origen: { tipo: 'deposito' } });
 
   persist();
   closeModal('modalAreaTransfInsumo');
   const locId = _areaCtx.locId;
   _areaCtx = null;
-  toast(`${cant} ${ins?.nombre || ''} → ${loc?.nombre}`, 'success');
+  toast(`${label} de ${ins?.nombre || ''} → ${loc?.nombre}`, 'success');
   _areaAbrirLoc(locId);
 }
 
