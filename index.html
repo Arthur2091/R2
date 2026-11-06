@@ -15484,6 +15484,33 @@ function _depRenderCarga(screen) {
   else _depRenderCargaPlanilla();
 }
 
+function _depCargaProvColor(prov) {
+  const palette = {
+    'Lácteos':                { bg:'#DBEAFE', ink:'#1E40AF', emoji:'🥛' },
+    'Harinas y Cereales':     { bg:'#FEF3C7', ink:'#92400E', emoji:'🌾' },
+    'Huevos':                 { bg:'#FEF9C3', ink:'#854D0E', emoji:'🥚' },
+    'Carnes y Fiambres':      { bg:'#FFE4E6', ink:'#9F1239', emoji:'🥩' },
+    'Frutas y Verduras':      { bg:'#DCFCE7', ink:'#166534', emoji:'🥦' },
+    'Aceites y Condimentos':  { bg:'#FDE8D8', ink:'#7C2D12', emoji:'🫒' },
+    'Azúcares y Dulces':      { bg:'#FCE7F3', ink:'#831843', emoji:'🍯' },
+    'Chocolates y Coberturas':{ bg:'#F5E6D3', ink:'#6B2D0E', emoji:'🍫' },
+    'Café e Infusiones':      { bg:'#E8E0D8', ink:'#44322A', emoji:'☕' },
+    'Bebidas':                { bg:'#CFFAFE', ink:'#155E75', emoji:'🥤' },
+    'Panadería':              { bg:'#FFEDD5', ink:'#C2410C', emoji:'🍞' },
+    'Congelados':             { bg:'#E0F2FE', ink:'#075985', emoji:'🧊' },
+    'Limpieza':               { bg:'#CCFBF1', ink:'#0F5940', emoji:'🧹' },
+    'Descartables':           { bg:'#F1F5F9', ink:'#475569', emoji:'📦' },
+    'Otros':                  { bg:'#EDE9FE', ink:'#5B21B6', emoji:'📋' },
+  };
+  const counts = {};
+  (prov?.items || []).forEach(it => {
+    const cat = insumos.find(i => i.id === it.insumoId)?.categoria || 'Otros';
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const dominant = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Otros';
+  return palette[dominant] || palette['Otros'];
+}
+
 function _depCargaToggleProv(key) {
   if (_depCargaCollapsed.has(key)) _depCargaCollapsed.delete(key);
   else _depCargaCollapsed.add(key);
@@ -15560,17 +15587,21 @@ function _depRenderCargaManual() {
     const key = prov?.id || '__sin_prov__';
     const collapsed = _depCargaCollapsed.has(key);
     const conCarga  = items.filter(i => (_depCargaItems[i.id] || 0) > 0).length;
-    const badge = conCarga ? `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:6px">${conCarga}</span>` : '';
-    return `<div style="margin-bottom:4px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    const color = _depCargaProvColor(prov);
+    const badge = conCarga
+      ? `<span style="background:${color.ink};color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:6px">${conCarga}</span>`
+      : '';
+    return `<div style="margin-bottom:6px;border:1px solid ${color.bg};border-radius:var(--radius);overflow:hidden">
       <button onclick="_depCargaToggleProv('${key}')"
-        style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border:none;cursor:pointer;text-align:left;gap:8px">
-        <div style="display:flex;align-items:center;min-width:0">
-          <span style="font-size:12px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prov?.nombre || 'Sin proveedor'}</span>
+        style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:${color.bg};border:none;cursor:pointer;text-align:left;gap:8px">
+        <div style="display:flex;align-items:center;min-width:0;gap:6px">
+          <span style="font-size:16px;line-height:1">${color.emoji}</span>
+          <span style="font-size:13px;font-weight:700;color:${color.ink};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prov?.nombre || 'Sin proveedor'}</span>
           ${badge}
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <span style="font-size:11px;color:var(--ink3)">${items.length} insumo${items.length === 1 ? '' : 's'}</span>
-          <span style="font-size:12px;color:var(--ink3);transition:transform .2s;display:inline-block;transform:rotate(${collapsed ? '0' : '180'}deg)">▾</span>
+          <span style="font-size:11px;color:${color.ink};opacity:0.7">${items.length} insumo${items.length === 1 ? '' : 's'}</span>
+          <span style="font-size:13px;color:${color.ink};display:inline-block;transform:rotate(${collapsed ? '0' : '180'}deg)">▾</span>
         </div>
       </button>
       ${collapsed ? '' : `<div style="padding:0 14px">${items.map(stepper).join('')}</div>`}
