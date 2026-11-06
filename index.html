@@ -16737,7 +16737,7 @@ function _areaSacarInsumo(locId, insId) {
   const dSel  = document.getElementById('areaSacarDestino');
   if (loc?.area === 'deposito') {
     const areaLabels = { fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
-    let opts = '<option value="">🗑 Consumir / Merma</option>';
+    let opts = '<option value="">— Elegí un destino —</option>';
     ['fabrica','cocina','barra'].forEach(area => {
       const locs = areaLocaciones.filter(l => l.area === area);
       if (!locs.length) return;
@@ -16818,6 +16818,7 @@ function _areaConfirmarSacar() {
     const ins       = insumos.find(i => i.id === insId);
     const unidad    = document.getElementById('areaSacarUnidad')?.value || 'pres';
     const destLocId = document.getElementById('areaSacarDestino')?.value || '';
+    if (area === 'deposito' && !destLocId) { toast('Elegí un destino', 'error'); return; }
     let cant = cantRaw;
     if (unidad !== 'pres' && ins?.presQty) cant = Number((cantRaw / ins.presQty).toFixed(6));
     const actual = s.insumos[insId] || 0;
