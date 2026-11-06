@@ -15520,30 +15520,26 @@ function _depRenderCargaManual() {
   const stepper = (ins) => {
     const qty = _depCargaItems[ins.id] || 0;
     const pres = _depPresentacionLabel(ins);
-    return `<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:0">
+    return `<div style="display:flex;align-items:center;gap:6px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0;margin-right:4px">
         <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ins.nombre}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
       </div>
       <div style="display:flex;align-items:center;flex-shrink:0">
         <button onclick="_depCargaStep('${ins.id}',-1)"
-          style="width:38px;height:38px;border:1px solid var(--border);border-radius:8px 0 0 8px;background:var(--surface2);font-size:20px;cursor:pointer;color:var(--ink2);display:flex;align-items:center;justify-content:center">−</button>
+          style="width:34px;height:34px;border:1px solid var(--border);border-radius:7px 0 0 7px;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--ink2);display:flex;align-items:center;justify-content:center">−</button>
         <input type="number" min="0" step="1" value="${qty}" data-carga-id="${ins.id}"
           oninput="_depCargaItems['${ins.id}']=Math.max(0,parseInt(this.value)||0);_depCargaUpdateFooter()"
-          style="width:50px;height:38px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;text-align:center;font-family:var(--mono);font-size:15px;font-weight:700;background:var(--surface)">
+          style="width:42px;height:34px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);border-left:none;border-right:none;text-align:center;font-family:var(--mono);font-size:14px;font-weight:700;background:var(--surface)">
         <button onclick="_depCargaStep('${ins.id}',+1)"
-          style="width:38px;height:38px;border:1px solid var(--border);border-radius:0 8px 8px 0;background:var(--surface2);font-size:20px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
+          style="width:34px;height:34px;border:1px solid var(--border);border-radius:0 7px 7px 0;background:var(--surface2);font-size:18px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
       </div>
-      <button onclick="_depCargaEditarInsumo('${ins.id}')"
-        title="Editar"
-        style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--ink3);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s"
-        onmouseover="this.style.color='var(--info)';this.style.borderColor='var(--info)'"
-        onmouseout="this.style.color='var(--ink3)';this.style.borderColor='var(--border)'">✏️</button>
-      <button onclick="_depCargaDarDeBaja('${ins.id}')"
-        title="Dar de baja"
-        style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--ink3);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s"
-        onmouseover="this.style.color='var(--danger)';this.style.borderColor='var(--danger)'"
-        onmouseout="this.style.color='var(--ink3)';this.style.borderColor='var(--border)'">🗑</button>
+      <button onclick="_depCargaEditarInsumo('${ins.id}')" title="Editar"
+        style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
+        onmouseover="this.style.color='var(--info)'" onmouseout="this.style.color='var(--ink3)'">✏️</button>
+      <button onclick="_depCargaDarDeBaja('${ins.id}')" title="Dar de baja"
+        style="width:30px;height:34px;border:none;background:none;cursor:pointer;font-size:14px;color:var(--ink3);display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0;transition:color .15s"
+        onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink3)'">🗑</button>
     </div>`;
   };
 
