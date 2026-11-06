@@ -1727,6 +1727,39 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
   <div id="depositoScreen"></div>
 </div>
 
+<!-- MODAL: Editar insumo desde carga inicial -->
+<div id="modalDepEditarInsumo" class="overlay">
+  <div class="modal" style="max-width:440px">
+    <h2>Editar insumo</h2>
+    <input type="hidden" id="depEiId">
+    <div class="field">
+      <label>Nombre *</label>
+      <input id="depEiNombre" type="text" style="width:100%">
+    </div>
+    <div class="field">
+      <label>Proveedor <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <select id="depEiProveedor" style="width:100%"></select>
+    </div>
+    <div class="field">
+      <label>Presentación <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <div style="display:flex;gap:8px">
+        <input id="depEiPresQty" type="number" min="0.001" step="any" placeholder="25" style="flex:1">
+        <select id="depEiPresUnit" style="flex:1">
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="L">L</option>
+          <option value="ml">ml</option>
+          <option value="u">u</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalDepEditarInsumo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_depCargaEditarInsumoGuardar()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Nuevo insumo desde carga inicial -->
 <div id="modalDepNuevoInsumo" class="overlay">
   <div class="modal" style="max-width:440px">
@@ -15501,6 +15534,11 @@ function _depRenderCargaManual() {
         <button onclick="_depCargaStep('${ins.id}',+1)"
           style="width:38px;height:38px;border:1px solid var(--border);border-radius:0 8px 8px 0;background:var(--surface2);font-size:20px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
       </div>
+      <button onclick="_depCargaEditarInsumo('${ins.id}')"
+        title="Editar"
+        style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--ink3);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s"
+        onmouseover="this.style.color='var(--info)';this.style.borderColor='var(--info)'"
+        onmouseout="this.style.color='var(--ink3)';this.style.borderColor='var(--border)'">✏️</button>
       <button onclick="_depCargaDarDeBaja('${ins.id}')"
         title="Dar de baja"
         style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--ink3);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s"
@@ -15526,6 +15564,69 @@ function _depRenderCargaManual() {
       ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
          <p>${q ? `No hay coincidencias para "${_depCargaSearch}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
       : rows}`;
+}
+
+function _depCargaEditarInsumo(insumoId) {
+  const ins = insumos.find(i => i.id === insumoId);
+  if (!ins) return;
+  document.getElementById('depEiId').value      = insumoId;
+  document.getElementById('depEiNombre').value  = ins.nombre;
+  document.getElementById('depEiPresQty').value = ins.presQty || '';
+  document.getElementById('depEiPresUnit').value = ins.presUnit || 'kg';
+  const sel = document.getElementById('depEiProveedor');
+  sel.innerHTML = '<option value="">— Sin asignar —</option>';
+  [...proveedores].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.id; o.textContent = p.nombre;
+    sel.appendChild(o);
+  });
+  const provActual = proveedores.find(p => (p.items || []).some(it => it.insumoId === insumoId));
+  sel.value = provActual?.id || '';
+  openModal('modalDepEditarInsumo');
+}
+
+function _depCargaEditarInsumoGuardar() {
+  const insumoId = document.getElementById('depEiId').value;
+  const ins = insumos.find(i => i.id === insumoId);
+  if (!ins) return;
+  const nombre = document.getElementById('depEiNombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+  const conflicto = insumos.find(i => i.id !== insumoId && i.nombre.toLowerCase() === nombre.toLowerCase());
+  if (conflicto) { toast('Ya existe un insumo con ese nombre', 'error'); return; }
+
+  const provId   = document.getElementById('depEiProveedor').value;
+  const presQty  = parseFloat(document.getElementById('depEiPresQty').value) || null;
+  const presUnit = document.getElementById('depEiPresUnit').value || 'kg';
+
+  ins.nombre  = nombre;
+  ins.presQty = presQty;
+  ins.presUnit = presQty ? presUnit : ins.presUnit;
+  ins.unidad  = presUnit;
+
+  // Actualizar nombre en boleta del proveedor actual
+  proveedores.forEach(p => {
+    (p.items || []).forEach(it => { if (it.insumoId === insumoId) it.nombreBoleta = nombre; });
+  });
+
+  // Reasignar proveedor si cambió
+  const provActual = proveedores.find(p => (p.items || []).some(it => it.insumoId === insumoId));
+  if (provId && provActual?.id !== provId) {
+    // Desvincular del anterior
+    if (provActual) provActual.items = (provActual.items || []).filter(it => it.insumoId !== insumoId);
+    // Vincular al nuevo
+    const provNuevo = proveedores.find(p => p.id === provId);
+    if (provNuevo) {
+      if (!provNuevo.items) provNuevo.items = [];
+      provNuevo.items.push({ id: crypto.randomUUID(), nombreBoleta: nombre, insumoId, unidad: presUnit });
+    }
+  } else if (!provId && provActual) {
+    provActual.items = (provActual.items || []).filter(it => it.insumoId !== insumoId);
+  }
+
+  persist();
+  closeModal('modalDepEditarInsumo');
+  toast('Insumo actualizado', 'success');
+  _depRenderCargaManual();
 }
 
 function _depCargaDarDeBaja(insumoId) {
