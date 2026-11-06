@@ -15012,6 +15012,7 @@ let _depCargaItems      = {};   // { [insumoId]: cantidad } — estado transitor
 let _depCargaMode       = 'manual';
 let _depCargaSearch     = '';
 let _depPlanillaPreview = [];   // [{ nombre, cantidad, insumoId, insumoNombre, score, esNuevo }]
+let _depCargaCollapsed  = new Set();  // keys de proveedores colapsados
 
 // Usuario actual (placeholder hasta tener login multi-rol)
 function _depUsuario() {
@@ -15482,6 +15483,12 @@ function _depRenderCarga(screen) {
   else _depRenderCargaPlanilla();
 }
 
+function _depCargaToggleProv(key) {
+  if (_depCargaCollapsed.has(key)) _depCargaCollapsed.delete(key);
+  else _depCargaCollapsed.add(key);
+  _depRenderCargaManual();
+}
+
 function _depCargaUpdateFooter() {
   if (_depCargaMode !== 'manual') return;
   const totalItems = Object.keys(_depCargaItems).filter(k => (_depCargaItems[k] || 0) > 0).length;
@@ -15543,11 +15550,26 @@ function _depRenderCargaManual() {
     </div>`;
   };
 
-  const rows = gruposSorted.map(({ prov, items }) =>
-    `<div style="margin-bottom:4px">
-      <div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:0.06em;padding:8px 0 4px">${prov?.nombre || 'Sin proveedor'}</div>
-      ${items.map(stepper).join('')}
-    </div>`).join('');
+  const rows = gruposSorted.map(({ prov, items }) => {
+    const key = prov?.id || '__sin_prov__';
+    const collapsed = _depCargaCollapsed.has(key);
+    const conCarga  = items.filter(i => (_depCargaItems[i.id] || 0) > 0).length;
+    const badge = conCarga ? `<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;margin-left:6px">${conCarga}</span>` : '';
+    return `<div style="margin-bottom:4px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <button onclick="_depCargaToggleProv('${key}')"
+        style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border:none;cursor:pointer;text-align:left;gap:8px">
+        <div style="display:flex;align-items:center;min-width:0">
+          <span style="font-size:12px;font-weight:700;color:var(--ink);text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${prov?.nombre || 'Sin proveedor'}</span>
+          ${badge}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <span style="font-size:11px;color:var(--ink3)">${items.length} insumo${items.length === 1 ? '' : 's'}</span>
+          <span style="font-size:12px;color:var(--ink3);transition:transform .2s;display:inline-block;transform:rotate(${collapsed ? '0' : '180'}deg)">▾</span>
+        </div>
+      </button>
+      ${collapsed ? '' : `<div style="padding:0 14px">${items.map(stepper).join('')}</div>`}
+    </div>`;
+  }).join('');
 
   content.innerHTML = `
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
