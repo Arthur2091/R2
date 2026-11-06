@@ -1719,7 +1719,6 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
 <div id="viewDeposito" class="view">
   <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;align-items:center">
     <button class="dep-subtab dep-subtab-active" data-dep-sub="stock" onclick="_depSwitchSub('stock')">Depósito</button>
-    <button class="dep-subtab" data-dep-sub="dep_ubic" onclick="_depSwitchSub('dep_ubic')">🏪 Ubic.</button>
     <button class="dep-subtab" data-dep-sub="fabrica" onclick="_depSwitchSub('fabrica')">🏭 Fábrica</button>
     <button class="dep-subtab" data-dep-sub="cocina" onclick="_depSwitchSub('cocina')">🍳 Cocina</button>
     <button class="dep-subtab" data-dep-sub="barra" onclick="_depSwitchSub('barra')">🥤 Barra</button>
@@ -15226,8 +15225,7 @@ function renderDeposito() {
   _depBadgeUpdate();
   const screen = document.getElementById('depositoScreen');
   if (!screen) return;
-  if (_depSubtab === 'stock')     return _depRenderStock(screen);
-  if (_depSubtab === 'dep_ubic')  return _areaRender(screen, 'deposito');
+  if (_depSubtab === 'stock')      return _depRenderStock(screen);
   if (_depSubtab === 'pendientes') return _depRenderPendientes(screen);
   if (_depSubtab === 'movs')      return _depRenderMovs(screen);
   if (_depSubtab === 'carga')     return _depRenderCarga(screen);
@@ -15258,37 +15256,68 @@ function _depStockGrupos() {
 }
 
 function _depRenderStock(screen) {
-  const entradas = Object.entries(deposito).filter(([_, qty]) => qty > 0);
-  if (!entradas.length) {
-    screen.innerHTML = `<div class="empty-state"><h3>Depósito vacío</h3><p>Cuando marques un pedido como recibido vas a poder dar de alta la mercadería acá.</p></div>`;
+  const depLocs = areaLocaciones.filter(l => l.area === 'deposito');
+  const sinUbicar = Object.entries(deposito).filter(([, q]) => q > 0);
+  const totalLocs = depLocs.reduce((s, l) => {
+    const ins = _areaLocStock(l.id).insumos;
+    return s + Object.entries(ins).filter(([,q]) => q > 0).length;
+  }, 0);
+
+  if (!sinUbicar.length && !depLocs.length) {
+    screen.innerHTML = `
+      <div class="empty-state">
+        <h3>Depósito vacío</h3>
+        <p>Primero creá ubicaciones (heladeras, estantes…) y luego cargá el stock.</p>
+        <button class="btn btn-primary" onclick="_areaAbrirNuevaLoc('deposito')">+ Agregar ubicación</button>
+      </div>`;
     return;
   }
 
-  const grupos = _depStockGrupos().filter(g => g.prov);
-  const bajosTotal = entradas.filter(([_, qty]) => qty <= 1).length;
+  const cards = [];
 
-  const alertaHtml = bajosTotal
-    ? `<div style="background:#FEF3C7;border:1px solid #FBBF24;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:13px;font-weight:600;color:#92400E;display:flex;align-items:center;gap:8px">
-        <span>⚠</span><span>${bajosTotal} insumo${bajosTotal === 1 ? '' : 's'} con stock en 1</span>
-       </div>`
-    : '';
-
-  screen.innerHTML = alertaHtml +
-    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">` +
-    grupos.map(({ prov, items }) => {
-      const bajos = items.filter(([_, qty]) => qty <= 1).length;
-      const nombre = prov?.nombre || 'Sin proveedor';
-      return `<button onclick="_depAbrirStockProv('${prov?.id || '__sin_prov__'}')"
-        style="background:var(--surface);border:1px solid ${bajos ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s;width:100%"
-        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
-        <div style="font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nombre}</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-          <div style="font-size:22px;font-weight:700;color:var(--accent);font-family:var(--mono)">${items.length}</div>
+  // Sin ubicar — stock viejo sin asignar a ubicación
+  if (sinUbicar.length) {
+    const bajos = sinUbicar.filter(([,q]) => q <= 1).length;
+    cards.push(`
+      <button onclick="_depAbrirSinUbicar()"
+        style="background:var(--surface);border:1px solid ${bajos ? '#FBBF24' : 'var(--border)'};border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;width:100%;box-shadow:0 1px 3px rgba(0,0,0,.06)"
+        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
+        <div style="font-size:20px;margin-bottom:6px">📋</div>
+        <div style="font-weight:700;font-size:14px;color:var(--ink)">Sin ubicar</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:10px">
+          <div style="font-size:26px;font-weight:700;color:var(--ink2);font-family:var(--mono)">${sinUbicar.length}</div>
           <div style="font-size:11px;color:var(--ink3)">insumos</div>
         </div>
         ${bajos ? `<div style="margin-top:8px;font-size:11px;font-weight:700;color:#92400E;background:#FEF3C7;border-radius:6px;padding:3px 8px;display:inline-block">⚠ ${bajos} en 1</div>` : ''}
-      </button>`;
-    }).join('') + `</div>`;
+      </button>`);
+  }
+
+  // Ubicaciones del depósito
+  depLocs.forEach(loc => {
+    const tipoInfo = _LOC_TIPOS[loc.tipo] || { emoji: '📦', label: 'Ubicación' };
+    const s   = _areaLocStock(loc.id);
+    const cnt = Object.entries(s.insumos).filter(([,q]) => q > 0).length;
+    cards.push(`
+      <button onclick="_areaAbrirLoc('${loc.id}')"
+        style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;width:100%;box-shadow:0 1px 3px rgba(0,0,0,.06)"
+        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,.06)'">
+        <div style="font-size:20px;margin-bottom:6px">${tipoInfo.emoji}</div>
+        <div style="font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loc.nombre}</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:10px">
+          <div style="font-size:26px;font-weight:700;color:var(--accent);font-family:var(--mono)">${cnt}</div>
+          <div style="font-size:11px;color:var(--ink3)">insumos</div>
+        </div>
+      </button>`);
+  });
+
+  screen.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:13px;color:var(--ink2)">${sinUbicar.length + totalLocs} insumos en total</div>
+      <button class="btn btn-outline btn-sm" onclick="_areaAbrirNuevaLoc('deposito')">+ Ubicación</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px">
+      ${cards.join('')}
+    </div>`;
 }
 
 function _depAbrirStockProv(provId) {
@@ -15331,6 +15360,73 @@ function _depAbrirStockProv(provId) {
       </div>
     </div>`);
   _makeDraggable(document.getElementById('modalDepStockProv'));
+}
+
+function _depAbrirSinUbicar() {
+  const entradas = Object.entries(deposito)
+    .filter(([, q]) => q > 0)
+    .sort(([a], [b]) => (insumos.find(i=>i.id===a)?.nombre||'').localeCompare(insumos.find(i=>i.id===b)?.nombre||'','es'));
+  if (!entradas.length) return;
+
+  const depLocs = areaLocaciones.filter(l => l.area === 'deposito');
+
+  const rows = entradas.map(([iid, qty]) => {
+    const ins = insumos.find(i => i.id === iid);
+    const n   = ins?.nombre || iid.slice(0,8);
+    const pres = _depPresentacionLabel(ins);
+    const bajo = qty <= 1;
+    const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(3);
+    const opts = depLocs.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+    return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:600;font-size:13px">${n}</div>
+        ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
+      </div>
+      <div style="font-size:18px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono)">${qtyD}</div>
+      ${depLocs.length ? `<select id="sinUbLoc_${iid}" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><option value="">→ Loc</option>${opts}</select>
+      <button class="btn btn-outline btn-sm" onclick="_depUbicarInsumo('${iid}')">Ubicar</button>` : ''}
+    </div>`;
+  }).join('');
+
+  const existing = document.getElementById('modalDepSinUbicar');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modalDepSinUbicar" class="overlay open" style="display:flex" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:560px;max-height:85vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <h2 style="margin:0">📋 Sin ubicar</h2>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalDepSinUbicar').remove()">✕</button>
+        </div>
+        <p class="modal-sub" style="margin-bottom:10px">${entradas.length} insumos · asignales una ubicación</p>
+        <div style="overflow-y:auto;flex:1">${rows}</div>
+        ${!depLocs.length ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);text-align:center">
+          <button class="btn btn-primary" onclick="document.getElementById('modalDepSinUbicar').remove();_areaAbrirNuevaLoc('deposito')">+ Crear primera ubicación</button>
+        </div>` : ''}
+      </div>
+    </div>`);
+  _makeDraggable(document.getElementById('modalDepSinUbicar'));
+}
+
+function _depUbicarInsumo(insId) {
+  const locId = document.getElementById(`sinUbLoc_${insId}`)?.value;
+  if (!locId) { toast('Elegí una ubicación', 'error'); return; }
+  const qty = deposito[insId] || 0;
+  if (qty <= 0) return;
+
+  const s = _areaLocStock(locId);
+  s.insumos[insId] = Number(((s.insumos[insId] || 0) + qty).toFixed(6));
+  delete deposito[insId];
+
+  const ins = insumos.find(i => i.id === insId);
+  const loc = areaLocaciones.find(l => l.id === locId);
+  areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in', locacionId: locId,
+    area: loc?.area, insumoId: insId, cantidad: qty, fecha: new Date().toISOString(),
+    solicitadoPor: _depUsuario(), motivo: 'Organización: Sin ubicar → ' + (loc?.nombre||''), origen: { tipo: 'deposito' } });
+
+  persist();
+  document.getElementById('modalDepSinUbicar')?.remove();
+  renderDeposito();
+  toast(`${ins?.nombre || ''} → ${loc?.nombre}`, 'success');
 }
 
 function _depRenderPendientes(screen) {
@@ -15717,14 +15813,14 @@ function _depRenderCargaManual() {
   const gruposSorted = Object.values(grupos).sort((a, b) =>
     (a.prov?.nombre || 'z').localeCompare(b.prov?.nombre || 'z', 'es'));
 
-  // Opciones de destino: Depósito + todas las ubicaciones configuradas
+  // Opciones de destino: Sin ubicar + ubicaciones del depósito + áreas externas
   const optsDestino = (() => {
-    const grupos = { fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
-    let html = '<option value="">📦 Depósito</option>';
-    ['fabrica','cocina','barra'].forEach(area => {
+    const areaLabels = { deposito: '🏪 Depósito', fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
+    let html = '<option value="">📋 Sin ubicar (Depósito)</option>';
+    ['deposito','fabrica','cocina','barra'].forEach(area => {
       const locs = areaLocaciones.filter(l => l.area === area);
       if (!locs.length) return;
-      html += `<optgroup label="${grupos[area]}">`;
+      html += `<optgroup label="${areaLabels[area]}">`;
       locs.forEach(l => {
         const t = _LOC_TIPOS?.[l.tipo]?.emoji || '📌';
         html += `<option value="${l.id}">${t} ${l.nombre}</option>`;
@@ -16289,7 +16385,7 @@ function _areaGuardarNuevaLoc() {
   persist();
   closeModal('modalAreaNuevaLoc');
   toast(`${nombre} agregada`, 'success');
-  _depSwitchSub(area);
+  _depSwitchSub(area === 'deposito' ? 'stock' : area);
 }
 
 /* ── DETALLE DE UBICACIÓN ────────────────────────────────────────── */
