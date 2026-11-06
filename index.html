@@ -16582,9 +16582,10 @@ function _areaTrSeleccionar(insId) {
 
   const uWrap = document.getElementById('areaTrUnidadWrap');
   const uSel  = document.getElementById('areaTrUnidad');
-  if (r.ins.presQty && r.ins.presUnit) {
-    uSel.innerHTML = `<option value="pres">pres. (1 = ${r.ins.presQty} ${r.ins.presUnit})</option>
-                      <option value="${r.ins.presUnit}">${r.ins.presUnit}</option>`;
+  if (r.ins.presQty) {
+    const pUnit = r.ins.presUnit || 'u';
+    uSel.innerHTML = `<option value="pres">completo (1 = ${r.ins.presQty} ${pUnit})</option>
+                      <option value="__unit__">por ${pUnit} (÷ ${r.ins.presQty})</option>`;
     uWrap.style.display = 'block';
   } else {
     uSel.innerHTML = '<option value="pres">presentaciones</option>';
@@ -16778,13 +16779,14 @@ function _areaSacarInsumo(locId, insId) {
 
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
-  if (ins?.presQty && ins?.presUnit) {
-    uSel.innerHTML = `<option value="pres">pres. (1 = ${ins.presQty} ${ins.presUnit})</option>
-                      <option value="${ins.presUnit}">${ins.presUnit}</option>`;
+  if (ins?.presQty) {
+    const pUnit = ins.presUnit || 'u';
+    uSel.innerHTML = `<option value="pres">completo (1 = ${ins.presQty} ${pUnit})</option>
+                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`;
     uWrap.style.display = 'block';
   } else {
     uSel.innerHTML = '<option value="pres">pres.</option>';
-    uWrap.style.display = ins?.presQty ? 'block' : 'none';
+    uWrap.style.display = 'none';
   }
   openModal('modalAreaSacar');
 }
