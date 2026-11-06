@@ -16389,7 +16389,10 @@ function _areaRender(screen, area) {
     <div style="max-width:720px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
         <div style="font-size:13px;color:var(--ink2)">${locs.length} ubicacion${locs.length===1?'':'es'}</div>
-        <button class="btn btn-outline btn-sm" onclick="_areaAbrirNuevaLoc('${area}')">+ Nueva ubicación</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="_areaAbrirProducirDesdeArea('${area}')">🏭 Producir</button>
+          <button class="btn btn-outline btn-sm" onclick="_areaAbrirNuevaLoc('${area}')">+ Nueva ubicación</button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
         ${cards}
@@ -16986,7 +16989,11 @@ function _prodStockPorIns(insId) {
   return result.sort((a, b) => b.qty - a.qty);
 }
 
-function _areaAbrirProducir(locId) {
+function _areaAbrirProducirDesdeArea(area) {
+  _areaAbrirProducir(null, area);
+}
+
+function _areaAbrirProducir(locId, _area) {
   document.getElementById('modalAreaLoc')?.remove();
 
   const recOpts = recetas.length
