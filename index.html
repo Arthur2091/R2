@@ -15012,7 +15012,7 @@ let _depCargaItems      = {};   // { [insumoId]: cantidad } — estado transitor
 let _depCargaMode       = 'manual';
 let _depCargaSearch     = '';
 let _depPlanillaPreview = [];   // [{ nombre, cantidad, insumoId, insumoNombre, score, esNuevo }]
-let _depCargaCollapsed  = null;  // null = no inicializado aún
+let _depCargaOpen       = null;  // key del proveedor actualmente desplegado (uno solo a la vez)
 
 // Usuario actual (placeholder hasta tener login multi-rol)
 function _depUsuario() {
@@ -15054,7 +15054,7 @@ function _depBadgeUpdate() {
 }
 
 function _depSwitchSub(sub) {
-  if (sub !== 'carga') _depCargaCollapsed = null;
+  if (sub !== 'carga') _depCargaOpen = null;
   _depSubtab = sub;
   document.querySelectorAll('.dep-subtab').forEach(b => b.classList.toggle('dep-subtab-active', b.dataset.depSub === sub));
   renderDeposito();
@@ -15512,8 +15512,7 @@ function _depCargaProvColor(prov) {
 }
 
 function _depCargaToggleProv(key) {
-  if (_depCargaCollapsed.has(key)) _depCargaCollapsed.delete(key);
-  else _depCargaCollapsed.add(key);
+  _depCargaOpen = _depCargaOpen === key ? null : key;
   _depRenderCargaManual();
 }
 
@@ -15578,14 +15577,9 @@ function _depRenderCargaManual() {
     </div>`;
   };
 
-  // Primera vez que se renderiza: colapsar todos los grupos
-  if (_depCargaCollapsed === null) {
-    _depCargaCollapsed = new Set(gruposSorted.map(({ prov }) => prov?.id || '__sin_prov__'));
-  }
-
   const rows = gruposSorted.map(({ prov, items }) => {
     const key = prov?.id || '__sin_prov__';
-    const collapsed = _depCargaCollapsed.has(key);
+    const collapsed = _depCargaOpen !== key;
     const conCarga  = items.filter(i => (_depCargaItems[i.id] || 0) > 0).length;
     const color = _depCargaProvColor(prov);
     const badge = conCarga
