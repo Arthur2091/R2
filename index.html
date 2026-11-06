@@ -15487,7 +15487,7 @@ function _depRenderCargaManual() {
   const stepper = (ins) => {
     const qty = _depCargaItems[ins.id] || 0;
     const pres = _depPresentacionLabel(ins);
-    return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
+    return `<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
       <div style="min-width:0">
         <div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ins.nombre}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
@@ -15501,6 +15501,11 @@ function _depRenderCargaManual() {
         <button onclick="_depCargaStep('${ins.id}',+1)"
           style="width:38px;height:38px;border:1px solid var(--border);border-radius:0 8px 8px 0;background:var(--surface2);font-size:20px;cursor:pointer;color:var(--accent);display:flex;align-items:center;justify-content:center">+</button>
       </div>
+      <button onclick="_depCargaDarDeBaja('${ins.id}')"
+        title="Dar de baja"
+        style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:none;cursor:pointer;color:var(--ink3);font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s,border-color .15s"
+        onmouseover="this.style.color='var(--danger)';this.style.borderColor='var(--danger)'"
+        onmouseout="this.style.color='var(--ink3)';this.style.borderColor='var(--border)'">🗑</button>
     </div>`;
   };
 
@@ -15521,6 +15526,20 @@ function _depRenderCargaManual() {
       ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
          <p>${q ? `No hay coincidencias para "${_depCargaSearch}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
       : rows}`;
+}
+
+function _depCargaDarDeBaja(insumoId) {
+  const ins = insumos.find(i => i.id === insumoId);
+  if (!ins) return;
+  if (!confirm(`¿Dar de baja "${ins.nombre}"?\n\nSe elimina del sistema. No se puede deshacer.`)) return;
+  insumos = insumos.filter(i => i.id !== insumoId);
+  proveedores.forEach(p => { p.items = (p.items || []).filter(it => it.insumoId !== insumoId); });
+  delete deposito[insumoId];
+  delete _depCargaItems[insumoId];
+  persist();
+  toast(`"${ins.nombre}" dado de baja`, 'success');
+  _depRenderCargaManual();
+  _depCargaUpdateFooter();
 }
 
 function _depCargaStep(insumoId, delta) {
