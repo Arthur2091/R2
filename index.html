@@ -16780,9 +16780,13 @@ function _areaSacarInsumo(locId, insId) {
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
   if (ins?.presQty) {
-    const pUnit = ins.presUnit || 'u';
+    const pUnit    = ins.presUnit || 'u';
+    const subUnits = { kg: { unit: 'g',  factor: 1000 }, l: { unit: 'ml', factor: 1000 },
+                       L:  { unit: 'ml', factor: 1000 }, KG: { unit: 'g',  factor: 1000 } };
+    const sub      = subUnits[pUnit];
     uSel.innerHTML = `<option value="pres">completo (1 = ${ins.presQty} ${pUnit})</option>
-                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`;
+                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`
+      + (sub ? `<option value="__sub__" data-factor="${sub.factor}">por ${sub.unit} (÷ ${ins.presQty * sub.factor})</option>` : '');
     uWrap.style.display = 'block';
   } else {
     uSel.innerHTML = '<option value="pres">pres.</option>';
@@ -16816,17 +16820,25 @@ function _areaSacarProducto(locId, nombreEnc) {
   openModal('modalAreaSacar');
 }
 
+function _areaSacarGetFactor() {
+  const sel    = document.getElementById('areaSacarUnidad');
+  const unidad = sel?.value || 'pres';
+  const factor = parseFloat(sel?.selectedOptions[0]?.dataset.factor) || 1;
+  return { unidad, factor };
+}
+
 function _areaSacarOnCantChange() {
   if (_areaCtx?.tipo !== 'insumo') return;
-  const ins    = insumos.find(i => i.id === _areaCtx?.insId);
-  const unidad = document.getElementById('areaSacarUnidad').value;
-  const cant   = parseFloat(document.getElementById('areaSacarCantidad').value);
+  const ins  = insumos.find(i => i.id === _areaCtx?.insId);
+  const cant = parseFloat(document.getElementById('areaSacarCantidad').value);
+  const { unidad, factor } = _areaSacarGetFactor();
   if (unidad === 'pres' || !isFinite(cant) || !ins?.presQty) {
     document.getElementById('areaSacarConversion').textContent = '';
     return;
   }
-  const pres = cant / ins.presQty;
-  document.getElementById('areaSacarConversion').textContent = `= ${pres.toFixed(4)} presentaciones`;
+  const divisor = unidad === '__sub__' ? ins.presQty * factor : ins.presQty;
+  const pres    = cant / divisor;
+  document.getElementById('areaSacarConversion').textContent = `= ${pres.toFixed(6)} pres.`;
 }
 
 function _areaConfirmarSacar() {
@@ -16844,11 +16856,14 @@ function _areaConfirmarSacar() {
   if (tipo === 'insumo') {
     const insId     = _areaCtx.insId;
     const ins       = insumos.find(i => i.id === insId);
-    const unidad    = document.getElementById('areaSacarUnidad')?.value || 'pres';
+    const { unidad, factor } = _areaSacarGetFactor();
     const destLocId = document.getElementById('areaSacarDestino')?.value || '';
     if (!destLocId) { toast('Elegí un destino', 'error'); return; }
     let cant = cantRaw;
-    if (unidad !== 'pres' && ins?.presQty) cant = Number((cantRaw / ins.presQty).toFixed(6));
+    if (unidad !== 'pres' && ins?.presQty) {
+      const divisor = unidad === '__sub__' ? ins.presQty * factor : ins.presQty;
+      cant = Number((cantRaw / divisor).toFixed(6));
+    }
     const actual = s.insumos[insId] || 0;
     if (cant > actual + 0.0001) { toast('Cantidad mayor al stock', 'error'); return; }
     s.insumos[insId] = Number((actual - cant).toFixed(6));
