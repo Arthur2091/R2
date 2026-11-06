@@ -15611,16 +15611,18 @@ function _depRenderCargaManual() {
   }).join('');
 
   content.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
-      <input id="depCargaSearch" type="search" placeholder="Buscar insumo…" value="${_depCargaSearch}"
-        oninput="_depCargaSearch=this.value;_depRenderCargaManual()"
-        style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;min-width:0">
-      <button class="btn btn-outline btn-sm" onclick="_depAbrirNuevoInsumoInline()" style="white-space:nowrap;flex-shrink:0">+ Nuevo insumo</button>
-    </div>
-    ${!gruposSorted.length
-      ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
-         <p>${q ? `No hay coincidencias para "${_depCargaSearch}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
-      : rows}`;
+    <div style="max-width:620px">
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+        <input id="depCargaSearch" type="search" placeholder="Buscar insumo…" value="${_depCargaSearch}"
+          oninput="_depCargaSearch=this.value;_depRenderCargaManual()"
+          style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;min-width:0">
+        <button class="btn btn-outline btn-sm" onclick="_depAbrirNuevoInsumoInline()" style="white-space:nowrap;flex-shrink:0">+ Nuevo insumo</button>
+      </div>
+      ${!gruposSorted.length
+        ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
+           <p>${q ? `No hay coincidencias para "${_depCargaSearch}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
+        : rows}
+    </div>`;
 }
 
 function _depCargaEditarInsumo(insumoId) {
