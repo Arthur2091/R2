@@ -16737,7 +16737,7 @@ function _areaSacarInsumo(locId, insId) {
   const dSel  = document.getElementById('areaSacarDestino');
   if (loc?.area === 'deposito') {
     const areaLabels = { fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
-    let opts = '<option value="">— Elegí un destino —</option>';
+    let opts = '<option value="">— Elegí un destino —</option><option value="__merma__">🗑 Merma</option>';
     ['fabrica','cocina','barra'].forEach(area => {
       const locs = areaLocaciones.filter(l => l.area === area);
       if (!locs.length) return;
@@ -16826,7 +16826,7 @@ function _areaConfirmarSacar() {
     s.insumos[insId] = Number((actual - cant).toFixed(6));
     if (s.insumos[insId] <= 0.0001) delete s.insumos[insId];
     const ts = new Date().toISOString();
-    if (destLocId) {
+    if (destLocId && destLocId !== '__merma__') {
       const destLoc = areaLocaciones.find(l => l.id === destLocId);
       const destS   = _areaLocStock(destLocId);
       destS.insumos[insId] = Number(((destS.insumos[insId] || 0) + cant).toFixed(6));
@@ -16840,9 +16840,9 @@ function _areaConfirmarSacar() {
         fecha: ts, solicitadoPor: _depUsuario(), motivo: moveMotivo,
         recetaId: recetaId || null, origen: { tipo: 'deposito', locacionId: locId } });
     } else {
-      areaMovs.push({ id: crypto.randomUUID(), tipo: 'consumo', locacionId: locId,
-        area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
-        fecha: ts, solicitadoPor: _depUsuario(), motivo,
+      areaMovs.push({ id: crypto.randomUUID(), tipo: destLocId === '__merma__' ? 'merma' : 'consumo',
+        locacionId: locId, area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
+        fecha: ts, solicitadoPor: _depUsuario(), motivo: motivo || (destLocId === '__merma__' ? 'Merma' : null),
         recetaId: recetaId || null, origen: { tipo: recetaId ? 'receta' : 'manual' } });
     }
   } else {
@@ -16861,7 +16861,7 @@ function _areaConfirmarSacar() {
   _areaCtx = null;
   persist();
   closeModal('modalAreaSacar');
-  toast(_destNombreFinal ? `Enviado → ${_destNombreFinal}` : 'Sacado', 'success');
+  toast(_destLocIdFinal === '__merma__' ? '🗑 Merma registrada' : _destNombreFinal ? `Enviado → ${_destNombreFinal}` : 'Sacado', 'success');
   _depSwitchSub(area === 'deposito' ? 'stock' : area);
 }
 
