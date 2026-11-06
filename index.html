@@ -16718,6 +16718,19 @@ function _areaSacarOnRecetaChange() {
   if (r) document.getElementById('areaSacarMotivo').value = `Receta: ${r.nombre}`;
 }
 
+function _areaSacarDestinoOpts(excluirLocId) {
+  const areaLabels = { deposito: '🏪 Depósito', fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
+  let opts = '<option value="">— Elegí un destino —</option><option value="__merma__">🗑 Merma</option>';
+  ['deposito','fabrica','cocina','barra'].forEach(area => {
+    const locs = areaLocaciones.filter(l => l.area === area && l.id !== excluirLocId);
+    if (!locs.length) return;
+    opts += `<optgroup label="${areaLabels[area]}">`;
+    locs.forEach(l => { opts += `<option value="${l.id}">${_LOC_TIPOS[l.tipo]?.emoji || '📌'} ${l.nombre}</option>`; });
+    opts += '</optgroup>';
+  });
+  return opts;
+}
+
 function _areaSacarInsumo(locId, insId) {
   document.getElementById('modalAreaLoc')?.remove();
   const loc  = areaLocaciones.find(l => l.id === locId);
@@ -16733,30 +16746,12 @@ function _areaSacarInsumo(locId, insId) {
   _areaSacarRellenarRecetas();
   document.getElementById('areaSacarReceta').value = '';
 
-  // Destino: solo si la fuente es Depósito
   const dWrap = document.getElementById('areaSacarDestinoWrap');
   const dSel  = document.getElementById('areaSacarDestino');
-  if (loc?.area === 'deposito') {
-    const areaLabels = { fabrica: '🏭 Fábrica', cocina: '🍳 Cocina', barra: '🥤 Barra' };
-    let opts = '<option value="">— Elegí un destino —</option><option value="__merma__">🗑 Merma</option>';
-    ['fabrica','cocina','barra'].forEach(area => {
-      const locs = areaLocaciones.filter(l => l.area === area);
-      if (!locs.length) return;
-      opts += `<optgroup label="${areaLabels[area]}">`;
-      locs.forEach(l => {
-        const t = _LOC_TIPOS[l.tipo]?.emoji || '📌';
-        opts += `<option value="${l.id}">${t} ${l.nombre}</option>`;
-      });
-      opts += '</optgroup>';
-    });
-    dSel.innerHTML = opts;
-    dSel.value = '';
-    dWrap.style.display = 'block';
-    document.getElementById('areaSacarBtn').textContent = 'Enviar';
-  } else {
-    dWrap.style.display = 'none';
-    document.getElementById('areaSacarBtn').textContent = 'Confirmar';
-  }
+  dSel.innerHTML = _areaSacarDestinoOpts(locId);
+  dSel.value = '';
+  dWrap.style.display = 'block';
+  document.getElementById('areaSacarBtn').textContent = 'Enviar';
 
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
@@ -16786,6 +16781,14 @@ function _areaSacarProducto(locId, nombreEnc) {
   document.getElementById('areaSacarUnidadWrap').style.display = 'none';
   _areaSacarRellenarRecetas();
   document.getElementById('areaSacarReceta').value = '';
+
+  const dWrap = document.getElementById('areaSacarDestinoWrap');
+  const dSel  = document.getElementById('areaSacarDestino');
+  dSel.innerHTML = _areaSacarDestinoOpts(locId);
+  dSel.value = '';
+  dWrap.style.display = 'block';
+  document.getElementById('areaSacarBtn').textContent = 'Enviar';
+
   openModal('modalAreaSacar');
 }
 
@@ -16819,7 +16822,7 @@ function _areaConfirmarSacar() {
     const ins       = insumos.find(i => i.id === insId);
     const unidad    = document.getElementById('areaSacarUnidad')?.value || 'pres';
     const destLocId = document.getElementById('areaSacarDestino')?.value || '';
-    if (area === 'deposito' && !destLocId) { toast('Elegí un destino', 'error'); return; }
+    if (!destLocId) { toast('Elegí un destino', 'error'); return; }
     let cant = cantRaw;
     if (unidad !== 'pres' && ins?.presQty) cant = Number((cantRaw / ins.presQty).toFixed(6));
     const actual = s.insumos[insId] || 0;
@@ -16827,11 +16830,11 @@ function _areaConfirmarSacar() {
     s.insumos[insId] = Number((actual - cant).toFixed(6));
     if (s.insumos[insId] <= 0.0001) delete s.insumos[insId];
     const ts = new Date().toISOString();
-    if (destLocId && destLocId !== '__merma__') {
+    if (destLocId !== '__merma__') {
       const destLoc = areaLocaciones.find(l => l.id === destLocId);
       const destS   = _areaLocStock(destLocId);
       destS.insumos[insId] = Number(((destS.insumos[insId] || 0) + cant).toFixed(6));
-      const moveMotivo = motivo || `Depósito → ${destLoc?.nombre}`;
+      const moveMotivo = motivo || `${loc?.nombre} → ${destLoc?.nombre}`;
       areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_out', locacionId: locId,
         area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
         fecha: ts, solicitadoPor: _depUsuario(), motivo: moveMotivo,
@@ -16839,30 +16842,48 @@ function _areaConfirmarSacar() {
       areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in', locacionId: destLocId,
         area: destLoc?.area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
         fecha: ts, solicitadoPor: _depUsuario(), motivo: moveMotivo,
-        recetaId: recetaId || null, origen: { tipo: 'deposito', locacionId: locId } });
+        recetaId: recetaId || null, origen: { locacionId: locId, area } });
     } else {
-      areaMovs.push({ id: crypto.randomUUID(), tipo: destLocId === '__merma__' ? 'merma' : 'consumo',
+      areaMovs.push({ id: crypto.randomUUID(), tipo: 'merma',
         locacionId: locId, area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
-        fecha: ts, solicitadoPor: _depUsuario(), motivo: motivo || (destLocId === '__merma__' ? 'Merma' : null),
-        recetaId: recetaId || null, origen: { tipo: recetaId ? 'receta' : 'manual' } });
+        fecha: ts, solicitadoPor: _depUsuario(), motivo: motivo || 'Merma',
+        recetaId: recetaId || null });
     }
   } else {
+    const destLocId = document.getElementById('areaSacarDestino')?.value || '';
+    if (!destLocId) { toast('Elegí un destino', 'error'); return; }
     const nombre = _areaCtx.nombre;
     const actual = s.productos[nombre] || 0;
     if (cantRaw > actual) { toast('Cantidad mayor al stock', 'error'); return; }
     s.productos[nombre] = Number((actual - cantRaw).toFixed(3));
     if (s.productos[nombre] <= 0) delete s.productos[nombre];
-    areaMovs.push({ id: crypto.randomUUID(), tipo: 'consumo_prod', locacionId: locId,
-      area, producto: nombre, cantidad: cantRaw,
-      fecha: new Date().toISOString(), solicitadoPor: _depUsuario(), motivo, origen: { tipo: 'manual' } });
+    const ts = new Date().toISOString();
+    if (destLocId !== '__merma__') {
+      const destLoc = areaLocaciones.find(l => l.id === destLocId);
+      const destS   = _areaLocStock(destLocId);
+      destS.productos[nombre] = Number(((destS.productos[nombre] || 0) + cantRaw).toFixed(3));
+      const moveMotivo = motivo || `${loc?.nombre} → ${destLoc?.nombre}`;
+      areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_out_prod', locacionId: locId,
+        area, producto: nombre, cantidad: cantRaw, fecha: ts,
+        solicitadoPor: _depUsuario(), motivo: moveMotivo, destLocId });
+      areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in_prod', locacionId: destLocId,
+        area: destLoc?.area, producto: nombre, cantidad: cantRaw, fecha: ts,
+        solicitadoPor: _depUsuario(), motivo: moveMotivo,
+        origen: { locacionId: locId, area } });
+    } else {
+      areaMovs.push({ id: crypto.randomUUID(), tipo: 'merma_prod', locacionId: locId,
+        area, producto: nombre, cantidad: cantRaw, fecha: ts,
+        solicitadoPor: _depUsuario(), motivo: motivo || 'Merma' });
+    }
   }
 
-  const _destLocIdFinal = tipo === 'insumo' ? (document.getElementById('areaSacarDestino')?.value || '') : '';
-  const _destNombreFinal = _destLocIdFinal ? (areaLocaciones.find(l => l.id === _destLocIdFinal)?.nombre || 'destino') : '';
+  const _destLocIdFinal = document.getElementById('areaSacarDestino')?.value || '';
+  const _destNombreFinal = _destLocIdFinal && _destLocIdFinal !== '__merma__'
+    ? (areaLocaciones.find(l => l.id === _destLocIdFinal)?.nombre || 'destino') : '';
   _areaCtx = null;
   persist();
   closeModal('modalAreaSacar');
-  toast(_destLocIdFinal === '__merma__' ? '🗑 Merma registrada' : _destNombreFinal ? `Enviado → ${_destNombreFinal}` : 'Sacado', 'success');
+  toast(_destLocIdFinal === '__merma__' ? '🗑 Merma registrada' : `Enviado → ${_destNombreFinal}`, 'success');
   _depSwitchSub(area === 'deposito' ? 'stock' : area);
 }
 
