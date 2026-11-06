@@ -16582,14 +16582,12 @@ function _areaTrSeleccionar(insId) {
 
   const uWrap = document.getElementById('areaTrUnidadWrap');
   const uSel  = document.getElementById('areaTrUnidad');
-  uSel.innerHTML = '<option value="pres">presentaciones</option>';
   if (r.ins.presQty && r.ins.presUnit) {
-    const opt = document.createElement('option');
-    opt.value = r.ins.presUnit;
-    opt.textContent = r.ins.presUnit;
-    uSel.appendChild(opt);
+    uSel.innerHTML = `<option value="pres">pres. (1 = ${r.ins.presQty} ${r.ins.presUnit})</option>
+                      <option value="${r.ins.presUnit}">${r.ins.presUnit}</option>`;
     uWrap.style.display = 'block';
   } else {
+    uSel.innerHTML = '<option value="pres">presentaciones</option>';
     uWrap.style.display = 'none';
   }
   document.getElementById('areaTrCantField').style.display = 'block';
@@ -16780,14 +16778,13 @@ function _areaSacarInsumo(locId, insId) {
 
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
-  uSel.innerHTML = '<option value="pres">pres.</option>';
   if (ins?.presQty && ins?.presUnit) {
-    const opt = document.createElement('option');
-    opt.value = ins.presUnit; opt.textContent = ins.presUnit;
-    uSel.appendChild(opt);
+    uSel.innerHTML = `<option value="pres">pres. (1 = ${ins.presQty} ${ins.presUnit})</option>
+                      <option value="${ins.presUnit}">${ins.presUnit}</option>`;
     uWrap.style.display = 'block';
   } else {
-    uWrap.style.display = 'none';
+    uSel.innerHTML = '<option value="pres">pres.</option>';
+    uWrap.style.display = ins?.presQty ? 'block' : 'none';
   }
   openModal('modalAreaSacar');
 }
@@ -17106,10 +17103,20 @@ function _areaProdRenderIngs() {
 
   if (!vinculados.length) {
     btn.style.display = 'none';
-    container.innerHTML = `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:14px 16px;color:#92400E">
-      <div style="font-weight:700;margin-bottom:4px">⚠️ Ingredientes sin vincular</div>
-      <div style="font-size:13px">Esta receta no tiene ingredientes vinculados a insumos del sistema. No se puede producir sin descontar stock.<br><br>
-      Ir a <b>Recetas → editar esta receta</b> y vincular cada ingrediente al insumo correspondiente.</div>
+    const sinVincRows = (rec.ingredientes || []).map((ing, ii) => {
+      if (ing.insumoId) return '';
+      return `<div style="padding:8px 0;border-bottom:1px solid #FDE68A">
+        <div style="font-size:13px;font-weight:600;color:#92400E;margin-bottom:4px">${ing.nombreOriginal || ing.nombre || '?'}</div>
+        <div style="display:flex;gap:6px">
+          <input placeholder="Buscar insumo…" oninput="_areaProdBuscarVinculo(this,'${rec.id}',${ii})"
+            style="flex:1;padding:5px 8px;border:1px solid #FCD34D;border-radius:6px;font-size:12px">
+        </div>
+        <div id="areaProdVincRes_${ii}" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px"></div>
+      </div>`;
+    }).join('');
+    container.innerHTML = `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:14px 16px">
+      <div style="font-weight:700;margin-bottom:8px;color:#92400E">⚠️ Vinculá los ingredientes al insumo</div>
+      ${sinVincRows}
     </div>`;
     return;
   }
@@ -17166,6 +17173,27 @@ function _areaProdRenderIngs() {
   }
 
   container.innerHTML = html;
+}
+
+function _areaProdBuscarVinculo(input, recId, ii) {
+  const q   = input.value.toLowerCase().trim();
+  const res = document.getElementById(`areaProdVincRes_${ii}`);
+  if (!res) return;
+  if (!q) { res.innerHTML = ''; return; }
+  const matches = insumos.filter(i => i.nombre.toLowerCase().includes(q)).slice(0, 6);
+  res.innerHTML = matches.map(ins =>
+    `<button onclick="_areaProdVincular('${recId}',${ii},'${ins.id}')"
+      style="font-size:11px;padding:3px 8px;border:1px solid #FCD34D;border-radius:5px;background:#FFF;cursor:pointer;color:#92400E">${ins.nombre}</button>`
+  ).join('') || '<span style="font-size:11px;color:#92400E">Sin resultados</span>';
+}
+
+function _areaProdVincular(recId, ii, insId) {
+  const rec = recetas.find(r => r.id === recId);
+  if (!rec || !rec.ingredientes[ii]) return;
+  rec.ingredientes[ii].insumoId = insId;
+  persistRecetas();
+  toast('Vinculado ✓ — revisá los demás ingredientes', 'success');
+  _areaProdRenderIngs();
 }
 
 function _areaProdIngChange(ii) {
