@@ -1836,7 +1836,13 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
       <div id="areaSacarConversion" style="font-size:11px;color:var(--ink3);margin-top:4px"></div>
     </div>
     <div class="field">
-      <label>Motivo <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <label>🍳 Receta <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <select id="areaSacarReceta" style="width:100%" onchange="_areaSacarOnRecetaChange()">
+        <option value="">— Sin receta —</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Motivo libre <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
       <input id="areaSacarMotivo" type="text" placeholder="ej. producción, merma, devolución" style="width:100%">
     </div>
     <div class="modal-actions">
@@ -16688,21 +16694,35 @@ function _areaConfirmarTransfProducto() {
 
 /* ── SACAR ───────────────────────────────────────────────────────── */
 
-function _areaSacarInsumo(locId, insId) {
-  // Cerrar el modal de ubicación ANTES para que el modal Sacar quede encima
-  document.getElementById('modalAreaLoc')?.remove();
-  const loc = areaLocaciones.find(l => l.id === locId);
-  const ins = insumos.find(i => i.id === insId);
-  const qty = _areaLocStock(locId).insumos[insId] || 0;
-  _areaCtx  = { locId, insId, tipo: 'insumo' };
-  const pres = _depPresentacionLabel(ins);
-  document.getElementById('areaSacarTitulo').textContent = `Sacar: ${ins?.nombre || '?'}`;
-  document.getElementById('areaSacarSub').textContent    = `Disponible en ${loc?.nombre || '?'}: ${qty}${pres ? ' ' + pres : ''}`;
-  document.getElementById('areaSacarCantidad').value     = '';
-  document.getElementById('areaSacarMotivo').value       = '';
-  document.getElementById('areaSacarConversion').textContent = '';
+function _areaSacarRellenarRecetas() {
+  const sel = document.getElementById('areaSacarReceta');
+  sel.innerHTML = '<option value="">— Sin receta —</option>' +
+    [...recetas].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+      .map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
+}
 
-  // Selector de unidad si el insumo tiene presentación con unidad base
+function _areaSacarOnRecetaChange() {
+  const recetaId = document.getElementById('areaSacarReceta').value;
+  if (!recetaId) return;
+  const r = recetas.find(x => x.id === recetaId);
+  if (r) document.getElementById('areaSacarMotivo').value = `Receta: ${r.nombre}`;
+}
+
+function _areaSacarInsumo(locId, insId) {
+  document.getElementById('modalAreaLoc')?.remove();
+  const loc  = areaLocaciones.find(l => l.id === locId);
+  const ins  = insumos.find(i => i.id === insId);
+  const qty  = _areaLocStock(locId).insumos[insId] || 0;
+  _areaCtx   = { locId, insId, tipo: 'insumo' };
+  const pres = _depPresentacionLabel(ins);
+  document.getElementById('areaSacarTitulo').textContent     = `Sacar: ${ins?.nombre || '?'}`;
+  document.getElementById('areaSacarSub').textContent        = `Disponible en ${loc?.nombre || '?'}: ${qty}${pres ? ' ' + pres : ''}`;
+  document.getElementById('areaSacarCantidad').value         = '';
+  document.getElementById('areaSacarMotivo').value           = '';
+  document.getElementById('areaSacarConversion').textContent = '';
+  _areaSacarRellenarRecetas();
+  document.getElementById('areaSacarReceta').value = '';
+
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
   uSel.innerHTML = '<option value="pres">pres.</option>';
@@ -16723,12 +16743,14 @@ function _areaSacarProducto(locId, nombreEnc) {
   const loc    = areaLocaciones.find(l => l.id === locId);
   const qty    = _areaLocStock(locId).productos[nombre] || 0;
   _areaCtx     = { locId, nombre, tipo: 'producto' };
-  document.getElementById('areaSacarTitulo').textContent = `Sacar: ${nombre}`;
-  document.getElementById('areaSacarSub').textContent    = `Disponible en ${loc?.nombre || '?'}: ${qty}`;
-  document.getElementById('areaSacarCantidad').value     = '';
-  document.getElementById('areaSacarMotivo').value       = '';
+  document.getElementById('areaSacarTitulo').textContent     = `Sacar: ${nombre}`;
+  document.getElementById('areaSacarSub').textContent        = `Disponible en ${loc?.nombre || '?'}: ${qty}`;
+  document.getElementById('areaSacarCantidad').value         = '';
+  document.getElementById('areaSacarMotivo').value           = '';
   document.getElementById('areaSacarConversion').textContent = '';
   document.getElementById('areaSacarUnidadWrap').style.display = 'none';
+  _areaSacarRellenarRecetas();
+  document.getElementById('areaSacarReceta').value = '';
   openModal('modalAreaSacar');
 }
 
@@ -16747,8 +16769,9 @@ function _areaSacarOnCantChange() {
 
 function _areaConfirmarSacar() {
   if (!_areaCtx?.locId) return;
-  const cantRaw = parseFloat(document.getElementById('areaSacarCantidad').value);
-  const motivo  = document.getElementById('areaSacarMotivo').value.trim() || null;
+  const cantRaw  = parseFloat(document.getElementById('areaSacarCantidad').value);
+  const motivo   = document.getElementById('areaSacarMotivo').value.trim() || null;
+  const recetaId = document.getElementById('areaSacarReceta')?.value || null;
   if (!isFinite(cantRaw) || cantRaw <= 0) { toast('Cantidad inválida', 'error'); return; }
 
   const { locId, tipo } = _areaCtx;
@@ -16768,7 +16791,8 @@ function _areaConfirmarSacar() {
     if (s.insumos[insId] <= 0.0001) delete s.insumos[insId];
     areaMovs.push({ id: crypto.randomUUID(), tipo: 'consumo', locacionId: locId,
       area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
-      fecha: new Date().toISOString(), solicitadoPor: _depUsuario(), motivo, origen: { tipo: 'manual' } });
+      fecha: new Date().toISOString(), solicitadoPor: _depUsuario(), motivo,
+      recetaId: recetaId || null, origen: { tipo: recetaId ? 'receta' : 'manual' } });
   } else {
     const nombre = _areaCtx.nombre;
     const actual = s.productos[nombre] || 0;
