@@ -1718,13 +1718,109 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
 <!-- VIEW: Depósito -->
 <div id="viewDeposito" class="view">
   <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap;align-items:center">
-    <button class="dep-subtab dep-subtab-active" data-dep-sub="stock" onclick="_depSwitchSub('stock')">Stock</button>
+    <button class="dep-subtab dep-subtab-active" data-dep-sub="stock" onclick="_depSwitchSub('stock')">Depósito</button>
+    <button class="dep-subtab" data-dep-sub="fabrica" onclick="_depSwitchSub('fabrica')">🏭 Fábrica</button>
+    <button class="dep-subtab" data-dep-sub="cocina" onclick="_depSwitchSub('cocina')">🍳 Cocina</button>
+    <button class="dep-subtab" data-dep-sub="barra" onclick="_depSwitchSub('barra')">🥤 Barra</button>
     <button class="dep-subtab" data-dep-sub="pendientes" onclick="_depSwitchSub('pendientes')">Pendientes <span id="depSubBadge" style="display:none;background:var(--danger);color:#fff;font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px"></span></button>
     <button class="dep-subtab" data-dep-sub="movs" onclick="_depSwitchSub('movs')">Movimientos</button>
     <button class="dep-subtab" data-dep-sub="carga" onclick="_depSwitchSub('carga')">Carga inicial</button>
     <button class="btn btn-outline btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="_depBorrarTodo()">Borrar todo</button>
   </div>
   <div id="depositoScreen"></div>
+</div>
+
+<!-- MODAL: Nueva ubicación de área -->
+<div id="modalAreaNuevaLoc" class="overlay">
+  <div class="modal" style="max-width:400px">
+    <h2>Nueva ubicación</h2>
+    <input type="hidden" id="areaNlArea">
+    <div class="field">
+      <label>Nombre *</label>
+      <input id="areaNlNombre" type="text" placeholder="ej. Heladera 1, Freezer Grande" style="width:100%">
+    </div>
+    <div class="field">
+      <label>Tipo</label>
+      <select id="areaNlTipo" style="width:100%">
+        <option value="heladera">🌡️ Heladera</option>
+        <option value="freezer">🧊 Freezer</option>
+        <option value="estante">📦 Estante</option>
+        <option value="alacena">🗄️ Alacena</option>
+        <option value="mesada">🔲 Mesada</option>
+        <option value="otro">📌 Otro</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalAreaNuevaLoc')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_areaGuardarNuevaLoc()">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Transferir insumo desde Depósito a ubicación -->
+<div id="modalAreaTransfInsumo" class="overlay">
+  <div class="modal" style="max-width:440px">
+    <h2>Transferir insumo</h2>
+    <p class="modal-sub" id="areaTrLocLabel"></p>
+    <div class="field">
+      <label>Insumo</label>
+      <select id="areaTrInsumo" style="width:100%" onchange="_areaTrOnInsumoChange()">
+        <option value="">— Elegí un insumo —</option>
+      </select>
+      <div id="areaTrStock" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
+    </div>
+    <div class="field">
+      <label>Cantidad de presentaciones</label>
+      <input id="areaTrCantidad" type="number" min="0.001" step="any" style="width:100%">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalAreaTransfInsumo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_areaConfirmarTransfInsumo()">Transferir</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Transferir producto terminado a ubicación -->
+<div id="modalAreaTransfProducto" class="overlay">
+  <div class="modal" style="max-width:440px">
+    <h2>Subir producto terminado</h2>
+    <p class="modal-sub" id="areaTpLocLabel"></p>
+    <div class="field">
+      <label>Producto</label>
+      <select id="areaTpProducto" style="width:100%" onchange="_areaTpOnChange()">
+        <option value="">— Elegí un producto —</option>
+      </select>
+      <div id="areaTpStock" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
+    </div>
+    <div class="field">
+      <label>Cantidad</label>
+      <input id="areaTpCantidad" type="number" min="1" step="1" style="width:100%">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalAreaTransfProducto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_areaConfirmarTransfProducto()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Sacar de ubicación -->
+<div id="modalAreaSacar" class="overlay">
+  <div class="modal" style="max-width:400px">
+    <h2 id="areaSacarTitulo">Sacar</h2>
+    <p class="modal-sub" id="areaSacarSub"></p>
+    <div class="field" style="margin-top:10px">
+      <label>Cantidad</label>
+      <input id="areaSacarCantidad" type="number" min="0.001" step="any" style="width:100%">
+    </div>
+    <div class="field">
+      <label>Motivo <span style="font-weight:400;color:var(--ink3)">(opcional)</span></label>
+      <input id="areaSacarMotivo" type="text" placeholder="ej. producción, merma, devolución" style="width:100%">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('modalAreaSacar')">Cancelar</button>
+      <button class="btn btn-primary" onclick="_areaConfirmarSacar()">Confirmar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: Editar insumo desde carga inicial -->
@@ -2386,6 +2482,9 @@ let _depSalidaCtx     = null;
 let stockBarra        = {};   // { [productoNombre]: cantidad } — productos terminados (legacy name, contiene cocina + barra)
 let produccionMovs    = [];   // [{ id, producto, cantidad, fecha, producidoPor, area }]
 let _prodSubtab       = 'todos';
+let areaLocaciones    = [];   // [{ id, area, nombre, tipo }]
+let areaStock         = {};   // { [locId]: { insumos: {[insId]:qty}, productos: {[nombre]:qty} } }
+let areaMovs          = [];   // [{ id, tipo, locacionId, area, ... }]
 let _lpExtraido       = null;
 let _lpProvIdSel      = null;
 let _currentVerRecetaId = null;
@@ -2524,6 +2623,7 @@ function persist() {
     _fbWrite('deposito',          { stock: deposito, movs: depositoMovs }),
     _fbWrite('produccion',        { stock: stockBarra, movs: produccionMovs }),
     _fbWrite('arca_pendientes',   { items: arcaPendientes }),
+    _fbWrite('areas',             { locaciones: areaLocaciones, stock: areaStock, movs: areaMovs }),
   ]).then(() => _syncChip('ok')).catch(() => {});
 }
 
@@ -13494,6 +13594,11 @@ async function _fbLoad(retry = 0) {
           if (d.stock && typeof d.stock === 'object') stockBarra = d.stock;
           if (Array.isArray(d.movs)) produccionMovs = d.movs;
           break;
+        case 'areas':
+          if (Array.isArray(d.locaciones)) areaLocaciones = d.locaciones;
+          if (d.stock && typeof d.stock === 'object') areaStock = d.stock;
+          if (Array.isArray(d.movs)) areaMovs = d.movs;
+          break;
         case 'contable':
           if (d.sueldos?.length)      sueldos        = d.sueldos;
           if (d.otrosEgresos?.length) otrosEgresos   = d.otrosEgresos;
@@ -15067,7 +15172,10 @@ function renderDeposito() {
   if (_depSubtab === 'stock') return _depRenderStock(screen);
   if (_depSubtab === 'pendientes') return _depRenderPendientes(screen);
   if (_depSubtab === 'movs') return _depRenderMovs(screen);
-  if (_depSubtab === 'carga') return _depRenderCarga(screen);
+  if (_depSubtab === 'carga')   return _depRenderCarga(screen);
+  if (_depSubtab === 'fabrica') return _areaRender(screen, 'fabrica');
+  if (_depSubtab === 'cocina')  return _areaRender(screen, 'cocina');
+  if (_depSubtab === 'barra')   return _areaRender(screen, 'barra');
 }
 
 function _depStockGrupos() {
@@ -15984,6 +16092,408 @@ async function _depBorrarTodo() {
   toast('Depósito borrado', 'success');
 }
 
+
+/* ── ÁREAS: FÁBRICA / COCINA / BARRA ────────────────────────────── */
+
+const _AREA_CFG = {
+  fabrica: { label: 'Fábrica', emoji: '🏭', color: '#FFE4E6', ink: '#9F1239' },
+  cocina:  { label: 'Cocina',  emoji: '🍳', color: '#FEF3C7', ink: '#92400E' },
+  barra:   { label: 'Barra',   emoji: '🥤', color: '#DBEAFE', ink: '#1E40AF' },
+};
+
+const _LOC_TIPOS = {
+  heladera: { label: 'Heladera', emoji: '🌡️' },
+  freezer:  { label: 'Freezer',  emoji: '🧊' },
+  estante:  { label: 'Estante',  emoji: '📦' },
+  alacena:  { label: 'Alacena',  emoji: '🗄️' },
+  mesada:   { label: 'Mesada',   emoji: '🔲' },
+  otro:     { label: 'Otro',     emoji: '📌' },
+};
+
+let _areaCtx = null;
+
+function _areaLocStock(locId) {
+  if (!areaStock[locId]) areaStock[locId] = { insumos: {}, productos: {} };
+  if (!areaStock[locId].insumos)   areaStock[locId].insumos   = {};
+  if (!areaStock[locId].productos) areaStock[locId].productos  = {};
+  return areaStock[locId];
+}
+
+function _areaTotalItems(locId) {
+  const s = _areaLocStock(locId);
+  return Object.values(s.insumos).filter(q => q > 0).length
+       + Object.values(s.productos).filter(q => q > 0).length;
+}
+
+/* ── RENDER ÁREA ─────────────────────────────────────────────────── */
+
+function _areaRender(screen, area) {
+  const cfg  = _AREA_CFG[area];
+  const locs = areaLocaciones.filter(l => l.area === area);
+
+  if (!locs.length) {
+    screen.innerHTML = `
+      <div style="max-width:620px">
+        <div class="empty-state">
+          <div style="font-size:48px;margin-bottom:12px">${cfg.emoji}</div>
+          <h3>${cfg.label} sin ubicaciones</h3>
+          <p>Agregá heladeras, freezers, estantes para empezar a trackear el stock de ${cfg.label}.</p>
+          <button class="btn btn-primary" style="margin-top:16px" onclick="_areaAbrirNuevaLoc('${area}')">+ Agregar primera ubicación</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const cards = locs.map(loc => {
+    const total    = _areaTotalItems(loc.id);
+    const s        = _areaLocStock(loc.id);
+    const nIns     = Object.values(s.insumos).filter(q => q > 0).length;
+    const nProd    = Object.values(s.productos).filter(q => q > 0).length;
+    const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
+    return `<button onclick="_areaAbrirLoc('${loc.id}')"
+      style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:left;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.06);transition:box-shadow .15s;width:100%"
+      onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(0,0,0,0.06)'">
+      <div style="font-size:28px;margin-bottom:8px">${tipoInfo.emoji}</div>
+      <div style="font-weight:700;font-size:14px;color:var(--ink)">${loc.nombre}</div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:2px">${tipoInfo.label}</div>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px">
+        ${nIns  ? `<div style="font-size:12px;color:var(--ink2)">🥛 <strong>${nIns}</strong> insumo${nIns===1?'':'s'}</div>` : ''}
+        ${nProd ? `<div style="font-size:12px;color:var(--ink2)">🍞 <strong>${nProd}</strong> producto${nProd===1?'':'s'}</div>` : ''}
+        ${!total ? `<div style="font-size:12px;color:var(--ink3)">Vacía</div>` : ''}
+      </div>
+    </button>`;
+  }).join('');
+
+  screen.innerHTML = `
+    <div style="max-width:720px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;color:var(--ink2)">${locs.length} ubicacion${locs.length===1?'':'es'}</div>
+        <button class="btn btn-outline btn-sm" onclick="_areaAbrirNuevaLoc('${area}')">+ Nueva ubicación</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+        ${cards}
+      </div>
+    </div>`;
+}
+
+/* ── NUEVA UBICACIÓN ─────────────────────────────────────────────── */
+
+function _areaAbrirNuevaLoc(area) {
+  document.getElementById('areaNlNombre').value = '';
+  document.getElementById('areaNlTipo').value   = 'heladera';
+  document.getElementById('areaNlArea').value   = area;
+  openModal('modalAreaNuevaLoc');
+}
+
+function _areaGuardarNuevaLoc() {
+  const nombre = document.getElementById('areaNlNombre').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
+  const area = document.getElementById('areaNlArea').value;
+  const tipo = document.getElementById('areaNlTipo').value;
+  areaLocaciones.push({ id: crypto.randomUUID(), area, nombre, tipo });
+  persist();
+  closeModal('modalAreaNuevaLoc');
+  toast(`${nombre} agregada`, 'success');
+  _depSwitchSub(area);
+}
+
+/* ── DETALLE DE UBICACIÓN ────────────────────────────────────────── */
+
+function _areaAbrirLoc(locId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  if (!loc) return;
+  const cfg      = _AREA_CFG[loc.area];
+  const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
+  const s        = _areaLocStock(locId);
+
+  const rowsIns = Object.entries(s.insumos).filter(([,q]) => q > 0).map(([insId, qty]) => {
+    const ins  = insumos.find(i => i.id === insId);
+    const pres = _depPresentacionLabel(ins);
+    const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
+        ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
+      </div>
+      <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
+    </div>`;
+  }).join('');
+
+  const rowsProd = Object.entries(s.productos).filter(([,q]) => q > 0).map(([nombre, qty]) => {
+    const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${nombre}</div>
+        <div style="font-size:11px;color:var(--ink3)">Producto terminado</div>
+      </div>
+      <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarProducto('${locId}','${encodeURIComponent(nombre)}')">Sacar</button>
+    </div>`;
+  }).join('');
+
+  const hasIns  = rowsIns.length > 0;
+  const hasProd = rowsProd.length > 0;
+
+  const body = `
+    ${hasIns ? `<div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding:8px 0 2px">🥛 Insumos</div>${rowsIns}` : ''}
+    ${hasProd ? `<div style="font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding:12px 0 2px">🍞 Productos terminados</div>${rowsProd}` : ''}
+    ${!hasIns && !hasProd ? `<div style="text-align:center;padding:24px;color:var(--ink3)">Ubicación vacía. Transferí insumos o cargá productos.</div>` : ''}`;
+
+  const existing = document.getElementById('modalAreaLoc');
+  if (existing) existing.remove();
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="modalAreaLoc" class="overlay open" style="display:flex" onclick="if(event.target===this)this.remove()">
+      <div class="modal" style="max-width:520px;max-height:85vh;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:22px">${tipoInfo.emoji}</span>
+            <h2 style="margin:0">${loc.nombre}</h2>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove()">✕</button>
+        </div>
+        <p class="modal-sub" style="margin-bottom:10px">${cfg.label} · ${tipoInfo.label}</p>
+        <div style="overflow-y:auto;flex:1">${body}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('modalAreaLoc').remove();_areaAbrirTransfInsumo('${locId}')">↓ Insumo</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove();_areaAbrirTransfProducto('${locId}')">↓ Producto</button>
+          <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaEliminarLoc('${locId}')">🗑</button>
+        </div>
+      </div>
+    </div>`);
+  _makeDraggable(document.getElementById('modalAreaLoc'));
+}
+
+/* ── TRANSFERIR INSUMO DESDE DEPÓSITO ───────────────────────────── */
+
+function _areaAbrirTransfInsumo(locId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  if (!loc) return;
+  _areaCtx = { locId, modo: 'insumo' };
+
+  const conStock = Object.entries(deposito)
+    .filter(([, qty]) => qty > 0)
+    .sort(([a], [b]) => (insumos.find(i=>i.id===a)?.nombre||'').localeCompare(insumos.find(i=>i.id===b)?.nombre||'','es'));
+
+  if (!conStock.length) { toast('El Depósito está vacío', 'error'); return; }
+
+  const cfg = _AREA_CFG[loc.area];
+  const sel = document.getElementById('areaTrInsumo');
+  sel.innerHTML = '<option value="">— Elegí un insumo —</option>' +
+    conStock.map(([insId, qty]) => {
+      const ins  = insumos.find(i => i.id === insId);
+      const pres = _depPresentacionLabel(ins);
+      return `<option value="${insId}">${ins?.nombre || insId} · ${qty} disp.${pres ? ' · '+pres : ''}</option>`;
+    }).join('');
+
+  document.getElementById('areaTrLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
+  document.getElementById('areaTrCantidad').value  = '';
+  document.getElementById('areaTrStock').textContent = '';
+  openModal('modalAreaTransfInsumo');
+}
+
+function _areaTrOnInsumoChange() {
+  const insId = document.getElementById('areaTrInsumo').value;
+  const qty   = deposito[insId] || 0;
+  const ins   = insumos.find(i => i.id === insId);
+  const pres  = _depPresentacionLabel(ins);
+  document.getElementById('areaTrStock').textContent = insId
+    ? `Disponible en Depósito: ${qty}${pres ? ' ' + pres : ''}`
+    : '';
+  document.getElementById('areaTrCantidad').value = '';
+}
+
+function _areaConfirmarTransfInsumo() {
+  if (!_areaCtx?.locId) return;
+  const insId = document.getElementById('areaTrInsumo').value;
+  const cant  = parseFloat(document.getElementById('areaTrCantidad').value);
+  if (!insId) { toast('Elegí un insumo', 'error'); return; }
+  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
+  if ((deposito[insId] || 0) < cant) { toast('Stock insuficiente en Depósito', 'error'); return; }
+
+  const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
+  deposito[insId] = Number(((deposito[insId] || 0) - cant).toFixed(3));
+  if (deposito[insId] <= 0) delete deposito[insId];
+
+  const s = _areaLocStock(_areaCtx.locId);
+  s.insumos[insId] = Number(((s.insumos[insId] || 0) + cant).toFixed(3));
+
+  const ins = insumos.find(i => i.id === insId);
+  areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in', locacionId: _areaCtx.locId,
+    area: loc?.area, insumoId: insId, cantidad: cant, fecha: new Date().toISOString(),
+    solicitadoPor: _depUsuario(), motivo: `Depósito → ${loc?.nombre}`, origen: { tipo: 'deposito' } });
+
+  persist();
+  closeModal('modalAreaTransfInsumo');
+  const locId = _areaCtx.locId;
+  _areaCtx = null;
+  toast(`${cant} ${ins?.nombre || ''} → ${loc?.nombre}`, 'success');
+  _areaAbrirLoc(locId);
+}
+
+/* ── TRANSFERIR PRODUCTO TERMINADO ──────────────────────────────── */
+
+function _areaAbrirTransfProducto(locId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  if (!loc) return;
+  _areaCtx = { locId, modo: 'producto' };
+
+  // Productos disponibles: stockBarra + productos en otras ubicaciones del área origen
+  const opts = [];
+
+  // Desde stockBarra (producción general)
+  Object.entries(stockBarra).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
+    opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en stock Barra`, nombre, qty, origen: 'barra' });
+  });
+
+  // Desde otras ubicaciones (cualquier área)
+  areaLocaciones.filter(l => l.id !== locId).forEach(l => {
+    const s = _areaLocStock(l.id);
+    Object.entries(s.productos).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
+      opts.push({ key: `loc::${l.id}::${nombre}`, label: `${nombre} · ${qty} en ${l.nombre} (${_AREA_CFG[l.area]?.label})`, nombre, qty, origen: 'loc', locId: l.id });
+    });
+  });
+
+  if (!opts.length) { toast('No hay productos terminados disponibles para transferir', 'error'); return; }
+
+  const cfg = _AREA_CFG[loc.area];
+  const sel = document.getElementById('areaTpProducto');
+  sel.innerHTML = '<option value="">— Elegí un producto —</option>' +
+    opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+
+  document.getElementById('areaTpLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
+  document.getElementById('areaTpCantidad').value  = '';
+  document.getElementById('areaTpStock').textContent = '';
+  window._areaTpOpts = opts;
+  openModal('modalAreaTransfProducto');
+}
+
+function _areaTpOnChange() {
+  const key = document.getElementById('areaTpProducto').value;
+  const opt = (window._areaTpOpts || []).find(o => o.key === key);
+  document.getElementById('areaTpStock').textContent = opt ? `Disponible: ${opt.qty}` : '';
+  document.getElementById('areaTpCantidad').value = '';
+}
+
+function _areaConfirmarTransfProducto() {
+  if (!_areaCtx?.locId) return;
+  const key   = document.getElementById('areaTpProducto').value;
+  const cant  = parseFloat(document.getElementById('areaTpCantidad').value);
+  const opt   = (window._areaTpOpts || []).find(o => o.key === key);
+  if (!opt)  { toast('Elegí un producto', 'error'); return; }
+  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
+  if (cant > opt.qty) { toast('Cantidad mayor a la disponible', 'error'); return; }
+
+  // Descontar origen
+  if (opt.origen === 'barra') {
+    stockBarra[opt.nombre] = Number(((stockBarra[opt.nombre] || 0) - cant).toFixed(3));
+    if (stockBarra[opt.nombre] <= 0) delete stockBarra[opt.nombre];
+  } else {
+    const srcS = _areaLocStock(opt.locId);
+    srcS.productos[opt.nombre] = Number(((srcS.productos[opt.nombre] || 0) - cant).toFixed(3));
+    if (srcS.productos[opt.nombre] <= 0) delete srcS.productos[opt.nombre];
+  }
+
+  // Sumar al destino
+  const destS = _areaLocStock(_areaCtx.locId);
+  destS.productos[opt.nombre] = Number(((destS.productos[opt.nombre] || 0) + cant).toFixed(3));
+
+  const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
+  areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_prod', locacionId: _areaCtx.locId,
+    area: loc?.area, producto: opt.nombre, cantidad: cant, fecha: new Date().toISOString(),
+    solicitadoPor: _depUsuario(), motivo: `→ ${loc?.nombre}`, origen: opt.origen });
+
+  persist();
+  closeModal('modalAreaTransfProducto');
+  const locId = _areaCtx.locId;
+  _areaCtx = null;
+  toast(`${cant} ${opt.nombre} → ${loc?.nombre}`, 'success');
+  _areaAbrirLoc(locId);
+}
+
+/* ── SACAR ───────────────────────────────────────────────────────── */
+
+function _areaSacarInsumo(locId, insId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  const ins = insumos.find(i => i.id === insId);
+  const qty = _areaLocStock(locId).insumos[insId] || 0;
+  _areaCtx  = { locId, insId, tipo: 'insumo' };
+  document.getElementById('areaSacarTitulo').textContent = `Sacar: ${ins?.nombre || '?'}`;
+  document.getElementById('areaSacarSub').textContent    = `Disponible en ${loc?.nombre || '?'}: ${qty}`;
+  document.getElementById('areaSacarCantidad').value     = '';
+  document.getElementById('areaSacarMotivo').value       = '';
+  openModal('modalAreaSacar');
+}
+
+function _areaSacarProducto(locId, nombreEnc) {
+  const nombre = decodeURIComponent(nombreEnc);
+  const loc    = areaLocaciones.find(l => l.id === locId);
+  const qty    = _areaLocStock(locId).productos[nombre] || 0;
+  _areaCtx     = { locId, nombre, tipo: 'producto' };
+  document.getElementById('areaSacarTitulo').textContent = `Sacar: ${nombre}`;
+  document.getElementById('areaSacarSub').textContent    = `Disponible en ${loc?.nombre || '?'}: ${qty}`;
+  document.getElementById('areaSacarCantidad').value     = '';
+  document.getElementById('areaSacarMotivo').value       = '';
+  openModal('modalAreaSacar');
+}
+
+function _areaConfirmarSacar() {
+  if (!_areaCtx?.locId) return;
+  const cant   = parseFloat(document.getElementById('areaSacarCantidad').value);
+  const motivo = document.getElementById('areaSacarMotivo').value.trim() || null;
+  if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
+
+  const { locId, tipo } = _areaCtx;
+  const loc = areaLocaciones.find(l => l.id === locId);
+  const s   = _areaLocStock(locId);
+
+  if (tipo === 'insumo') {
+    const insId  = _areaCtx.insId;
+    const actual = s.insumos[insId] || 0;
+    if (cant > actual) { toast('Cantidad mayor al stock', 'error'); return; }
+    s.insumos[insId] = Number((actual - cant).toFixed(3));
+    if (s.insumos[insId] <= 0) delete s.insumos[insId];
+    areaMovs.push({ id: crypto.randomUUID(), tipo: 'consumo', locacionId: locId,
+      area: loc?.area, insumoId: insId, cantidad: cant,
+      fecha: new Date().toISOString(), solicitadoPor: _depUsuario(), motivo, origen: { tipo: 'manual' } });
+  } else {
+    const nombre = _areaCtx.nombre;
+    const actual = s.productos[nombre] || 0;
+    if (cant > actual) { toast('Cantidad mayor al stock', 'error'); return; }
+    s.productos[nombre] = Number((actual - cant).toFixed(3));
+    if (s.productos[nombre] <= 0) delete s.productos[nombre];
+    areaMovs.push({ id: crypto.randomUUID(), tipo: 'consumo_prod', locacionId: locId,
+      area: loc?.area, producto: nombre, cantidad: cant,
+      fecha: new Date().toISOString(), solicitadoPor: _depUsuario(), motivo, origen: { tipo: 'manual' } });
+  }
+
+  _areaCtx = null;
+  persist();
+  closeModal('modalAreaSacar');
+  document.getElementById('modalAreaLoc')?.remove();
+  toast('Sacado', 'success');
+  _depSwitchSub(loc?.area || 'fabrica');
+}
+
+/* ── ELIMINAR UBICACIÓN ──────────────────────────────────────────── */
+
+function _areaEliminarLoc(locId) {
+  const loc = areaLocaciones.find(l => l.id === locId);
+  if (!confirm(`¿Eliminar "${loc?.nombre}"?\nLos insumos que tenía vuelven al Depósito. Los productos se pierden.`)) return;
+
+  const s = _areaLocStock(locId);
+  Object.entries(s.insumos).forEach(([insId, qty]) => {
+    if (qty > 0) deposito[insId] = Number(((deposito[insId] || 0) + qty).toFixed(3));
+  });
+
+  delete areaStock[locId];
+  areaLocaciones = areaLocaciones.filter(l => l.id !== locId);
+  document.getElementById('modalAreaLoc')?.remove();
+  persist();
+  toast(`${loc?.nombre} eliminada`, 'success');
+  _depSwitchSub(loc?.area || 'fabrica');
+}
 
 /* ── IMPORTADOR RECETAS V2 ──────────────────────────────────────── */
 let _impWb = null;
