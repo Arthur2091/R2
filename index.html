@@ -15824,6 +15824,26 @@ function _depRenderCargaManual() {
   const content = document.getElementById('depCargaContent');
   if (!content) return;
 
+  if (!document.getElementById('depCargaSearch')) {
+    content.innerHTML = `
+      <div style="max-width:620px">
+        <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+          <input id="depCargaSearch" type="search" placeholder="Buscar insumo…" value="${_depCargaSearch}"
+            oninput="_depCargaSearch=this.value;_depRenderCargaResultados()"
+            style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;min-width:0">
+          <button class="btn btn-outline btn-sm" onclick="_depAbrirNuevoInsumoInline()" style="white-space:nowrap;flex-shrink:0">+ Nuevo insumo</button>
+        </div>
+        <div id="depCargaResultados"></div>
+      </div>`;
+  }
+
+  _depRenderCargaResultados();
+}
+
+function _depRenderCargaResultados() {
+  const container = document.getElementById('depCargaResultados');
+  if (!container) return;
+
   const insumoAProv = {};
   proveedores.forEach(prov => {
     (prov.items || []).forEach(it => {
@@ -15888,9 +15908,9 @@ function _depRenderCargaManual() {
           onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--ink3)'">🗑</button>
       </div>
       <select data-destino-id="${ins.id}"
-        onchange="_depCargaDestinos['${ins.id}']=this.value"
+        onchange="_depCargaDestinos['${ins.id}']=this.value;this.style.background=this.value?'#EDE9FE':'var(--surface2)';this.style.color=this.value?'#5B21B6':'var(--ink3)'"
         style="margin-top:5px;width:100%;font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:${destino ? '#EDE9FE' : 'var(--surface2)'};color:${destino ? '#5B21B6' : 'var(--ink3)'};cursor:pointer">
-        ${optsDestino}
+        ${optsDestino.replace(`value="${destino}"`, `value="${destino}" selected`)}
       </select>
     </div>`;
   };
@@ -15928,19 +15948,10 @@ function _depRenderCargaManual() {
     </div>`;
   }).join('');
 
-  content.innerHTML = `
-    <div style="max-width:620px">
-      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
-        <input id="depCargaSearch" type="search" placeholder="Buscar insumo…" value="${_depCargaSearch}"
-          oninput="_depCargaSearch=this.value;_depRenderCargaManual()"
-          style="flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;min-width:0">
-        <button class="btn btn-outline btn-sm" onclick="_depAbrirNuevoInsumoInline()" style="white-space:nowrap;flex-shrink:0">+ Nuevo insumo</button>
-      </div>
-      ${!gruposSorted.length
-        ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
-           <p>${q ? `No hay coincidencias para "${_depCargaSearch}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
-        : rows}
-    </div>`;
+  container.innerHTML = !gruposSorted.length
+    ? `<div class="empty-state" style="margin-top:20px"><h3>Sin insumos${q ? ' encontrados' : ''}</h3>
+       <p>${q ? `No hay coincidencias para "${q}".` : 'Creá tu primer insumo con el botón de arriba.'}</p></div>`
+    : rows;
 }
 
 function _depCargaEditarInsumo(insumoId) {
