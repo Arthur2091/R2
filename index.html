@@ -17105,7 +17105,12 @@ function _areaProdRenderIngs() {
   const sinVinc    = rec.ingredientes?.filter(i => !i.insumoId && !i.recetaId) || [];
 
   if (!vinculados.length) {
-    container.innerHTML = `<div style="text-align:center;padding:20px;color:var(--ink3)">Esta receta no tiene ingredientes vinculados a insumos.</div>`;
+    btn.style.display = 'none';
+    container.innerHTML = `<div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:14px 16px;color:#92400E">
+      <div style="font-weight:700;margin-bottom:4px">⚠️ Ingredientes sin vincular</div>
+      <div style="font-size:13px">Esta receta no tiene ingredientes vinculados a insumos del sistema. No se puede producir sin descontar stock.<br><br>
+      Ir a <b>Recetas → editar esta receta</b> y vincular cada ingrediente al insumo correspondiente.</div>
+    </div>`;
     return;
   }
 
@@ -17157,6 +17162,11 @@ function _areaProdConfirmar() {
 
   const ts = new Date().toISOString();
   const srcEls = document.querySelectorAll('#modalAreaProducir [id^="areaProdSrc_"]');
+  const tieneVinculados = rec.ingredientes?.some(i => i.insumoId);
+  if (tieneVinculados && srcEls.length === 0) {
+    toast('Los ingredientes no tienen stock disponible en ninguna ubicación', 'error');
+    return;
+  }
 
   for (const sel of srcEls) {
     const insId    = sel.dataset.ins;
