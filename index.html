@@ -6775,9 +6775,8 @@ function renderProductosRubro(key, rubro) {
   const subtotal = items.reduce((acc, [,p]) => acc + p.total, 0);
 
   if (!esSin) {
-    const top10  = items.slice(0, 10);
-    const maxTop = top10[0]?.[1].total || 1;
-    const graficoHtml = top10.map(([nombre, pd], i) => {
+    const maxTop = items[0]?.[1].total || 1;
+    const graficoHtml = items.map(([nombre, pd], i) => {
       const pct  = Math.round((pd.total / maxTop) * 100);
       const slug = `prod_${i}_${key}`;
       return `<div style="display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:.75rem;padding:.4rem 0;cursor:pointer" onclick="toggleSection('${slug}')">
