@@ -6993,6 +6993,63 @@ function _renderDecisiones(desde, hasta) {
     ventasPorMes6[rubro][mes] = (ventasPorMes6[rubro][mes] || 0) + tot;
   });
 
+  // ── Unidades y frecuencia por producto × día de semana ──
+  const unidadesDiaProd = {};
+  const frecDiaProd     = {};
+  ventasFiltradas.forEach(v => {
+    const nombre = String(v.producto || '').trim();
+    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
+    const fecha = v.fecha || '';
+    if (fecha.length < 10) return;
+    const dow = new Date(fecha + 'T00:00:00').getDay();
+    if (!unidadesDiaProd[nombre]) unidadesDiaProd[nombre] = Array(7).fill(0);
+    if (!frecDiaProd[nombre])     frecDiaProd[nombre]     = Array(7).fill(0);
+    unidadesDiaProd[nombre][dow] += Number(v.unidades) || 0;
+    frecDiaProd[nombre][dow]++;
+  });
+
+  const _tablaProductoDia = (datos, subtitulo) => {
+    const prods = Object.entries(datos)
+      .filter(([, arr]) => arr.some(v => v > 0))
+      .sort((a, b) => b[1].reduce((s,v)=>s+v,0) - a[1].reduce((s,v)=>s+v,0));
+    if (!prods.length) return `<p style="color:var(--ink3);padding:12px 0">Sin datos suficientes.</p>`;
+    const rubrosDisp = [...new Set(prods.map(([n]) => productosRubros[n]).filter(Boolean))].sort();
+    const uid = 'td_' + Math.random().toString(36).slice(2,7);
+    const filterHtml = rubrosDisp.length > 1 ? `
+      <select id="${uid}_sel" style="margin-bottom:10px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font)"
+        onchange="document.querySelectorAll('#${uid}_tbody tr').forEach(tr=>tr.style.display=(!this.value||tr.dataset.rubro===this.value)?'':'none')">
+        <option value="">Todas las categorías</option>
+        ${rubrosDisp.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>` : '';
+    const rows = prods.map(([nombre, arr]) => {
+      const max   = Math.max(...arr);
+      const rubro = productosRubros[nombre] || '';
+      const cells = arr.map((v, i) => {
+        const pct = max > 0 ? v / max : 0;
+        const bg  = v === 0 ? 'transparent' : v === max ? '#065F46' : pct > 0.6 ? 'var(--accent)' : pct > 0.3 ? '#6EE7B7' : '#D1FAE5';
+        const col = (v === max && v > 0) ? '#fff' : v === 0 ? 'var(--ink3)' : '#1A1814';
+        return `<td style="padding:6px 8px;text-align:center;font-family:var(--mono);font-size:12px;background:${bg};color:${col};font-weight:${v===max&&v>0?700:400}">${v||'—'}</td>`;
+      }).join('');
+      const mejorDow = arr.indexOf(max);
+      return `<tr data-rubro="${rubro}" style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${nombre}">${nombre}</td>
+        ${cells}
+        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap">${max>0?DIAS[mejorDow]:'—'}</td>
+      </tr>`;
+    }).join('');
+    return `${filterHtml}
+      <div style="overflow-x:auto">
+        <table style="border-collapse:collapse;width:100%">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--ink2)">Producto</th>
+            ${DIAS.map(d=>`<th style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--ink2)">${d}</th>`).join('')}
+            <th style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--accent)">Mejor</th>
+          </tr></thead>
+          <tbody id="${uid}_tbody">${rows}</tbody>
+        </table>
+      </div>`;
+  };
+
   // ── 1. Alertas de caída ──
   const semanas = [...new Set(Object.values(ventasPorSemana).flatMap(s => Object.keys(s)))].sort();
   const ultimaSem = semanas[semanas.length - 1] || '';
@@ -7203,6 +7260,8 @@ function _renderDecisiones(desde, hasta) {
       ${sec('alertasCaida','Alertas de caída','⚠️','#DC2626', _tablaAlertas(alertasCaida, false), false)}
       ${sec('alertasSubida','Alertas de subida','📈','#065F46', _tablaAlertas(alertasSubida, true), false)}
       ${sec('dias','Mejores días para vender','📅','#1D4ED8', diasHtml)}
+      ${sec('mejordiaproducto','Mejor día por producto','🗓️','#1D4ED8', _tablaProductoDia(unidadesDiaProd, 'unidades'))}
+      ${sec('diasvendido','En qué días se vendió','📆','#7C3AED', _tablaProductoDia(frecDiaProd, 'veces'))}
       ${sec('sinmov','Productos sin movimiento','🛑','#92400E', sinMovHtml)}
       ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
       ${sec('rubros','Comparación de rubros','📊','var(--ink)', rubrosHtml2)}
