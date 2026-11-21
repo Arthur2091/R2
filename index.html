@@ -7042,7 +7042,7 @@ function _renderDemandaRecetas() {
         ⚠️ ${Object.keys(sinReceta).length} producto${Object.keys(sinReceta).length!==1?'s':''} sin receta — vinculalos para que aparezcan en el cálculo
       </div>
       <div style="display:flex;flex-direction:column">
-        ${Object.entries(sinReceta).sort((a,b)=>b[1]-a[1]).map(([n,u]) => {
+        ${Object.entries(sinReceta).sort((a,b)=>a[0].localeCompare(b[0],'es')).map(([n,u]) => {
           const nEsc = n.replace(/'/g,"\\'").replace(/"/g,'&quot;');
           return `<div id="demSR_${btoa(encodeURIComponent(n)).replace(/[^a-zA-Z0-9]/g,'')}" style="display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;border-bottom:1px solid var(--border);flex-wrap:wrap">
             <span style="flex:1;font-size:13px;font-weight:600;min-width:160px">${n}</span>
