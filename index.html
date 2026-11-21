@@ -1672,6 +1672,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <button class="dep-subtab" data-prod-sub="cocina" onclick="_prodSwitchSub('cocina')">🍳 Cocina</button>
     <button class="dep-subtab" data-prod-sub="barra" onclick="_prodSwitchSub('barra')">🥤 Barra</button>
     <button class="dep-subtab" data-prod-sub="movs" onclick="_prodSwitchSub('movs')">Historial</button>
+    <button class="dep-subtab" data-prod-sub="demanda" onclick="_prodSwitchSub('demanda')">🧮 Demanda</button>
   </div>
   <div id="produccionScreen"></div>
 </div>
@@ -7266,6 +7267,175 @@ function _renderDecisiones(desde, hasta) {
       ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
       ${sec('rubros','Comparación de rubros','📊','var(--ink)', rubrosHtml2)}
     </div>`;
+}
+
+// ── Demanda: match nombre de venta → receta ──
+function _demMatchReceta(nombreProducto) {
+  const n = nombreProducto.toLowerCase().trim();
+  for (const rec of recetas) {
+    if (rec.tipo !== 'venta') continue;
+    if ((ventaAlias[rec.id] || []).some(a => a.toLowerCase().trim() === n)) return rec;
+    if ((rec.nombre || '').toLowerCase().trim() === n) return rec;
+  }
+  return null;
+}
+function _demMatchFabricacion(nombreProducto) {
+  const n = nombreProducto.toLowerCase().trim();
+  return recetas.find(r => r.tipo === 'fabricacion' && (r.nombre || '').toLowerCase().trim() === n) || null;
+}
+
+let _demDesde = '', _demHasta = '';
+
+function _prodRenderDemanda(screen) {
+  // Rango por defecto: último día con datos
+  const todasFechas = ventas.map(v => v.fecha || '').filter(Boolean).sort();
+  const fechaMin = todasFechas[0] || '';
+  const fechaMax = todasFechas[todasFechas.length - 1] || '';
+  if (!_demDesde) _demDesde = fechaMax;
+  if (!_demHasta) _demHasta = fechaMax;
+
+  const desde = _demDesde || fechaMax;
+  const hasta = _demHasta || fechaMax;
+
+  if (!fechaMax) {
+    screen.innerHTML = `<div class="empty-state"><h3>Sin ventas cargadas</h3><p>Importá el Excel de ventas para calcular la demanda.</p></div>`;
+    return;
+  }
+
+  // Filtrar ventas por rango
+  const ventasFiltradas = ventas.filter(v => {
+    const f = v.fecha || '';
+    return f >= desde && f <= hasta;
+  });
+
+  // Calcular demanda
+  const demand = {}; // recetaId → { nombre, area, unidades, orígenes: [{combo, unidades}] }
+  const sinReceta = {};
+
+  ventasFiltradas.forEach(v => {
+    const nombre = String(v.producto || '').trim();
+    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
+    const unds = Number(v.unidades) || 0;
+    if (!unds) return;
+
+    const rec = _demMatchReceta(nombre);
+    if (rec) {
+      const rinde  = rec.rinde || 1;
+      const factor = unds / rinde;
+      const subRecs = (rec.ingredientes || []).filter(i => i.recetaId);
+
+      if (subRecs.length) {
+        // Combo: explotar sub-recetas
+        subRecs.forEach(ing => {
+          const sub = recetas.find(r => r.id === ing.recetaId);
+          if (!sub) return;
+          const qty = (Number(ing.cantidad) || 0) * factor;
+          if (!qty) return;
+          if (!demand[ing.recetaId]) demand[ing.recetaId] = { nombre: sub.nombre, area: sub.area || '', unidades: 0, origenes: [] };
+          demand[ing.recetaId].unidades += qty;
+          demand[ing.recetaId].origenes.push({ combo: nombre, unidades: qty });
+        });
+      } else {
+        // Producto simple (sin sub-recetas): se cuenta como unidad a preparar
+        if (!demand[rec.id]) demand[rec.id] = { nombre: rec.nombre, area: rec.area || '', unidades: 0, origenes: [] };
+        demand[rec.id].unidades += unds;
+        demand[rec.id].origenes.push({ combo: nombre, unidades: unds });
+      }
+      return;
+    }
+
+    // Intento como receta de fabricación directa
+    const fab = _demMatchFabricacion(nombre);
+    if (fab) {
+      if (!demand[fab.id]) demand[fab.id] = { nombre: fab.nombre, area: fab.area || '', unidades: 0, origenes: [] };
+      demand[fab.id].unidades += unds;
+      demand[fab.id].origenes.push({ combo: nombre, unidades: unds });
+      return;
+    }
+
+    sinReceta[nombre] = (sinReceta[nombre] || 0) + unds;
+  });
+
+  // Agrupar por area
+  const grupos = { barra: [], cocina: [], fabrica: [], otro: [] };
+  Object.entries(demand).forEach(([, d]) => {
+    const a = (d.area || '').toLowerCase();
+    if (a === 'barra') grupos.barra.push(d);
+    else if (a === 'cocina') grupos.cocina.push(d);
+    else if (a === 'fabrica' || a === 'fábrica') grupos.fabrica.push(d);
+    else grupos.otro.push(d);
+  });
+  Object.values(grupos).forEach(g => g.sort((a, b) => b.unidades - a.unidades));
+
+  const totalItems = Object.values(demand).length;
+
+  const _secArea = (titulo, icono, items) => {
+    if (!items.length) return '';
+    const cards = items.map(d => {
+      const qtyDisplay = Number.isInteger(d.unidades) ? d.unidades : d.unidades.toFixed(1);
+      const origenesUniq = {};
+      d.origenes.forEach(o => { origenesUniq[o.combo] = (origenesUniq[o.combo] || 0) + o.unidades; });
+      const origenesTooltip = Object.entries(origenesUniq)
+        .map(([c, u]) => `${c}: ${Number.isInteger(u) ? u : u.toFixed(1)}`)
+        .join(' · ');
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:default" title="${origenesTooltip.replace(/"/g,'&quot;')}">
+        <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.nombre}</div>
+        <div style="font-size:28px;font-weight:700;color:var(--accent);font-family:var(--mono);line-height:1;margin-top:8px">${qtyDisplay}</div>
+        <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">unidades</div>
+        ${origenesTooltip ? `<div style="font-size:10px;color:var(--ink3);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${origenesTooltip}</div>` : ''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:1.5rem">
+      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);margin-bottom:.6rem">${icono} ${titulo}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">${cards}</div>
+    </div>`;
+  };
+
+  const sinRecetaHtml = Object.keys(sinReceta).length ? `
+    <details style="margin-top:1rem">
+      <summary style="font-size:.8rem;color:var(--ink3);cursor:pointer">${Object.keys(sinReceta).length} producto${Object.keys(sinReceta).length!==1?'s':''} sin receta configurada</summary>
+      <div style="margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.4rem">
+        ${Object.entries(sinReceta).sort((a,b)=>b[1]-a[1]).map(([n,u])=>
+          `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:12px">${n} <strong>${Number.isInteger(u)?u:u.toFixed(1)}</strong></span>`
+        ).join('')}
+      </div>
+    </details>` : '';
+
+  const _preset = (label, dias) => {
+    const max = fechaMax;
+    let d;
+    if (dias === 0) { d = fechaMin; }
+    else { const dt = new Date(max + 'T00:00:00'); dt.setDate(dt.getDate() - dias + 1); d = dt.toISOString().slice(0,10); }
+    return `<button class="btn btn-outline" style="font-size:11px;padding:4px 10px"
+      onclick="_demDesde='${d}';_demHasta='${max}';_prodRenderDemanda(document.getElementById('produccionScreen'))">${label}</button>`;
+  };
+
+  screen.innerHTML = `
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.25rem">
+      <span style="font-size:.85rem;font-weight:600;color:var(--ink2)">Período:</span>
+      <input type="date" id="demDesdeInput" value="${desde}" min="${fechaMin}" max="${fechaMax}"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
+      <span style="color:var(--ink3);font-size:.85rem">→</span>
+      <input type="date" id="demHastaInput" value="${hasta}" min="${fechaMin}" max="${fechaMax}"
+        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
+      <button class="btn btn-primary" style="padding:6px 16px;font-size:13px"
+        onclick="_demDesde=document.getElementById('demDesdeInput').value;_demHasta=document.getElementById('demHastaInput').value;_prodRenderDemanda(document.getElementById('produccionScreen'))">Aplicar</button>
+      <div style="display:flex;gap:.4rem;margin-left:auto;flex-wrap:wrap">
+        ${_preset('Hoy', 1)}
+        ${_preset('7d', 7)}
+        ${_preset('30d', 30)}
+        ${_preset('Todo', 0)}
+      </div>
+    </div>
+    ${!totalItems
+      ? `<div class="empty-state"><h3>Sin match de recetas</h3><p>Vinculá los productos de ventas con recetas desde la sección Recetas.</p></div>`
+      : `<div style="font-size:12px;color:var(--ink3);margin-bottom:1rem">${ventasFiltradas.length.toLocaleString('es-AR')} ventas · ${totalItems} items a producir · período ${desde} → ${hasta}</div>
+         ${_secArea('Barra', '🥤', grupos.barra)}
+         ${_secArea('Cocina', '🍳', grupos.cocina)}
+         ${_secArea('Fábrica', '🏭', grupos.fabrica)}
+         ${_secArea('Sin área', '📦', grupos.otro)}
+         ${sinRecetaHtml}`
+    }`;
 }
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
@@ -17668,10 +17838,11 @@ function renderProduccion() {
   const screen = document.getElementById('produccionScreen');
   if (!screen) return;
   _prodInitPeriodo();
-  if (_prodSubtab === 'todos')  return _prodRenderTodos(screen);
-  if (_prodSubtab === 'cocina') return _prodRenderArea(screen, 'cocina');
-  if (_prodSubtab === 'barra')  return _prodRenderArea(screen, 'barra');
-  if (_prodSubtab === 'movs')   return _prodRenderMovs(screen);
+  if (_prodSubtab === 'todos')   return _prodRenderTodos(screen);
+  if (_prodSubtab === 'cocina')  return _prodRenderArea(screen, 'cocina');
+  if (_prodSubtab === 'barra')   return _prodRenderArea(screen, 'barra');
+  if (_prodSubtab === 'movs')    return _prodRenderMovs(screen);
+  if (_prodSubtab === 'demanda') return _prodRenderDemanda(screen);
 }
 
 function _prodCard(nombre, qty, area) {
