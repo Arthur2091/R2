@@ -16931,13 +16931,9 @@ function _areaAbrirTransfInsumo(locId) {
   if (!loc) return;
   _areaCtx = { locId, modo: 'insumo' };
 
-  _areaTrInsumosList = Object.entries(deposito)
-    .filter(([, qty]) => qty > 0)
-    .map(([insId, qty]) => ({ insId, qty, ins: insumos.find(i => i.id === insId) }))
-    .filter(r => r.ins)
+  _areaTrInsumosList = insumos
+    .map(ins => ({ insId: ins.id, qty: deposito[ins.id] || 0, ins }))
     .sort((a, b) => a.ins.nombre.localeCompare(b.ins.nombre, 'es'));
-
-  if (!_areaTrInsumosList.length) { toast('El Depósito está vacío', 'error'); return; }
 
   const cfg = _AREA_CFG[loc.area];
   document.getElementById('areaTrLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
@@ -16965,14 +16961,18 @@ function _areaTrFiltrar(q) {
     return;
   }
   lista.innerHTML = filtrados.slice(0, 20).map(r => {
-    const pres = _depPresentacionLabel(r.ins);
+    const pres    = _depPresentacionLabel(r.ins);
+    const directo = r.qty <= 0;
     return `<div onclick="_areaTrSeleccionar('${r.insId}')"
       style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <strong>${r.ins.nombre}</strong>
-      <span style="color:var(--ink3);margin-left:8px">${r.qty} disp.${pres ? ' · ' + pres : ''}</span>
+      <span style="color:${directo?'var(--ink3)':'var(--accent)'};margin-left:8px;font-size:11px">${directo ? 'Carga directa' : r.qty + ' en depósito' + (pres ? ' · ' + pres : '')}</span>
     </div>`;
-  }).join('');
+  }).join('') + (filtrados.length === 0 ? `
+    <div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
+      <button class="btn btn-outline btn-sm" style="margin-left:10px" onclick="closeModal('modalAreaTransfInsumo');showView('viewInsumos')">+ Crear insumo</button>
+    </div>` : '');
   lista.style.display = 'block';
 }
 
@@ -17033,11 +17033,13 @@ function _areaConfirmarTransfInsumo() {
     cantPres = Number((cantRaw / ins.presQty).toFixed(6));
   }
 
-  if ((deposito[insId] || 0) < cantPres - 0.0001) { toast('Stock insuficiente en Depósito', 'error'); return; }
-
   const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
-  deposito[insId] = Number(((deposito[insId] || 0) - cantPres).toFixed(6));
-  if (deposito[insId] <= 0.0001) delete deposito[insId];
+  const enDeposito = deposito[insId] || 0;
+  const esDirecta  = enDeposito < cantPres - 0.0001;
+  if (!esDirecta) {
+    deposito[insId] = Number(((enDeposito) - cantPres).toFixed(6));
+    if (deposito[insId] <= 0.0001) delete deposito[insId];
+  }
 
   const s = _areaLocStock(_areaCtx.locId);
   s.insumos[insId] = Number(((s.insumos[insId] || 0) + cantPres).toFixed(6));
