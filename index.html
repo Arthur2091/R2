@@ -17089,7 +17089,7 @@ function _areaAbrirTransfProducto(locId) {
 
   // Desde stockBarra (producción general)
   Object.entries(stockBarra).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
-    opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en stock Barra`, nombre, qty, origen: 'barra' });
+    opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en Barra`, nombre, qty, origen: 'barra' });
   });
 
   // Desde otras ubicaciones (cualquier área)
@@ -17100,7 +17100,14 @@ function _areaAbrirTransfProducto(locId) {
     });
   });
 
-  if (!opts.length) { toast('No hay productos terminados disponibles para transferir', 'error'); return; }
+  // Recetas de fabricación sin stock (carga directa)
+  const yaEnOpts = new Set(opts.map(o => o.nombre.toLowerCase()));
+  recetas.filter(r => r.tipo === 'fabricacion' && r.nombre)
+    .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
+    .forEach(r => {
+      if (!yaEnOpts.has(r.nombre.toLowerCase()))
+        opts.push({ key: 'directo::' + r.id, label: `${r.nombre} · Carga directa`, nombre: r.nombre, qty: Infinity, origen: 'directo' });
+    });
 
   const cfg = _AREA_CFG[loc.area];
   const sel = document.getElementById('areaTpProducto');
@@ -17117,7 +17124,9 @@ function _areaAbrirTransfProducto(locId) {
 function _areaTpOnChange() {
   const key = document.getElementById('areaTpProducto').value;
   const opt = (window._areaTpOpts || []).find(o => o.key === key);
-  document.getElementById('areaTpStock').textContent = opt ? `Disponible: ${opt.qty}` : '';
+  document.getElementById('areaTpStock').textContent = opt
+    ? (opt.origen === 'directo' ? 'Carga directa — se suma sin descontar stock' : `Disponible: ${opt.qty}`)
+    : '';
   document.getElementById('areaTpCantidad').value = '';
 }
 
@@ -17128,13 +17137,13 @@ function _areaConfirmarTransfProducto() {
   const opt   = (window._areaTpOpts || []).find(o => o.key === key);
   if (!opt)  { toast('Elegí un producto', 'error'); return; }
   if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
-  if (cant > opt.qty) { toast('Cantidad mayor a la disponible', 'error'); return; }
+  if (opt.origen !== 'directo' && cant > opt.qty) { toast('Cantidad mayor a la disponible', 'error'); return; }
 
-  // Descontar origen
+  // Descontar origen (solo si no es carga directa)
   if (opt.origen === 'barra') {
     stockBarra[opt.nombre] = Number(((stockBarra[opt.nombre] || 0) - cant).toFixed(3));
     if (stockBarra[opt.nombre] <= 0) delete stockBarra[opt.nombre];
-  } else {
+  } else if (opt.origen === 'loc') {
     const srcS = _areaLocStock(opt.locId);
     srcS.productos[opt.nombre] = Number(((srcS.productos[opt.nombre] || 0) - cant).toFixed(3));
     if (srcS.productos[opt.nombre] <= 0) delete srcS.productos[opt.nombre];
