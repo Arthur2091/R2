@@ -16972,12 +16972,16 @@ function _areaTrFiltrar(q) {
   const filtrados = q
     ? _areaTrInsumosList.filter(r => r.ins.nombre.toLowerCase().includes(q))
     : _areaTrInsumosList;
+
   if (!filtrados.length) {
-    lista.innerHTML = '<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados</div>';
+    lista.innerHTML = `<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
+      ${q ? `<button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo('${q.replace(/'/g,"\\'")}')">+ Crear "${q}"</button>` : ''}
+    </div>`;
     lista.style.display = 'block';
     return;
   }
-  lista.innerHTML = filtrados.slice(0, 20).map(r => {
+
+  lista.innerHTML = filtrados.map(r => {
     const pres    = _depPresentacionLabel(r.ins);
     const directo = r.qty <= 0;
     return `<div onclick="_areaTrSeleccionar('${r.insId}')"
@@ -16986,10 +16990,7 @@ function _areaTrFiltrar(q) {
       <strong>${r.ins.nombre}</strong>
       <span style="color:${directo?'var(--ink3)':'var(--accent)'};margin-left:8px;font-size:11px">${directo ? 'Carga directa' : r.qty + ' en depósito' + (pres ? ' · ' + pres : '')}</span>
     </div>`;
-  }).join('') + (filtrados.length === 0 ? `
-    <div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
-      <button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo(document.getElementById('areaTrBuscar').value.trim())">+ Crear "${q}"</button>
-    </div>` : '');
+  }).join('');
   lista.style.display = 'block';
 }
 
