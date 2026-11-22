@@ -3333,6 +3333,16 @@ function saveInsumo() {
   persist();
   closeModal('modalInsumo');
   toast('Insumo guardado', 'success');
+  if (window._areaTrPostCreate) {
+    const nombre = window._areaTrPostCreate;
+    window._areaTrPostCreate = null;
+    _areaTrInsumosList = insumos
+      .map(ins => ({ insId: ins.id, qty: deposito[ins.id] || 0, ins }))
+      .sort((a, b) => a.ins.nombre.localeCompare(b.ins.nombre, 'es'));
+    const buscar = document.getElementById('areaTrBuscar');
+    if (buscar) { buscar.value = nombre; _areaTrFiltrar(nombre); }
+    return;
+  }
   if (_currentVerRecetaId) _reRenderReceta(_currentVerRecetaId);
   else renderInsumos();
 }
@@ -6950,6 +6960,13 @@ function _demPreset(dias) {
   else { const d = new Date(max + 'T00:00:00'); d.setDate(d.getDate() - dias + 1); _demRDesde = d.toISOString().slice(0,10); }
   _demRHasta = max;
   _renderDemandaRecetas();
+}
+
+function _areaTrCrearInsumo(nombre) {
+  window._areaTrPostCreate = nombre;
+  openAddModal();
+  const f = document.getElementById('fNombre');
+  if (f) f.value = nombre;
 }
 
 function _demConfirmarVinculo(nombreProducto) {
@@ -16971,7 +16988,7 @@ function _areaTrFiltrar(q) {
     </div>`;
   }).join('') + (filtrados.length === 0 ? `
     <div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
-      <button class="btn btn-outline btn-sm" style="margin-left:10px" onclick="closeModal('modalAreaTransfInsumo');showView('viewInsumos')">+ Crear insumo</button>
+      <button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo(document.getElementById('areaTrBuscar').value.trim())">+ Crear "${q}"</button>
     </div>` : '');
   lista.style.display = 'block';
 }
