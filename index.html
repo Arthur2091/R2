@@ -1802,14 +1802,20 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <p class="modal-sub" id="areaTpLocLabel"></p>
     <div class="field">
       <label>Producto</label>
-      <select id="areaTpProducto" style="width:100%" onchange="_areaTpOnChange()">
-        <option value="">— Elegí un producto —</option>
-      </select>
+      <div style="position:relative">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink3);font-size:15px;pointer-events:none">🔍</span>
+        <input id="areaTpBuscar" type="search" placeholder="Escribí el nombre…"
+          oninput="_areaTpFiltrar(this.value)"
+          style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;box-sizing:border-box">
+      </div>
+      <div id="areaTpResultados" style="display:none;border:1px solid var(--border);border-radius:var(--radius);background:#fff;max-height:200px;overflow-y:auto;margin-top:4px"></div>
+      <div id="areaTpSeleccionado" style="display:none;padding:8px 10px;background:var(--accent-light);border-radius:var(--radius);font-size:13px;margin-top:4px;color:var(--accent)"></div>
+      <input type="hidden" id="areaTpProductoKey">
       <div id="areaTpStock" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
-    <div class="field">
+    <div id="areaTpCantField" style="display:none" class="field">
       <label>Cantidad</label>
-      <input id="areaTpCantidad" type="number" min="1" step="1" style="width:100%">
+      <input id="areaTpCantidad" type="number" min="0.001" step="any" style="width:100%">
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalAreaTransfProducto')">Cancelar</button>
@@ -17085,15 +17091,12 @@ function _areaAbrirTransfProducto(locId) {
   if (!loc) return;
   _areaCtx = { locId, modo: 'producto' };
 
-  // Productos disponibles: stockBarra + productos en otras ubicaciones del área origen
   const opts = [];
 
-  // Desde stockBarra (producción general)
   Object.entries(stockBarra).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
     opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en Barra`, nombre, qty, origen: 'barra' });
   });
 
-  // Desde otras ubicaciones (cualquier área)
   areaLocaciones.filter(l => l.id !== locId).forEach(l => {
     const s = _areaLocStock(l.id);
     Object.entries(s.productos).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
@@ -17101,7 +17104,6 @@ function _areaAbrirTransfProducto(locId) {
     });
   });
 
-  // Recetas de fabricación sin stock (carga directa)
   const yaEnOpts = new Set(opts.map(o => o.nombre.toLowerCase()));
   recetas.filter(r => r.tipo === 'fabricacion' && r.nombre)
     .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
@@ -17110,30 +17112,81 @@ function _areaAbrirTransfProducto(locId) {
         opts.push({ key: 'directo::' + r.id, label: `${r.nombre} · Carga directa`, nombre: r.nombre, qty: Infinity, origen: 'directo' });
     });
 
-  const cfg = _AREA_CFG[loc.area];
-  const sel = document.getElementById('areaTpProducto');
-  sel.innerHTML = '<option value="">— Elegí un producto —</option>' +
-    opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
-
-  document.getElementById('areaTpLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
-  document.getElementById('areaTpCantidad').value  = '';
-  document.getElementById('areaTpStock').textContent = '';
   window._areaTpOpts = opts;
+
+  const cfg = _AREA_CFG[loc.area];
+  document.getElementById('areaTpLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
+  document.getElementById('areaTpBuscar').value = '';
+  document.getElementById('areaTpResultados').style.display = 'none';
+  document.getElementById('areaTpResultados').innerHTML = '';
+  document.getElementById('areaTpSeleccionado').style.display = 'none';
+  document.getElementById('areaTpSeleccionado').innerHTML = '';
+  document.getElementById('areaTpProductoKey').value = '';
+  document.getElementById('areaTpStock').textContent = '';
+  document.getElementById('areaTpCantField').style.display = 'none';
+  document.getElementById('areaTpCantidad').value = '';
   openModal('modalAreaTransfProducto');
 }
 
-function _areaTpOnChange() {
-  const key = document.getElementById('areaTpProducto').value;
+function _areaTpFiltrar(q) {
+  const lista = document.getElementById('areaTpResultados');
+  const qOrig = (q || '').trim();
+  const qLow  = qOrig.toLowerCase();
+  const opts  = window._areaTpOpts || [];
+  const filtrados = qLow ? opts.filter(o => o.nombre.toLowerCase().includes(qLow)) : opts;
+
+  if (!filtrados.length) {
+    lista.innerHTML = `<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
+      ${qOrig ? `<button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="_areaTpCrearProducto('${qOrig.replace(/'/g,"\\'")}')">+ Crear "${qOrig}"</button>` : ''}
+    </div>`;
+    lista.style.display = 'block';
+    return;
+  }
+
+  lista.innerHTML = filtrados.map(o => `
+    <div onclick="_areaTpSeleccionar('${o.key.replace(/'/g,"\\'")}','${o.nombre.replace(/'/g,"\\'")}')"
+      style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <strong>${o.nombre}</strong>
+      <span style="margin-left:8px;font-size:11px;color:var(--ink3)">${o.origen === 'directo' ? 'Carga directa' : `${o.qty} disponibles`}</span>
+    </div>`).join('');
+  lista.style.display = 'block';
+}
+
+function _areaTpSeleccionar(key, nombre) {
   const opt = (window._areaTpOpts || []).find(o => o.key === key);
-  document.getElementById('areaTpStock').textContent = opt
-    ? (opt.origen === 'directo' ? 'Carga directa — se suma sin descontar stock' : `Disponible: ${opt.qty}`)
-    : '';
+  if (!opt) return;
+  document.getElementById('areaTpProductoKey').value = key;
+  document.getElementById('areaTpResultados').style.display = 'none';
+  document.getElementById('areaTpBuscar').value = '';
+  document.getElementById('areaTpSeleccionado').innerHTML = `✓ ${opt.nombre}
+    <span style="font-size:11px;margin-left:8px;opacity:.7">${opt.origen === 'directo' ? 'Carga directa' : `${opt.qty} disponibles`}</span>
+    <button onclick="_areaTpLimpiarSel()" style="margin-left:12px;background:none;border:none;cursor:pointer;color:var(--ink3);font-size:12px">✕</button>`;
+  document.getElementById('areaTpSeleccionado').style.display = 'block';
+  document.getElementById('areaTpCantField').style.display = 'block';
   document.getElementById('areaTpCantidad').value = '';
+  document.getElementById('areaTpCantidad').focus();
+}
+
+function _areaTpLimpiarSel() {
+  document.getElementById('areaTpProductoKey').value = '';
+  document.getElementById('areaTpSeleccionado').style.display = 'none';
+  document.getElementById('areaTpCantField').style.display = 'none';
+  document.getElementById('areaTpBuscar').value = '';
+  document.getElementById('areaTpResultados').style.display = 'none';
+}
+
+function _areaTpCrearProducto(nombre) {
+  const key = 'libre::' + nombre;
+  window._areaTpOpts = window._areaTpOpts || [];
+  if (!window._areaTpOpts.find(o => o.key === key))
+    window._areaTpOpts.push({ key, label: nombre, nombre, qty: Infinity, origen: 'directo' });
+  _areaTpSeleccionar(key, nombre);
 }
 
 function _areaConfirmarTransfProducto() {
   if (!_areaCtx?.locId) return;
-  const key   = document.getElementById('areaTpProducto').value;
+  const key   = document.getElementById('areaTpProductoKey').value;
   const cant  = parseFloat(document.getElementById('areaTpCantidad').value);
   const opt   = (window._areaTpOpts || []).find(o => o.key === key);
   if (!opt)  { toast('Elegí un producto', 'error'); return; }
