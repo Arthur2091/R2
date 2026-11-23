@@ -1789,7 +1789,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalAreaTransfInsumo')">Cancelar</button>
-      <button class="btn btn-outline" onclick="_areaTrCrearInsumo(document.getElementById('areaTrBuscar').value.trim())">+ Nuevo insumo</button>
+      <button class="btn btn-outline" onclick="_areaTrCrearInsumo(document.getElementById('areaTrBuscar').value.trim() || '')">+ Nuevo insumo</button>
       <button class="btn btn-primary" onclick="_areaConfirmarTransfInsumo()">Transferir</button>
     </div>
   </div>
@@ -16969,14 +16969,15 @@ function _areaAbrirTransfInsumo(locId) {
 
 function _areaTrFiltrar(q) {
   const lista = document.getElementById('areaTrResultados');
-  q = (q || '').toLowerCase().trim();
+  const qOriginal = (q || '').trim();
+  q = qOriginal.toLowerCase();
   const filtrados = q
     ? _areaTrInsumosList.filter(r => r.ins.nombre.toLowerCase().includes(q))
     : _areaTrInsumosList;
 
   if (!filtrados.length) {
     lista.innerHTML = `<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
-      ${q ? `<button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo('${q.replace(/'/g,"\\'")}')">+ Crear "${q}"</button>` : ''}
+      ${qOriginal ? `<button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo('${qOriginal.replace(/'/g,"\\'")}')">+ Crear "${qOriginal}"</button>` : ''}
     </div>`;
     lista.style.display = 'block';
     return;
