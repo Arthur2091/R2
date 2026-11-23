@@ -16918,7 +16918,8 @@ function _areaAbrirLoc(locId) {
         <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
       </div>
-      <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <div id="alocQtyIns_${insId}" style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <button class="btn btn-outline btn-sm" onclick="_areaEditQty('${locId}','insumos','${insId}',${qty})" title="Editar cantidad">✏️</button>
       <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
     </div>`;
   }).join('');
@@ -16926,15 +16927,17 @@ function _areaAbrirLoc(locId) {
   const rowsProd = _areaLocSortedKeys(locId, 'productos').map(nombre => {
     const qty  = s.productos[nombre];
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div class="area-loc-row" draggable="true" data-key="${encodeURIComponent(nombre)}" data-tipo="productos"
+    const encN = encodeURIComponent(nombre);
+    return `<div class="area-loc-row" draggable="true" data-key="${encN}" data-tipo="productos"
       style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:default">
       <span class="drag-handle" style="color:var(--ink3);font-size:16px;cursor:grab;padding:0 2px;user-select:none" title="Arrastrar para reordenar">⠿</span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${nombre}</div>
         <div style="font-size:11px;color:var(--ink3)">Producto terminado</div>
       </div>
-      <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
-      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarProducto('${locId}','${encodeURIComponent(nombre)}')">Sacar</button>
+      <div id="alocQtyProd_${encN}" style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <button class="btn btn-outline btn-sm" onclick="_areaEditQty('${locId}','productos','${encN}',${qty})" title="Editar cantidad">✏️</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarProducto('${locId}','${encN}')">Sacar</button>
     </div>`;
   }).join('');
 
@@ -16972,6 +16975,23 @@ function _areaAbrirLoc(locId) {
     </div>`);
   _makeDraggable(document.getElementById('modalAreaLoc'));
   _areaLocInitDnd(locId);
+}
+
+function _areaEditQty(locId, tipo, key, qtyActual) {
+  const decoded = decodeURIComponent(key);
+  const nueva = prompt(`Nueva cantidad para "${tipo === 'insumos' ? (insumos.find(i=>i.id===key)?.nombre || key) : decoded}":`, qtyActual);
+  if (nueva === null) return;
+  const val = parseFloat(nueva);
+  if (isNaN(val) || val < 0) { toast('Cantidad inválida', 'error'); return; }
+  const s = _areaLocStock(locId);
+  if (val === 0) {
+    delete s[tipo][decoded];
+  } else {
+    s[tipo][decoded] = val;
+  }
+  persist();
+  _areaAbrirLoc(locId);
+  toast('Cantidad actualizada', 'success');
 }
 
 function _areaLocInitDnd(locId) {
