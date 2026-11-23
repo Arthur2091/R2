@@ -441,6 +441,7 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .chip-efectivo { background: var(--warn-light);   color: var(--warn);   padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
 .chip-ambos    { background: var(--accent-light); color: var(--accent); padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
 .chip-otro     { background: var(--surface2);     color: var(--ink2);   padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
+.dnd-over      { background: var(--accent-light) !important; border-radius: 6px; }
 
 /* WIDE MODAL */
 .modal-wide { width: 820px; }
@@ -16795,6 +16796,26 @@ function _areaLocStock(locId) {
   return areaStock[locId];
 }
 
+function _areaLocOrd(locId, tipo) {
+  const s = _areaLocStock(locId);
+  if (!s[tipo + 'Order']) s[tipo + 'Order'] = [];
+  return s[tipo + 'Order'];
+}
+
+function _areaLocSortedKeys(locId, tipo) {
+  const s    = _areaLocStock(locId);
+  const data = s[tipo] || {};
+  const keys = Object.keys(data).filter(k => (data[k] || 0) > 0);
+  const ord  = _areaLocOrd(locId, tipo);
+  return keys.sort((a, b) => {
+    const ia = ord.indexOf(a), ib = ord.indexOf(b);
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
+
 function _areaTotalItems(locId) {
   const s = _areaLocStock(locId);
   return Object.values(s.insumos).filter(q => q > 0).length
@@ -16885,11 +16906,14 @@ function _areaAbrirLoc(locId) {
   const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
   const s        = _areaLocStock(locId);
 
-  const rowsIns = Object.entries(s.insumos).filter(([,q]) => q > 0).map(([insId, qty]) => {
+  const rowsIns = _areaLocSortedKeys(locId, 'insumos').map(insId => {
+    const qty  = s.insumos[insId];
     const ins  = insumos.find(i => i.id === insId);
     const pres = _depPresentacionLabel(ins);
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+    return `<div class="area-loc-row" draggable="true" data-key="${insId}" data-tipo="insumos"
+      style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:default">
+      <span class="drag-handle" style="color:var(--ink3);font-size:16px;cursor:grab;padding:0 2px;user-select:none" title="Arrastrar para reordenar">⠿</span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
@@ -16899,9 +16923,12 @@ function _areaAbrirLoc(locId) {
     </div>`;
   }).join('');
 
-  const rowsProd = Object.entries(s.productos).filter(([,q]) => q > 0).map(([nombre, qty]) => {
+  const rowsProd = _areaLocSortedKeys(locId, 'productos').map(nombre => {
+    const qty  = s.productos[nombre];
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+    return `<div class="area-loc-row" draggable="true" data-key="${encodeURIComponent(nombre)}" data-tipo="productos"
+      style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:default">
+      <span class="drag-handle" style="color:var(--ink3);font-size:16px;cursor:grab;padding:0 2px;user-select:none" title="Arrastrar para reordenar">⠿</span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${nombre}</div>
         <div style="font-size:11px;color:var(--ink3)">Producto terminado</div>
@@ -16944,6 +16971,49 @@ function _areaAbrirLoc(locId) {
       </div>
     </div>`);
   _makeDraggable(document.getElementById('modalAreaLoc'));
+  _areaLocInitDnd(locId);
+}
+
+function _areaLocInitDnd(locId) {
+  const container = document.querySelector('#modalAreaLoc [style*="overflow-y:auto"]');
+  if (!container) return;
+  let dragSrc = null;
+
+  container.querySelectorAll('.area-loc-row').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragSrc = row;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => row.style.opacity = '0.4', 0);
+    });
+    row.addEventListener('dragend', () => {
+      row.style.opacity = '';
+      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
+    });
+    row.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
+      if (row !== dragSrc) row.classList.add('dnd-over');
+    });
+    row.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrc || dragSrc === row) return;
+      const tipo     = dragSrc.dataset.tipo;
+      const allRows  = [...container.querySelectorAll(`.area-loc-row[data-tipo="${tipo}"]`)];
+      const newOrder = allRows.map(r => decodeURIComponent(r.dataset.key));
+      const srcIdx   = newOrder.indexOf(decodeURIComponent(dragSrc.dataset.key));
+      const tgtIdx   = newOrder.indexOf(decodeURIComponent(row.dataset.key));
+      newOrder.splice(tgtIdx, 0, newOrder.splice(srcIdx, 1)[0]);
+      _areaLocOrd(locId, tipo).splice(0, 999, ...newOrder);
+      persist();
+      // reorder DOM
+      const parent = row.parentElement;
+      const tgt    = tgtIdx > srcIdx ? row.nextSibling : row;
+      parent.insertBefore(dragSrc, tgt);
+      dragSrc.style.opacity = '';
+      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
+    });
+  });
 }
 
 /* ── TRANSFERIR INSUMO DESDE DEPÓSITO ───────────────────────────── */
