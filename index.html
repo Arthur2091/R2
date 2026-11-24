@@ -15236,9 +15236,13 @@ function _depKgLabel(ins, qty) {
   };
   const _fmt = kg => kg < 1 ? `${(kg * 1000).toFixed(0)} g` : `${parseFloat(kg.toFixed(3))} kg`;
   // Estilo "paquete × 3.6kg": presUnitWeight + presUnitWeightUnit
-  if (ins.presUnitWeight && ins.presUnitWeightUnit) {
-    const perPres = (ins.presQty || 1) * ins.presUnitWeight;
-    const kg = _toKg(qty * perPres, ins.presUnitWeightUnit);
+  // Solo cuando presUnit NO es peso directo — evita doble multiplicación (presQty×presUnitWeight)
+  const presUnitEsPeso = ['kg','g'].includes((ins.presUnit || '').toLowerCase());
+  if (!presUnitEsPeso && ins.presUnitWeight && ins.presUnitWeightUnit) {
+    // presQty es un contador de unidades por bulto — solo válido si es entero (ej: 12 sachets/caja)
+    // Si es decimal (ej: 3.6) es dato mal cargado, se ignora para evitar doble multiplicación
+    const count = (ins.presQty && Number.isInteger(ins.presQty)) ? ins.presQty : 1;
+    const kg = _toKg(qty * count * ins.presUnitWeight, ins.presUnitWeightUnit);
     if (kg > 0) return _fmt(kg);
   }
   // Estilo "3.6 kg por presentación": presQty en unidad de peso
