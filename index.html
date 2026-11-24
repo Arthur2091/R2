@@ -441,7 +441,6 @@ tbody td { padding: 10px 14px; vertical-align: middle; }
 .chip-efectivo { background: var(--warn-light);   color: var(--warn);   padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
 .chip-ambos    { background: var(--accent-light); color: var(--accent); padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
 .chip-otro     { background: var(--surface2);     color: var(--ink2);   padding: var(--space-1) var(--space-3); font-size: var(--text-xs); }
-.dnd-over      { background: var(--accent-light) !important; border-radius: 6px; }
 
 /* WIDE MODAL */
 .modal-wide { width: 820px; }
@@ -1673,7 +1672,6 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <button class="dep-subtab" data-prod-sub="cocina" onclick="_prodSwitchSub('cocina')">🍳 Cocina</button>
     <button class="dep-subtab" data-prod-sub="barra" onclick="_prodSwitchSub('barra')">🥤 Barra</button>
     <button class="dep-subtab" data-prod-sub="movs" onclick="_prodSwitchSub('movs')">Historial</button>
-    <button class="dep-subtab" data-prod-sub="demanda" onclick="_prodSwitchSub('demanda')">🧮 Demanda</button>
   </div>
   <div id="produccionScreen"></div>
 </div>
@@ -1790,7 +1788,6 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalAreaTransfInsumo')">Cancelar</button>
-      <button class="btn btn-outline" onclick="_areaTrCrearInsumo(document.getElementById('areaTrBuscar').value.trim() || '')">+ Nuevo insumo</button>
       <button class="btn btn-primary" onclick="_areaConfirmarTransfInsumo()">Transferir</button>
     </div>
   </div>
@@ -1803,20 +1800,14 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
     <p class="modal-sub" id="areaTpLocLabel"></p>
     <div class="field">
       <label>Producto</label>
-      <div style="position:relative">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink3);font-size:15px;pointer-events:none">🔍</span>
-        <input id="areaTpBuscar" type="search" placeholder="Escribí el nombre…"
-          oninput="_areaTpFiltrar(this.value)"
-          style="width:100%;padding:8px 10px 8px 32px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;box-sizing:border-box">
-      </div>
-      <div id="areaTpResultados" style="display:none;border:1px solid var(--border);border-radius:var(--radius);background:#fff;max-height:200px;overflow-y:auto;margin-top:4px"></div>
-      <div id="areaTpSeleccionado" style="display:none;padding:8px 10px;background:var(--accent-light);border-radius:var(--radius);font-size:13px;margin-top:4px;color:var(--accent)"></div>
-      <input type="hidden" id="areaTpProductoKey">
+      <select id="areaTpProducto" style="width:100%" onchange="_areaTpOnChange()">
+        <option value="">— Elegí un producto —</option>
+      </select>
       <div id="areaTpStock" style="font-size:11px;color:var(--accent);margin-top:4px"></div>
     </div>
-    <div id="areaTpCantField" style="display:none" class="field">
+    <div class="field">
       <label>Cantidad</label>
-      <input id="areaTpCantidad" type="number" min="0.001" step="any" style="width:100%">
+      <input id="areaTpCantidad" type="number" min="1" step="1" style="width:100%">
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalAreaTransfProducto')">Cancelar</button>
@@ -3341,16 +3332,6 @@ function saveInsumo() {
   persist();
   closeModal('modalInsumo');
   toast('Insumo guardado', 'success');
-  if (window._areaTrPostCreate) {
-    const nombre = window._areaTrPostCreate;
-    window._areaTrPostCreate = null;
-    _areaTrInsumosList = insumos
-      .map(ins => ({ insId: ins.id, qty: deposito[ins.id] || 0, ins }))
-      .sort((a, b) => a.ins.nombre.localeCompare(b.ins.nombre, 'es'));
-    const buscar = document.getElementById('areaTrBuscar');
-    if (buscar) { buscar.value = nombre; _areaTrFiltrar(nombre); }
-    return;
-  }
   if (_currentVerRecetaId) _reRenderReceta(_currentVerRecetaId);
   else renderInsumos();
 }
@@ -6673,7 +6654,6 @@ function renderProductos() {
     <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
       <button id="prodTabResumen" onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">Resumen</button>
       <button id="prodTabDecisiones" onclick="_renderDecisiones()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">📊 Decisiones</button>
-      <button id="prodTabDemanda" onclick="_renderDemandaRecetas()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">🏭 Por receta</button>
     </div>`;
 
   screen.innerHTML = tabBar + `
@@ -6795,8 +6775,9 @@ function renderProductosRubro(key, rubro) {
   const subtotal = items.reduce((acc, [,p]) => acc + p.total, 0);
 
   if (!esSin) {
-    const maxTop = items[0]?.[1].total || 1;
-    const graficoHtml = items.map(([nombre, pd], i) => {
+    const top10  = items.slice(0, 10);
+    const maxTop = top10[0]?.[1].total || 1;
+    const graficoHtml = top10.map(([nombre, pd], i) => {
       const pct  = Math.round((pd.total / maxTop) * 100);
       const slug = `prod_${i}_${key}`;
       return `<div style="display:grid;grid-template-columns:140px 1fr auto;align-items:center;gap:.75rem;padding:.4rem 0;cursor:pointer" onclick="toggleSection('${slug}')">
@@ -6919,193 +6900,6 @@ function _moverProductosSeleccionados(key) {
   renderProductosRubro(key, '__sin__');
 }
 
-// ── Por receta: match venta → receta ──
-function _demNorm(s) { return (s || '').toLowerCase().trim(); }
-function _demBuscarRecetaVenta(nombreProducto) {
-  const n = _demNorm(nombreProducto);
-  for (const rec of recetas) {
-    if (rec.tipo !== 'venta') continue;
-    if ((ventaAlias[rec.id] || []).some(a => _demNorm(a) === n)) return rec;
-    if (_demNorm(rec.nombre) === n) return rec;
-  }
-  return null;
-}
-
-function _demTraverseFab(recetaId, qty, demand, visitados) {
-  if (visitados.has(recetaId)) return;
-  visitados.add(recetaId);
-  const r = recetas.find(x => x.id === recetaId);
-  if (!r) { visitados.delete(recetaId); return; }
-  const factor = qty / (r.rinde || 1);
-  (r.ingredientes || []).forEach(ing => {
-    const ingQty = (Number(ing.cantidad) || 0) * factor;
-    if (!ingQty) return;
-    if (ing.recetaId) {
-      const sub = recetas.find(x => x.id === ing.recetaId);
-      if (!sub) return;
-      if (sub.tipo === 'fabricacion') {
-        if (!demand[ing.recetaId]) demand[ing.recetaId] = { nombre: sub.nombre, area: sub.area || '', unidades: 0 };
-        demand[ing.recetaId].unidades += ingQty;
-      }
-      _demTraverseFab(ing.recetaId, ingQty, demand, visitados);
-    }
-  });
-  visitados.delete(recetaId);
-}
-
-let _demRDesde = '', _demRHasta = '';
-
-function _demAplicarRango() {
-  _demRDesde = document.getElementById('demRDesde')?.value || '';
-  _demRHasta = document.getElementById('demRHasta')?.value || '';
-  _renderDemandaRecetas();
-}
-function _demPreset(dias) {
-  const fechas = ventas.map(v => v.fecha || '').filter(Boolean).sort();
-  const max = fechas[fechas.length - 1] || '';
-  if (!max) return;
-  if (dias === 0) { _demRDesde = fechas[0]; }
-  else { const d = new Date(max + 'T00:00:00'); d.setDate(d.getDate() - dias + 1); _demRDesde = d.toISOString().slice(0,10); }
-  _demRHasta = max;
-  _renderDemandaRecetas();
-}
-
-function _areaTrCrearInsumo(nombre) {
-  window._areaTrPostCreate = nombre;
-  openAddModal();
-  const f = document.getElementById('fNombre');
-  if (f) f.value = nombre;
-}
-
-function _demConfirmarVinculo(nombreProducto) {
-  const uid = btoa(encodeURIComponent(nombreProducto)).replace(/[^a-zA-Z0-9]/g,'');
-  const sel = document.getElementById('demSel_' + uid);
-  if (!sel || !sel.value) { toast('Elegí una receta primero', 'error'); return; }
-  addVentaAlias(sel.value, nombreProducto);
-  _persistVentaAlias();
-  toast(`"${nombreProducto}" vinculado`, 'success');
-  _renderDemandaRecetas();
-}
-
-function _renderDemandaRecetas() {
-  const screen = document.getElementById('productosScreen');
-  const todasFechas = ventas.map(v => v.fecha || '').filter(Boolean).sort();
-  const fechaMin = todasFechas[0] || '';
-  const fechaMax = todasFechas[todasFechas.length - 1] || '';
-  if (!_demRDesde) _demRDesde = fechaMax;
-  if (!_demRHasta) _demRHasta = fechaMax;
-  const desde = _demRDesde || fechaMax;
-  const hasta = _demRHasta || fechaMax;
-
-  const tabBar = `
-    <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
-      <button onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Resumen</button>
-      <button onclick="_renderDecisiones()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">📊 Decisiones</button>
-      <button style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">🏭 Por receta</button>
-    </div>`;
-
-  if (!fechaMax) {
-    screen.innerHTML = tabBar + `<div class="empty-state"><h3>Sin ventas cargadas</h3><p>Importá el Excel de ventas para calcular la demanda.</p></div>`;
-    return;
-  }
-
-  const ventasFiltradas = ventas.filter(v => { const f = v.fecha || ''; return f >= desde && f <= hasta; });
-
-  // Calcular demanda
-  const demand = {};
-  const sinReceta = {};
-  let totalVentas = 0;
-
-  ventasFiltradas.forEach(v => {
-    const nombre = String(v.producto || '').trim();
-    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
-    const unds = Number(v.unidades) || 0;
-    if (!unds) return;
-    totalVentas += unds;
-    const rec = _demBuscarRecetaVenta(nombre);
-    if (rec) {
-      _demTraverseFab(rec.id, unds, demand, new Set());
-    } else {
-      sinReceta[nombre] = (sinReceta[nombre] || 0) + unds;
-    }
-  });
-
-  // Agrupar por area
-  const grupos = {};
-  Object.values(demand).forEach(d => {
-    const a = d.area || 'Sin área';
-    if (!grupos[a]) grupos[a] = [];
-    grupos[a].push(d);
-  });
-  Object.values(grupos).forEach(g => g.sort((a, b) => b.unidades - a.unidades));
-
-  const areaIcono = { barra: '🥤', cocina: '🍳', fabrica: '🏭', 'fábrica': '🏭' };
-
-  const seccionesHtml = Object.entries(grupos).map(([area, items]) => {
-    const icono = areaIcono[area.toLowerCase()] || '📦';
-    const cards = items.map(d => {
-      const qty = Number.isInteger(d.unidades) ? d.unidades : d.unidades.toFixed(1);
-      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px">
-        <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.nombre}">${d.nombre}</div>
-        <div style="font-size:30px;font-weight:700;color:var(--accent);font-family:var(--mono);line-height:1;margin-top:8px">${qty}</div>
-        <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">unidades</div>
-      </div>`;
-    }).join('');
-    return `<div style="margin-bottom:1.5rem">
-      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);margin-bottom:.6rem">${icono} ${area}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">${cards}</div>
-    </div>`;
-  }).join('');
-
-  const opcionesRecetas = recetas.filter(r => r.tipo === 'venta')
-    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||'','es'))
-    .map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
-
-  const sinRecetaHtml = Object.keys(sinReceta).length ? `
-    <div style="margin-top:1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-      <div style="padding:.7rem 1rem;background:var(--surface2);font-size:.8rem;font-weight:700;color:var(--ink2)">
-        ⚠️ ${Object.keys(sinReceta).length} producto${Object.keys(sinReceta).length!==1?'s':''} sin receta — vinculalos para que aparezcan en el cálculo
-      </div>
-      <div style="display:flex;flex-direction:column">
-        ${Object.entries(sinReceta).sort((a,b)=>a[0].localeCompare(b[0],'es')).map(([n,u]) => {
-          const nEsc = n.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-          return `<div id="demSR_${btoa(encodeURIComponent(n)).replace(/[^a-zA-Z0-9]/g,'')}" style="display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;border-bottom:1px solid var(--border);flex-wrap:wrap">
-            <span style="flex:1;font-size:13px;font-weight:600;min-width:160px">${n}</span>
-            <span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${u} ud</span>
-            <select style="padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:13px var(--font);flex:1;min-width:200px"
-              id="demSel_${btoa(encodeURIComponent(n)).replace(/[^a-zA-Z0-9]/g,'')}">
-              <option value="">— elegí receta —</option>
-              ${opcionesRecetas}
-            </select>
-            <button class="btn btn-primary btn-sm" onclick="_demConfirmarVinculo('${nEsc}')">Vincular</button>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : '';
-
-  const presetBtn = (label, dias) =>
-    `<button class="btn btn-outline" style="font-size:11px;padding:4px 10px" onclick="_demPreset(${dias})">${label}</button>`;
-
-  screen.innerHTML = tabBar + `
-    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.25rem">
-      <span style="font-size:.85rem;font-weight:600;color:var(--ink2)">Período:</span>
-      <input type="date" id="demRDesde" value="${desde}" min="${fechaMin}" max="${fechaMax}"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
-      <span style="color:var(--ink3);font-size:.85rem">→</span>
-      <input type="date" id="demRHasta" value="${hasta}" min="${fechaMin}" max="${fechaMax}"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
-      <button class="btn btn-primary" style="padding:6px 16px;font-size:13px" onclick="_demAplicarRango()">Aplicar</button>
-      <div style="display:flex;gap:.4rem;margin-left:auto;flex-wrap:wrap">
-        ${presetBtn('Hoy',1)} ${presetBtn('7d',7)} ${presetBtn('30d',30)} ${presetBtn('Todo',0)}
-      </div>
-    </div>
-    ${!Object.keys(demand).length
-      ? `<div class="empty-state"><h3>Sin match de recetas</h3><p>Vinculá los productos de Maxirest con sus recetas de venta desde la sección <strong>Recetas</strong>.</p></div>`
-      : `<div style="font-size:12px;color:var(--ink3);margin-bottom:1.25rem">${Object.keys(demand).length} items · ${totalVentas.toLocaleString('es-AR')} unidades vendidas · ${desde === hasta ? desde : desde + ' → ' + hasta}</div>
-         ${seccionesHtml}${sinRecetaHtml}`
-    }`;
-}
-
 function _aplicarRangoDecisiones() {
   const desde = document.getElementById('decDesde')?.value || '';
   const hasta = document.getElementById('decHasta')?.value || '';
@@ -7138,7 +6932,6 @@ function _renderDecisiones(desde, hasta) {
     <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:1.25rem;width:fit-content">
       <button onclick="renderProductos()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">Resumen</button>
       <button style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)">📊 Decisiones</button>
-      <button onclick="_renderDemandaRecetas()" style="padding:7px 18px;border-radius:7px;border:none;font:600 13px var(--font);cursor:pointer;background:transparent;color:var(--ink2)">🏭 Por receta</button>
     </div>
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.25rem">
       <span style="font-size:.85rem;font-weight:600;color:var(--ink2)">Período:</span>
@@ -7200,63 +6993,6 @@ function _renderDecisiones(desde, hasta) {
     if (!ventasPorMes6[rubro]) ventasPorMes6[rubro] = {};
     ventasPorMes6[rubro][mes] = (ventasPorMes6[rubro][mes] || 0) + tot;
   });
-
-  // ── Unidades y frecuencia por producto × día de semana ──
-  const unidadesDiaProd = {};
-  const frecDiaProd     = {};
-  ventasFiltradas.forEach(v => {
-    const nombre = String(v.producto || '').trim();
-    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
-    const fecha = v.fecha || '';
-    if (fecha.length < 10) return;
-    const dow = new Date(fecha + 'T00:00:00').getDay();
-    if (!unidadesDiaProd[nombre]) unidadesDiaProd[nombre] = Array(7).fill(0);
-    if (!frecDiaProd[nombre])     frecDiaProd[nombre]     = Array(7).fill(0);
-    unidadesDiaProd[nombre][dow] += Number(v.unidades) || 0;
-    frecDiaProd[nombre][dow]++;
-  });
-
-  const _tablaProductoDia = (datos, subtitulo) => {
-    const prods = Object.entries(datos)
-      .filter(([, arr]) => arr.some(v => v > 0))
-      .sort((a, b) => b[1].reduce((s,v)=>s+v,0) - a[1].reduce((s,v)=>s+v,0));
-    if (!prods.length) return `<p style="color:var(--ink3);padding:12px 0">Sin datos suficientes.</p>`;
-    const rubrosDisp = [...new Set(prods.map(([n]) => productosRubros[n]).filter(Boolean))].sort();
-    const uid = 'td_' + Math.random().toString(36).slice(2,7);
-    const filterHtml = rubrosDisp.length > 1 ? `
-      <select id="${uid}_sel" style="margin-bottom:10px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font)"
-        onchange="document.querySelectorAll('#${uid}_tbody tr').forEach(tr=>tr.style.display=(!this.value||tr.dataset.rubro===this.value)?'':'none')">
-        <option value="">Todas las categorías</option>
-        ${rubrosDisp.map(r=>`<option value="${r}">${r}</option>`).join('')}
-      </select>` : '';
-    const rows = prods.map(([nombre, arr]) => {
-      const max   = Math.max(...arr);
-      const rubro = productosRubros[nombre] || '';
-      const cells = arr.map((v, i) => {
-        const pct = max > 0 ? v / max : 0;
-        const bg  = v === 0 ? 'transparent' : v === max ? '#065F46' : pct > 0.6 ? 'var(--accent)' : pct > 0.3 ? '#6EE7B7' : '#D1FAE5';
-        const col = (v === max && v > 0) ? '#fff' : v === 0 ? 'var(--ink3)' : '#1A1814';
-        return `<td style="padding:6px 8px;text-align:center;font-family:var(--mono);font-size:12px;background:${bg};color:${col};font-weight:${v===max&&v>0?700:400}">${v||'—'}</td>`;
-      }).join('');
-      const mejorDow = arr.indexOf(max);
-      return `<tr data-rubro="${rubro}" style="border-bottom:1px solid var(--border)">
-        <td style="padding:6px 10px;font-size:12px;font-weight:600;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${nombre}">${nombre}</td>
-        ${cells}
-        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap">${max>0?DIAS[mejorDow]:'—'}</td>
-      </tr>`;
-    }).join('');
-    return `${filterHtml}
-      <div style="overflow-x:auto">
-        <table style="border-collapse:collapse;width:100%">
-          <thead><tr style="background:var(--surface2)">
-            <th style="padding:6px 10px;text-align:left;font-size:11px;font-weight:700;color:var(--ink2)">Producto</th>
-            ${DIAS.map(d=>`<th style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--ink2)">${d}</th>`).join('')}
-            <th style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:var(--accent)">Mejor</th>
-          </tr></thead>
-          <tbody id="${uid}_tbody">${rows}</tbody>
-        </table>
-      </div>`;
-  };
 
   // ── 1. Alertas de caída ──
   const semanas = [...new Set(Object.values(ventasPorSemana).flatMap(s => Object.keys(s)))].sort();
@@ -7468,181 +7204,10 @@ function _renderDecisiones(desde, hasta) {
       ${sec('alertasCaida','Alertas de caída','⚠️','#DC2626', _tablaAlertas(alertasCaida, false), false)}
       ${sec('alertasSubida','Alertas de subida','📈','#065F46', _tablaAlertas(alertasSubida, true), false)}
       ${sec('dias','Mejores días para vender','📅','#1D4ED8', diasHtml)}
-      ${sec('mejordiaproducto','Mejor día por producto','🗓️','#1D4ED8', _tablaProductoDia(unidadesDiaProd, 'unidades'))}
-      ${sec('diasvendido','En qué días se vendió','📆','#7C3AED', _tablaProductoDia(frecDiaProd, 'veces'))}
       ${sec('sinmov','Productos sin movimiento','🛑','#92400E', sinMovHtml)}
       ${sec('rent','Rentabilidad por producto','💰','#065F46', rentHtml)}
       ${sec('rubros','Comparación de rubros','📊','var(--ink)', rubrosHtml2)}
     </div>`;
-}
-
-// ── Demanda: match nombre de venta → receta ──
-function _demMatchReceta(nombreProducto) {
-  const n = nombreProducto.toLowerCase().trim();
-  for (const rec of recetas) {
-    if (rec.tipo !== 'venta') continue;
-    if ((ventaAlias[rec.id] || []).some(a => a.toLowerCase().trim() === n)) return rec;
-    if ((rec.nombre || '').toLowerCase().trim() === n) return rec;
-  }
-  return null;
-}
-function _demMatchFabricacion(nombreProducto) {
-  const n = nombreProducto.toLowerCase().trim();
-  return recetas.find(r => r.tipo === 'fabricacion' && (r.nombre || '').toLowerCase().trim() === n) || null;
-}
-
-let _demDesde = '', _demHasta = '';
-
-function _prodRenderDemanda(screen) {
-  // Rango por defecto: último día con datos
-  const todasFechas = ventas.map(v => v.fecha || '').filter(Boolean).sort();
-  const fechaMin = todasFechas[0] || '';
-  const fechaMax = todasFechas[todasFechas.length - 1] || '';
-  if (!_demDesde) _demDesde = fechaMax;
-  if (!_demHasta) _demHasta = fechaMax;
-
-  const desde = _demDesde || fechaMax;
-  const hasta = _demHasta || fechaMax;
-
-  if (!fechaMax) {
-    screen.innerHTML = `<div class="empty-state"><h3>Sin ventas cargadas</h3><p>Importá el Excel de ventas para calcular la demanda.</p></div>`;
-    return;
-  }
-
-  // Filtrar ventas por rango
-  const ventasFiltradas = ventas.filter(v => {
-    const f = v.fecha || '';
-    return f >= desde && f <= hasta;
-  });
-
-  // Calcular demanda
-  const demand = {}; // recetaId → { nombre, area, unidades, orígenes: [{combo, unidades}] }
-  const sinReceta = {};
-
-  ventasFiltradas.forEach(v => {
-    const nombre = String(v.producto || '').trim();
-    if (!nombre || EXCLUIR_PROD.includes(nombre.toLowerCase())) return;
-    const unds = Number(v.unidades) || 0;
-    if (!unds) return;
-
-    const rec = _demMatchReceta(nombre);
-    if (rec) {
-      const rinde  = rec.rinde || 1;
-      const factor = unds / rinde;
-      const subRecs = (rec.ingredientes || []).filter(i => i.recetaId);
-
-      if (subRecs.length) {
-        // Combo: explotar sub-recetas
-        subRecs.forEach(ing => {
-          const sub = recetas.find(r => r.id === ing.recetaId);
-          if (!sub) return;
-          const qty = (Number(ing.cantidad) || 0) * factor;
-          if (!qty) return;
-          if (!demand[ing.recetaId]) demand[ing.recetaId] = { nombre: sub.nombre, area: sub.area || '', unidades: 0, origenes: [] };
-          demand[ing.recetaId].unidades += qty;
-          demand[ing.recetaId].origenes.push({ combo: nombre, unidades: qty });
-        });
-      } else {
-        // Producto simple (sin sub-recetas): se cuenta como unidad a preparar
-        if (!demand[rec.id]) demand[rec.id] = { nombre: rec.nombre, area: rec.area || '', unidades: 0, origenes: [] };
-        demand[rec.id].unidades += unds;
-        demand[rec.id].origenes.push({ combo: nombre, unidades: unds });
-      }
-      return;
-    }
-
-    // Intento como receta de fabricación directa
-    const fab = _demMatchFabricacion(nombre);
-    if (fab) {
-      if (!demand[fab.id]) demand[fab.id] = { nombre: fab.nombre, area: fab.area || '', unidades: 0, origenes: [] };
-      demand[fab.id].unidades += unds;
-      demand[fab.id].origenes.push({ combo: nombre, unidades: unds });
-      return;
-    }
-
-    sinReceta[nombre] = (sinReceta[nombre] || 0) + unds;
-  });
-
-  // Agrupar por area
-  const grupos = { barra: [], cocina: [], fabrica: [], otro: [] };
-  Object.entries(demand).forEach(([, d]) => {
-    const a = (d.area || '').toLowerCase();
-    if (a === 'barra') grupos.barra.push(d);
-    else if (a === 'cocina') grupos.cocina.push(d);
-    else if (a === 'fabrica' || a === 'fábrica') grupos.fabrica.push(d);
-    else grupos.otro.push(d);
-  });
-  Object.values(grupos).forEach(g => g.sort((a, b) => b.unidades - a.unidades));
-
-  const totalItems = Object.values(demand).length;
-
-  const _secArea = (titulo, icono, items) => {
-    if (!items.length) return '';
-    const cards = items.map(d => {
-      const qtyDisplay = Number.isInteger(d.unidades) ? d.unidades : d.unidades.toFixed(1);
-      const origenesUniq = {};
-      d.origenes.forEach(o => { origenesUniq[o.combo] = (origenesUniq[o.combo] || 0) + o.unidades; });
-      const origenesTooltip = Object.entries(origenesUniq)
-        .map(([c, u]) => `${c}: ${Number.isInteger(u) ? u : u.toFixed(1)}`)
-        .join(' · ');
-      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:default" title="${origenesTooltip.replace(/"/g,'&quot;')}">
-        <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.nombre}</div>
-        <div style="font-size:28px;font-weight:700;color:var(--accent);font-family:var(--mono);line-height:1;margin-top:8px">${qtyDisplay}</div>
-        <div style="font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">unidades</div>
-        ${origenesTooltip ? `<div style="font-size:10px;color:var(--ink3);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${origenesTooltip}</div>` : ''}
-      </div>`;
-    }).join('');
-    return `<div style="margin-bottom:1.5rem">
-      <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink2);margin-bottom:.6rem">${icono} ${titulo}</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">${cards}</div>
-    </div>`;
-  };
-
-  const sinRecetaHtml = Object.keys(sinReceta).length ? `
-    <details style="margin-top:1rem">
-      <summary style="font-size:.8rem;color:var(--ink3);cursor:pointer">${Object.keys(sinReceta).length} producto${Object.keys(sinReceta).length!==1?'s':''} sin receta configurada</summary>
-      <div style="margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.4rem">
-        ${Object.entries(sinReceta).sort((a,b)=>b[1]-a[1]).map(([n,u])=>
-          `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:12px">${n} <strong>${Number.isInteger(u)?u:u.toFixed(1)}</strong></span>`
-        ).join('')}
-      </div>
-    </details>` : '';
-
-  const _preset = (label, dias) => {
-    const max = fechaMax;
-    let d;
-    if (dias === 0) { d = fechaMin; }
-    else { const dt = new Date(max + 'T00:00:00'); dt.setDate(dt.getDate() - dias + 1); d = dt.toISOString().slice(0,10); }
-    return `<button class="btn btn-outline" style="font-size:11px;padding:4px 10px"
-      onclick="_demDesde='${d}';_demHasta='${max}';_prodRenderDemanda(document.getElementById('produccionScreen'))">${label}</button>`;
-  };
-
-  screen.innerHTML = `
-    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem 1rem;margin-bottom:1.25rem">
-      <span style="font-size:.85rem;font-weight:600;color:var(--ink2)">Período:</span>
-      <input type="date" id="demDesdeInput" value="${desde}" min="${fechaMin}" max="${fechaMax}"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
-      <span style="color:var(--ink3);font-size:.85rem">→</span>
-      <input type="date" id="demHastaInput" value="${hasta}" min="${fechaMin}" max="${fechaMax}"
-        style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font:13px var(--font);color:var(--ink)">
-      <button class="btn btn-primary" style="padding:6px 16px;font-size:13px"
-        onclick="_demDesde=document.getElementById('demDesdeInput').value;_demHasta=document.getElementById('demHastaInput').value;_prodRenderDemanda(document.getElementById('produccionScreen'))">Aplicar</button>
-      <div style="display:flex;gap:.4rem;margin-left:auto;flex-wrap:wrap">
-        ${_preset('Hoy', 1)}
-        ${_preset('7d', 7)}
-        ${_preset('30d', 30)}
-        ${_preset('Todo', 0)}
-      </div>
-    </div>
-    ${!totalItems
-      ? `<div class="empty-state"><h3>Sin match de recetas</h3><p>Vinculá los productos de ventas con recetas desde la sección Recetas.</p></div>`
-      : `<div style="font-size:12px;color:var(--ink3);margin-bottom:1rem">${ventasFiltradas.length.toLocaleString('es-AR')} ventas · ${totalItems} items a producir · período ${desde} → ${hasta}</div>
-         ${_secArea('Barra', '🥤', grupos.barra)}
-         ${_secArea('Cocina', '🍳', grupos.cocina)}
-         ${_secArea('Fábrica', '🏭', grupos.fabrica)}
-         ${_secArea('Sin área', '📦', grupos.otro)}
-         ${sinRecetaHtml}`
-    }`;
 }
 
 const _GASTOS_FIJOS_CAT_ORDER = ['Servicios','Alquiler','Impuestos','Sindicato','Seguros y profesional','Otros'];
@@ -15661,6 +15226,29 @@ function _depPresentacionLabel(ins) {
   return ins.presUnit || ins.unidad || 'presentación';
 }
 
+function _depKgLabel(ins, qty) {
+  if (!ins || !qty) return '';
+  const _toKg = (val, unit) => {
+    const u = (unit || '').toLowerCase();
+    if (u === 'kg') return val;
+    if (u === 'g')  return val / 1000;
+    return null;
+  };
+  const _fmt = kg => kg < 1 ? `${(kg * 1000).toFixed(0)} g` : `${parseFloat(kg.toFixed(3))} kg`;
+  // Estilo "paquete × 3.6kg": presUnitWeight + presUnitWeightUnit
+  if (ins.presUnitWeight && ins.presUnitWeightUnit) {
+    const perPres = (ins.presQty || 1) * ins.presUnitWeight;
+    const kg = _toKg(qty * perPres, ins.presUnitWeightUnit);
+    if (kg > 0) return _fmt(kg);
+  }
+  // Estilo "3.6 kg por presentación": presQty en unidad de peso
+  if (ins.presQty && ins.presUnit) {
+    const kg = _toKg(qty * ins.presQty, ins.presUnit);
+    if (kg > 0) return _fmt(kg);
+  }
+  return '';
+}
+
 function _depBadgeUpdate() {
   const pendCount = depositoMovs.filter(m => m.estado === 'pendiente').length;
   const badge = document.getElementById('depBadge');
@@ -15800,6 +15388,7 @@ function _depAbrirStockProv(provId) {
       </div>
       <div style="text-align:right">
         <div style="font-size:20px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono)">${qtyDisplay}</div>
+        ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
         ${bajo ? `<div style="font-size:10px;color:#92400E;font-weight:600">bajo</div>` : ''}
       </div>
       <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}');document.getElementById('modalDepStockProv').querySelector('.overlay, [id]')?.remove?.()">Sacar</button>
@@ -15843,7 +15432,10 @@ function _depAbrirSinUbicar() {
         <div style="font-weight:600;font-size:13px">${n}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
       </div>
-      <div style="font-size:18px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono)">${qtyD}</div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${bajo ? '#92400E' : 'var(--accent)'};font-family:var(--mono)">${qtyD}</div>
+        ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
+      </div>
       ${depLocs.length ? `<select id="sinUbLoc_${iid}" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><option value="">→ Loc</option>${opts}</select>
       <button class="btn btn-outline btn-sm" onclick="_depUbicarInsumo('${iid}')">Ubicar</button>` : ''}
     </div>`;
@@ -16086,7 +15678,9 @@ function _depAbrirSalida(insumoId) {
   _depSalidaCtx = { insumoId };
   const pres = _depPresentacionLabel(ins);
   document.getElementById('depSalidaTitulo').textContent = `Sacar: ${ins.nombre}`;
-  document.getElementById('depSalidaSub').innerHTML = `Stock actual: <strong>${deposito[insumoId] || 0}</strong> ${pres}`;
+  const stockQty = deposito[insumoId] || 0;
+  const kgLabel = _depKgLabel(ins, stockQty);
+  document.getElementById('depSalidaSub').innerHTML = `Stock actual: <strong>${stockQty}</strong> ${pres}${kgLabel ? ` <span style="color:var(--ink2)">(${kgLabel})</span>` : ''}`;
   document.getElementById('depSalidaCantidad').value = '1';
   document.getElementById('depSalidaMotivo').value = '';
   openModal('modalDepSalida');
@@ -16796,26 +16390,6 @@ function _areaLocStock(locId) {
   return areaStock[locId];
 }
 
-function _areaLocOrd(locId, tipo) {
-  const s = _areaLocStock(locId);
-  if (!s[tipo + 'Order']) s[tipo + 'Order'] = [];
-  return s[tipo + 'Order'];
-}
-
-function _areaLocSortedKeys(locId, tipo) {
-  const s    = _areaLocStock(locId);
-  const data = s[tipo] || {};
-  const keys = Object.keys(data).filter(k => (data[k] || 0) > 0);
-  const ord  = _areaLocOrd(locId, tipo);
-  return keys.sort((a, b) => {
-    const ia = ord.indexOf(a), ib = ord.indexOf(b);
-    if (ia === -1 && ib === -1) return 0;
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
-}
-
 function _areaTotalItems(locId) {
   const s = _areaLocStock(locId);
   return Object.values(s.insumos).filter(q => q > 0).length
@@ -16906,38 +16480,32 @@ function _areaAbrirLoc(locId) {
   const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
   const s        = _areaLocStock(locId);
 
-  const rowsIns = _areaLocSortedKeys(locId, 'insumos').map(insId => {
-    const qty  = s.insumos[insId];
+  const rowsIns = Object.entries(s.insumos).filter(([,q]) => q > 0).map(([insId, qty]) => {
     const ins  = insumos.find(i => i.id === insId);
     const pres = _depPresentacionLabel(ins);
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div class="area-loc-row" draggable="true" data-key="${insId}" data-tipo="insumos"
-      style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:default">
-      <span class="drag-handle" style="color:var(--ink3);font-size:16px;cursor:grab;padding:0 2px;user-select:none" title="Arrastrar para reordenar">⠿</span>
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
       </div>
-      <div id="alocQtyIns_${insId}" style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
-      <button class="btn btn-outline btn-sm" onclick="_areaEditQty('${locId}','insumos','${insId}',${qty})" title="Editar cantidad">✏️</button>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+        ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
+      </div>
       <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
     </div>`;
   }).join('');
 
-  const rowsProd = _areaLocSortedKeys(locId, 'productos').map(nombre => {
-    const qty  = s.productos[nombre];
+  const rowsProd = Object.entries(s.productos).filter(([,q]) => q > 0).map(([nombre, qty]) => {
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    const encN = encodeURIComponent(nombre);
-    return `<div class="area-loc-row" draggable="true" data-key="${encN}" data-tipo="productos"
-      style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);cursor:default">
-      <span class="drag-handle" style="color:var(--ink3);font-size:16px;cursor:grab;padding:0 2px;user-select:none" title="Arrastrar para reordenar">⠿</span>
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;font-size:13px">${nombre}</div>
         <div style="font-size:11px;color:var(--ink3)">Producto terminado</div>
       </div>
-      <div id="alocQtyProd_${encN}" style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
-      <button class="btn btn-outline btn-sm" onclick="_areaEditQty('${locId}','productos','${encN}',${qty})" title="Editar cantidad">✏️</button>
-      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarProducto('${locId}','${encN}')">Sacar</button>
+      <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarProducto('${locId}','${encodeURIComponent(nombre)}')">Sacar</button>
     </div>`;
   }).join('');
 
@@ -16974,66 +16542,6 @@ function _areaAbrirLoc(locId) {
       </div>
     </div>`);
   _makeDraggable(document.getElementById('modalAreaLoc'));
-  _areaLocInitDnd(locId);
-}
-
-function _areaEditQty(locId, tipo, key, qtyActual) {
-  const decoded = decodeURIComponent(key);
-  const nueva = prompt(`Nueva cantidad para "${tipo === 'insumos' ? (insumos.find(i=>i.id===key)?.nombre || key) : decoded}":`, qtyActual);
-  if (nueva === null) return;
-  const val = parseFloat(nueva);
-  if (isNaN(val) || val < 0) { toast('Cantidad inválida', 'error'); return; }
-  const s = _areaLocStock(locId);
-  if (val === 0) {
-    delete s[tipo][decoded];
-  } else {
-    s[tipo][decoded] = val;
-  }
-  persist();
-  _areaAbrirLoc(locId);
-  toast('Cantidad actualizada', 'success');
-}
-
-function _areaLocInitDnd(locId) {
-  const container = document.querySelector('#modalAreaLoc [style*="overflow-y:auto"]');
-  if (!container) return;
-  let dragSrc = null;
-
-  container.querySelectorAll('.area-loc-row').forEach(row => {
-    row.addEventListener('dragstart', e => {
-      dragSrc = row;
-      e.dataTransfer.effectAllowed = 'move';
-      setTimeout(() => row.style.opacity = '0.4', 0);
-    });
-    row.addEventListener('dragend', () => {
-      row.style.opacity = '';
-      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
-    });
-    row.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
-      if (row !== dragSrc) row.classList.add('dnd-over');
-    });
-    row.addEventListener('drop', e => {
-      e.preventDefault();
-      if (!dragSrc || dragSrc === row) return;
-      const tipo     = dragSrc.dataset.tipo;
-      const allRows  = [...container.querySelectorAll(`.area-loc-row[data-tipo="${tipo}"]`)];
-      const newOrder = allRows.map(r => decodeURIComponent(r.dataset.key));
-      const srcIdx   = newOrder.indexOf(decodeURIComponent(dragSrc.dataset.key));
-      const tgtIdx   = newOrder.indexOf(decodeURIComponent(row.dataset.key));
-      newOrder.splice(tgtIdx, 0, newOrder.splice(srcIdx, 1)[0]);
-      _areaLocOrd(locId, tipo).splice(0, 999, ...newOrder);
-      persist();
-      // reorder DOM
-      const parent = row.parentElement;
-      const tgt    = tgtIdx > srcIdx ? row.nextSibling : row;
-      parent.insertBefore(dragSrc, tgt);
-      dragSrc.style.opacity = '';
-      container.querySelectorAll('.area-loc-row').forEach(r => r.classList.remove('dnd-over'));
-    });
-  });
 }
 
 /* ── TRANSFERIR INSUMO DESDE DEPÓSITO ───────────────────────────── */
@@ -17045,9 +16553,13 @@ function _areaAbrirTransfInsumo(locId) {
   if (!loc) return;
   _areaCtx = { locId, modo: 'insumo' };
 
-  _areaTrInsumosList = insumos
-    .map(ins => ({ insId: ins.id, qty: deposito[ins.id] || 0, ins }))
+  _areaTrInsumosList = Object.entries(deposito)
+    .filter(([, qty]) => qty > 0)
+    .map(([insId, qty]) => ({ insId, qty, ins: insumos.find(i => i.id === insId) }))
+    .filter(r => r.ins)
     .sort((a, b) => a.ins.nombre.localeCompare(b.ins.nombre, 'es'));
+
+  if (!_areaTrInsumosList.length) { toast('El Depósito está vacío', 'error'); return; }
 
   const cfg = _AREA_CFG[loc.area];
   document.getElementById('areaTrLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
@@ -17065,28 +16577,22 @@ function _areaAbrirTransfInsumo(locId) {
 
 function _areaTrFiltrar(q) {
   const lista = document.getElementById('areaTrResultados');
-  const qOriginal = (q || '').trim();
-  q = qOriginal.toLowerCase();
+  q = (q || '').toLowerCase().trim();
   const filtrados = q
     ? _areaTrInsumosList.filter(r => r.ins.nombre.toLowerCase().includes(q))
     : _areaTrInsumosList;
-
   if (!filtrados.length) {
-    lista.innerHTML = `<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
-      ${qOriginal ? `<button class="btn btn-primary btn-sm" style="margin-left:10px" onclick="_areaTrCrearInsumo('${qOriginal.replace(/'/g,"\\'")}')">+ Crear "${qOriginal}"</button>` : ''}
-    </div>`;
+    lista.innerHTML = '<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados</div>';
     lista.style.display = 'block';
     return;
   }
-
-  lista.innerHTML = filtrados.map(r => {
-    const pres    = _depPresentacionLabel(r.ins);
-    const directo = r.qty <= 0;
+  lista.innerHTML = filtrados.slice(0, 20).map(r => {
+    const pres = _depPresentacionLabel(r.ins);
     return `<div onclick="_areaTrSeleccionar('${r.insId}')"
       style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <strong>${r.ins.nombre}</strong>
-      <span style="color:${directo?'var(--ink3)':'var(--accent)'};margin-left:8px;font-size:11px">${directo ? 'Carga directa' : r.qty + ' en depósito' + (pres ? ' · ' + pres : '')}</span>
+      <span style="color:var(--ink3);margin-left:8px">${r.qty} disp.${pres ? ' · ' + pres : ''}</span>
     </div>`;
   }).join('');
   lista.style.display = 'block';
@@ -17149,13 +16655,11 @@ function _areaConfirmarTransfInsumo() {
     cantPres = Number((cantRaw / ins.presQty).toFixed(6));
   }
 
+  if ((deposito[insId] || 0) < cantPres - 0.0001) { toast('Stock insuficiente en Depósito', 'error'); return; }
+
   const loc = areaLocaciones.find(l => l.id === _areaCtx.locId);
-  const enDeposito = deposito[insId] || 0;
-  const esDirecta  = enDeposito < cantPres - 0.0001;
-  if (!esDirecta) {
-    deposito[insId] = Number(((enDeposito) - cantPres).toFixed(6));
-    if (deposito[insId] <= 0.0001) delete deposito[insId];
-  }
+  deposito[insId] = Number(((deposito[insId] || 0) - cantPres).toFixed(6));
+  if (deposito[insId] <= 0.0001) delete deposito[insId];
 
   const s = _areaLocStock(_areaCtx.locId);
   s.insumos[insId] = Number(((s.insumos[insId] || 0) + cantPres).toFixed(6));
@@ -17181,12 +16685,15 @@ function _areaAbrirTransfProducto(locId) {
   if (!loc) return;
   _areaCtx = { locId, modo: 'producto' };
 
+  // Productos disponibles: stockBarra + productos en otras ubicaciones del área origen
   const opts = [];
 
+  // Desde stockBarra (producción general)
   Object.entries(stockBarra).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
-    opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en Barra`, nombre, qty, origen: 'barra' });
+    opts.push({ key: 'barra::' + nombre, label: `${nombre} · ${qty} en stock Barra`, nombre, qty, origen: 'barra' });
   });
 
+  // Desde otras ubicaciones (cualquier área)
   areaLocaciones.filter(l => l.id !== locId).forEach(l => {
     const s = _areaLocStock(l.id);
     Object.entries(s.productos).filter(([,q]) => q > 0).forEach(([nombre, qty]) => {
@@ -17194,100 +16701,41 @@ function _areaAbrirTransfProducto(locId) {
     });
   });
 
-  const yaEnOpts = new Set(opts.map(o => o.nombre.toLowerCase()));
-  recetas.filter(r => r.tipo === 'fabricacion' && r.nombre)
-    .sort((a,b) => a.nombre.localeCompare(b.nombre,'es'))
-    .forEach(r => {
-      if (!yaEnOpts.has(r.nombre.toLowerCase()))
-        opts.push({ key: 'directo::' + r.id, label: `${r.nombre} · Carga directa`, nombre: r.nombre, qty: Infinity, origen: 'directo' });
-    });
-
-  window._areaTpOpts = opts;
+  if (!opts.length) { toast('No hay productos terminados disponibles para transferir', 'error'); return; }
 
   const cfg = _AREA_CFG[loc.area];
+  const sel = document.getElementById('areaTpProducto');
+  sel.innerHTML = '<option value="">— Elegí un producto —</option>' +
+    opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+
   document.getElementById('areaTpLocLabel').textContent = `→ ${loc.nombre} (${cfg.label})`;
-  document.getElementById('areaTpBuscar').value = '';
-  document.getElementById('areaTpResultados').style.display = 'none';
-  document.getElementById('areaTpResultados').innerHTML = '';
-  document.getElementById('areaTpSeleccionado').style.display = 'none';
-  document.getElementById('areaTpSeleccionado').innerHTML = '';
-  document.getElementById('areaTpProductoKey').value = '';
+  document.getElementById('areaTpCantidad').value  = '';
   document.getElementById('areaTpStock').textContent = '';
-  document.getElementById('areaTpCantField').style.display = 'none';
-  document.getElementById('areaTpCantidad').value = '';
+  window._areaTpOpts = opts;
   openModal('modalAreaTransfProducto');
 }
 
-function _areaTpFiltrar(q) {
-  const lista = document.getElementById('areaTpResultados');
-  const qOrig = (q || '').trim();
-  const qLow  = qOrig.toLowerCase();
-  const opts  = window._areaTpOpts || [];
-  const filtrados = qLow ? opts.filter(o => o.nombre.toLowerCase().includes(qLow)) : opts;
-
-  if (!filtrados.length) {
-    lista.innerHTML = `<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados
-      ${qOrig ? `<button class="btn btn-primary btn-sm" style="margin-left:8px" onclick="_areaTpCrearProducto('${qOrig.replace(/'/g,"\\'")}')">+ Crear "${qOrig}"</button>` : ''}
-    </div>`;
-    lista.style.display = 'block';
-    return;
-  }
-
-  lista.innerHTML = filtrados.map(o => `
-    <div onclick="_areaTpSeleccionar('${o.key.replace(/'/g,"\\'")}','${o.nombre.replace(/'/g,"\\'")}')"
-      style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
-      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-      <strong>${o.nombre}</strong>
-      <span style="margin-left:8px;font-size:11px;color:var(--ink3)">${o.origen === 'directo' ? 'Carga directa' : `${o.qty} disponibles`}</span>
-    </div>`).join('');
-  lista.style.display = 'block';
-}
-
-function _areaTpSeleccionar(key, nombre) {
+function _areaTpOnChange() {
+  const key = document.getElementById('areaTpProducto').value;
   const opt = (window._areaTpOpts || []).find(o => o.key === key);
-  if (!opt) return;
-  document.getElementById('areaTpProductoKey').value = key;
-  document.getElementById('areaTpResultados').style.display = 'none';
-  document.getElementById('areaTpBuscar').value = '';
-  document.getElementById('areaTpSeleccionado').innerHTML = `✓ ${opt.nombre}
-    <span style="font-size:11px;margin-left:8px;opacity:.7">${opt.origen === 'directo' ? 'Carga directa' : `${opt.qty} disponibles`}</span>
-    <button onclick="_areaTpLimpiarSel()" style="margin-left:12px;background:none;border:none;cursor:pointer;color:var(--ink3);font-size:12px">✕</button>`;
-  document.getElementById('areaTpSeleccionado').style.display = 'block';
-  document.getElementById('areaTpCantField').style.display = 'block';
+  document.getElementById('areaTpStock').textContent = opt ? `Disponible: ${opt.qty}` : '';
   document.getElementById('areaTpCantidad').value = '';
-  document.getElementById('areaTpCantidad').focus();
-}
-
-function _areaTpLimpiarSel() {
-  document.getElementById('areaTpProductoKey').value = '';
-  document.getElementById('areaTpSeleccionado').style.display = 'none';
-  document.getElementById('areaTpCantField').style.display = 'none';
-  document.getElementById('areaTpBuscar').value = '';
-  document.getElementById('areaTpResultados').style.display = 'none';
-}
-
-function _areaTpCrearProducto(nombre) {
-  const key = 'libre::' + nombre;
-  window._areaTpOpts = window._areaTpOpts || [];
-  if (!window._areaTpOpts.find(o => o.key === key))
-    window._areaTpOpts.push({ key, label: nombre, nombre, qty: Infinity, origen: 'directo' });
-  _areaTpSeleccionar(key, nombre);
 }
 
 function _areaConfirmarTransfProducto() {
   if (!_areaCtx?.locId) return;
-  const key   = document.getElementById('areaTpProductoKey').value;
+  const key   = document.getElementById('areaTpProducto').value;
   const cant  = parseFloat(document.getElementById('areaTpCantidad').value);
   const opt   = (window._areaTpOpts || []).find(o => o.key === key);
   if (!opt)  { toast('Elegí un producto', 'error'); return; }
   if (!isFinite(cant) || cant <= 0) { toast('Cantidad inválida', 'error'); return; }
-  if (opt.origen !== 'directo' && cant > opt.qty) { toast('Cantidad mayor a la disponible', 'error'); return; }
+  if (cant > opt.qty) { toast('Cantidad mayor a la disponible', 'error'); return; }
 
-  // Descontar origen (solo si no es carga directa)
+  // Descontar origen
   if (opt.origen === 'barra') {
     stockBarra[opt.nombre] = Number(((stockBarra[opt.nombre] || 0) - cant).toFixed(3));
     if (stockBarra[opt.nombre] <= 0) delete stockBarra[opt.nombre];
-  } else if (opt.origen === 'loc') {
+  } else {
     const srcS = _areaLocStock(opt.locId);
     srcS.productos[opt.nombre] = Number(((srcS.productos[opt.nombre] || 0) - cant).toFixed(3));
     if (srcS.productos[opt.nombre] <= 0) delete srcS.productos[opt.nombre];
@@ -17347,7 +16795,8 @@ function _areaSacarInsumo(locId, insId) {
   _areaCtx   = { locId, insId, tipo: 'insumo' };
   const pres = _depPresentacionLabel(ins);
   document.getElementById('areaSacarTitulo').textContent     = `Sacar: ${ins?.nombre || '?'}`;
-  document.getElementById('areaSacarSub').textContent        = `Disponible en ${loc?.nombre || '?'}: ${qty}${pres ? ' ' + pres : ''}`;
+  const kgLbl = _depKgLabel(ins, qty);
+  document.getElementById('areaSacarSub').textContent = `Disponible en ${loc?.nombre || '?'}: ${qty}${pres ? ' ' + pres : ''}${kgLbl ? ' (' + kgLbl + ')' : ''}`;
   document.getElementById('areaSacarCantidad').value         = '';
   document.getElementById('areaSacarMotivo').value           = '';
   document.getElementById('areaSacarConversion').textContent = '';
@@ -18194,11 +17643,10 @@ function renderProduccion() {
   const screen = document.getElementById('produccionScreen');
   if (!screen) return;
   _prodInitPeriodo();
-  if (_prodSubtab === 'todos')   return _prodRenderTodos(screen);
-  if (_prodSubtab === 'cocina')  return _prodRenderArea(screen, 'cocina');
-  if (_prodSubtab === 'barra')   return _prodRenderArea(screen, 'barra');
-  if (_prodSubtab === 'movs')    return _prodRenderMovs(screen);
-  if (_prodSubtab === 'demanda') return _prodRenderDemanda(screen);
+  if (_prodSubtab === 'todos')  return _prodRenderTodos(screen);
+  if (_prodSubtab === 'cocina') return _prodRenderArea(screen, 'cocina');
+  if (_prodSubtab === 'barra')  return _prodRenderArea(screen, 'barra');
+  if (_prodSubtab === 'movs')   return _prodRenderMovs(screen);
 }
 
 function _prodCard(nombre, qty, area) {
