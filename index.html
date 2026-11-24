@@ -15381,7 +15381,7 @@ function _depAbrirStockProv(provId) {
     const pres = _depPresentacionLabel(ins);
     const bajo = qty <= 1;
     const qtyDisplay = Number.isInteger(qty) ? qty : qty.toFixed(2);
-    return `<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+    return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-weight:600;font-size:13px;color:var(--ink)">${n}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3);margin-top:1px">${pres}</div>` : ''}
@@ -15392,6 +15392,7 @@ function _depAbrirStockProv(provId) {
         ${bajo ? `<div style="font-size:10px;color:#92400E;font-weight:600">bajo</div>` : ''}
       </div>
       <button class="btn btn-outline btn-sm" onclick="_depAbrirSalida('${iid}');document.getElementById('modalDepStockProv').querySelector('.overlay, [id]')?.remove?.()">Sacar</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_depBajaInsumo('${iid}','${n}')">Baja</button>
     </div>`;
   }).join('');
 
@@ -15427,7 +15428,7 @@ function _depAbrirSinUbicar() {
     const bajo = qty <= 1;
     const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(3);
     const opts = depLocs.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
-    return `<div style="display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)">
+    return `<div style="display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-weight:600;font-size:13px">${n}</div>
         ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
@@ -15437,7 +15438,8 @@ function _depAbrirSinUbicar() {
         ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
       </div>
       ${depLocs.length ? `<select id="sinUbLoc_${iid}" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><option value="">→ Loc</option>${opts}</select>
-      <button class="btn btn-outline btn-sm" onclick="_depUbicarInsumo('${iid}')">Ubicar</button>` : ''}
+      <button class="btn btn-outline btn-sm" onclick="_depUbicarInsumo('${iid}')">Ubicar</button>` : '<span></span><span></span>'}
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_depBajaInsumo('${iid}','${n}')">Baja</button>
     </div>`;
   }).join('');
 
@@ -15732,6 +15734,16 @@ function _depAprobar(movId) {
   _depBadgeUpdate();
   renderDeposito();
   toast('Aprobado', 'success');
+}
+
+function _depBajaInsumo(iid, nombre) {
+  if (!confirm(`¿Dar de baja "${nombre}" del depósito? Se eliminará todo el stock cargado.`)) return;
+  delete deposito[iid];
+  persist();
+  document.getElementById('modalDepStockProv')?.remove();
+  document.getElementById('modalDepSinUbicar')?.remove();
+  renderDeposito();
+  toast(`"${nombre}" dado de baja`, 'success');
 }
 
 function _depRechazar(movId) {
@@ -16494,6 +16506,7 @@ function _areaAbrirLoc(locId) {
         ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
       </div>
       <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger);opacity:.7" onclick="_areaBajaInsumo('${locId}','${insId}','${ins?.nombre || insId}')">Baja</button>
     </div>`;
   }).join('');
 
@@ -16785,6 +16798,16 @@ function _areaSacarDestinoOpts(excluirLocId) {
     opts += '</optgroup>';
   });
   return opts;
+}
+
+function _areaBajaInsumo(locId, iid, nombre) {
+  if (!confirm(`¿Dar de baja "${nombre}" de esta ubicación? Se eliminará todo el stock en este lugar.`)) return;
+  const s = _areaLocStock(locId);
+  delete s.insumos[iid];
+  persist();
+  document.getElementById('modalAreaLoc')?.remove();
+  _areaAbrirLoc(locId);
+  toast(`"${nombre}" dado de baja`, 'success');
 }
 
 function _areaSacarInsumo(locId, insId) {
