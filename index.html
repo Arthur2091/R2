@@ -16658,12 +16658,53 @@ function _areaTrFiltrar(q) {
 }
 
 function _areaTrCrearRapido(nombre) {
+  const lista = document.getElementById('areaTrResultados');
+  lista.innerHTML = `
+    <div style="padding:12px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:10px">Nuevo insumo: <em>${nombre}</em></div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--ink3);white-space:nowrap">Presentación</span>
+        <input id="_trNuevoQty" type="number" step="any" min="0" placeholder="1"
+          style="width:60px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font:13px var(--mono)">
+        <input id="_trNuevoUnit" type="text" placeholder="ej: horma, kg, L"
+          style="width:80px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font:13px var(--font)">
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--ink3);white-space:nowrap">Contenido</span>
+        <input id="_trNuevoPesoQty" type="number" step="any" min="0" placeholder="ej: 6.5"
+          style="width:60px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;font:13px var(--mono)">
+        <select id="_trNuevoPesoUnit" style="padding:5px 6px;border:1px solid var(--border);border-radius:6px;font:13px var(--font)">
+          <option value="">—</option>
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="L">L</option>
+          <option value="ml">ml</option>
+        </select>
+        <span style="font-size:11px;color:var(--ink3)">por unidad</span>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('areaTrResultados').style.display='none'">Cancelar</button>
+        <button class="btn btn-primary btn-sm" onclick="_areaTrConfirmarNuevo('${nombre.replace(/'/g,"\\'")}')">Crear y agregar</button>
+      </div>
+    </div>`;
+  lista.style.display = 'block';
+  setTimeout(() => document.getElementById('_trNuevoQty')?.focus(), 50);
+}
+
+function _areaTrConfirmarNuevo(nombre) {
+  const presQty  = parseFloat(document.getElementById('_trNuevoQty')?.value) || null;
+  const presUnit = document.getElementById('_trNuevoUnit')?.value.trim() || null;
+  const pesoQty  = parseFloat(document.getElementById('_trNuevoPesoQty')?.value) || null;
+  const pesoUnit = document.getElementById('_trNuevoPesoUnit')?.value || null;
   const nuevo = {
     id: crypto.randomUUID(),
     nombre: nombre.trim(),
     categoria: typeof categorizarInsumo === 'function' ? categorizarInsumo(nombre) : '',
-    unidad: '', precioConIVA: null, precioSinIVA: null,
-    presQty: null, presUnit: null, presUnitWeight: null, presUnitWeightUnit: null,
+    unidad: presUnit || '',
+    precioConIVA: null, precioSinIVA: null,
+    presQty, presUnit: presQty ? presUnit : null,
+    presUnitWeight: pesoQty || null,
+    presUnitWeightUnit: (pesoQty && pesoUnit) ? pesoUnit : null,
     precioPresOverride: null, observaciones: '', aliases: []
   };
   insumos.push(nuevo);
