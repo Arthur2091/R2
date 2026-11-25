@@ -16634,7 +16634,14 @@ function _areaTrFiltrar(q) {
     ? _areaTrInsumosList.filter(r => r.ins.nombre.toLowerCase().includes(q))
     : _areaTrInsumosList;
   if (!filtrados.length) {
-    lista.innerHTML = '<div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados</div>';
+    const qEsc = q.replace(/'/g, "\\'");
+    lista.innerHTML = `
+      <div style="padding:10px 12px;color:var(--ink3);font-size:13px">Sin resultados</div>
+      ${q ? `<div onclick="_areaTrCrearRapido('${qEsc}')"
+        style="padding:9px 12px;cursor:pointer;font-size:13px;color:var(--accent);font-weight:600;border-top:1px solid var(--border)"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        + Crear insumo "${q}"
+      </div>` : ''}`;
     lista.style.display = 'block';
     return;
   }
@@ -16644,10 +16651,28 @@ function _areaTrFiltrar(q) {
       style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <strong>${r.ins.nombre}</strong>
-      <span style="color:var(--ink3);margin-left:8px">${r.qty} disp.${pres ? ' · ' + pres : ''}</span>
+      <span style="color:var(--ink3);margin-left:8px">${r.qty > 0 ? r.qty + ' disp.' : 'sin stock'}${pres ? ' · ' + pres : ''}</span>
     </div>`;
   }).join('');
   lista.style.display = 'block';
+}
+
+function _areaTrCrearRapido(nombre) {
+  const nuevo = {
+    id: crypto.randomUUID(),
+    nombre: nombre.trim(),
+    categoria: typeof categorizarInsumo === 'function' ? categorizarInsumo(nombre) : '',
+    unidad: '', precioConIVA: null, precioSinIVA: null,
+    presQty: null, presUnit: null, presUnitWeight: null, presUnitWeightUnit: null,
+    precioPresOverride: null, observaciones: '', aliases: []
+  };
+  insumos.push(nuevo);
+  persist();
+  _areaTrInsumosList.push({ insId: nuevo.id, qty: 0, ins: nuevo });
+  document.getElementById('areaTrBuscar').value = nuevo.nombre;
+  document.getElementById('areaTrResultados').style.display = 'none';
+  _areaTrSeleccionar(nuevo.id);
+  toast(`"${nuevo.nombre}" creado`, 'success');
 }
 
 function _areaTrSeleccionar(insId) {
