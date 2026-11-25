@@ -15636,7 +15636,7 @@ function _depAbrirIngreso(pedidoId, modo) {
       ? `<select data-dep-ingreso-unit="${idx}" onchange="_depIngresoOnChange(${idx})"
            style="padding:5px 4px;border:1px solid var(--border);border-radius:6px;font:12px var(--font);background:var(--surface)">
            <option value="pres">${pUnit}</option>
-           <option value="kg" data-divisor="${divisorKg}">${ins.presUnitWeightUnit}</option>
+           <option value="kg" data-divisor="${divisorKg}" selected>${ins.presUnitWeightUnit}</option>
          </select>`
       : '';
     return `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
@@ -16678,6 +16678,8 @@ function _areaTrSeleccionar(insId) {
       opts += `<option value="__weight__" data-divisor="${divisorKg}">por ${r.ins.presUnitWeightUnit} (÷ ${divisorKg})</option>`;
     }
     uSel.innerHTML = opts;
+    // Defaultear a "por kg" si el insumo tiene peso por unidad
+    if (r.ins.presUnitWeight) uSel.value = '__weight__';
     uWrap.style.display = 'block';
   } else {
     uSel.innerHTML = '<option value="pres">presentaciones</option>';
