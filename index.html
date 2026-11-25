@@ -15627,17 +15627,47 @@ function _depAbrirIngreso(pedidoId, modo) {
   };
   const screen = document.getElementById('depIngresoScreen');
   screen.innerHTML = _depIngresoCtx.items.map((it, idx) => {
-    const ins = insumos.find(i => i.id === it.insumoId);
-    const pres = _depPresentacionLabel(ins);
-    return `<div style="display:grid;grid-template-columns:1fr 110px;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border);align-items:center">
-      <div>
-        <div style="font-weight:600;font-size:13px">${it.nombre}</div>
-        <div style="font-size:11px;color:var(--ink3)">${pres}</div>
+    const ins   = insumos.find(i => i.id === it.insumoId);
+    const pres  = _depPresentacionLabel(ins);
+    const pUnit = ins?.presUnit || 'u';
+    const hasWeight = ins?.presUnitWeight && ins?.presUnitWeightUnit;
+    const divisorKg = hasWeight ? (ins.presQty || 1) * ins.presUnitWeight : null;
+    const unitSel = hasWeight
+      ? `<select data-dep-ingreso-unit="${idx}" onchange="_depIngresoOnChange(${idx})"
+           style="padding:5px 4px;border:1px solid var(--border);border-radius:6px;font:12px var(--font);background:var(--surface)">
+           <option value="pres">${pUnit}</option>
+           <option value="kg" data-divisor="${divisorKg}">${ins.presUnitWeightUnit}</option>
+         </select>`
+      : '';
+    return `<div style="padding:8px 4px;border-bottom:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center">
+        <div>
+          <div style="font-weight:600;font-size:13px">${it.nombre}</div>
+          <div style="font-size:11px;color:var(--ink3)">${pres}</div>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="number" min="0" step="any" value="${it.cantidad}"
+            data-dep-ingreso-idx="${idx}" oninput="_depIngresoOnChange(${idx})"
+            style="width:72px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:13px;text-align:right">
+          ${unitSel}
+        </div>
       </div>
-      <input type="number" min="0" step="1" value="${it.cantidad}" data-dep-ingreso-idx="${idx}" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:13px;text-align:right">
+      <div data-dep-ingreso-conv="${idx}" style="font-size:11px;color:var(--ink3);text-align:right;min-height:14px;margin-top:2px"></div>
     </div>`;
   }).join('');
   openModal('modalDepIngreso');
+}
+
+function _depIngresoOnChange(idx) {
+  const inp  = document.querySelector(`input[data-dep-ingreso-idx="${idx}"]`);
+  const sel  = document.querySelector(`select[data-dep-ingreso-unit="${idx}"]`);
+  const conv = document.querySelector(`[data-dep-ingreso-conv="${idx}"]`);
+  if (!inp || !conv) return;
+  const cant = parseFloat(inp.value);
+  const unit = sel?.value || 'pres';
+  if (!isFinite(cant) || cant <= 0 || unit === 'pres') { conv.textContent = ''; return; }
+  const divisor = parseFloat(sel.selectedOptions[0]?.dataset.divisor) || 1;
+  conv.textContent = `= ${(cant / divisor).toFixed(4)} presentaciones`;
 }
 
 function _depConfirmarIngreso() {
@@ -15648,10 +15678,17 @@ function _depConfirmarIngreso() {
   let totalIngresado = 0;
 
   inputs.forEach(inp => {
-    const idx = Number(inp.dataset.depIngresoIdx);
-    const it = _depIngresoCtx.items[idx];
-    const cant = parseInt(inp.value, 10);
-    if (!it?.insumoId || !isFinite(cant) || cant <= 0) return;
+    const idx  = Number(inp.dataset.depIngresoIdx);
+    const it   = _depIngresoCtx.items[idx];
+    const sel  = document.querySelector(`select[data-dep-ingreso-unit="${idx}"]`);
+    const unit = sel?.value || 'pres';
+    const raw  = parseFloat(inp.value);
+    if (!it?.insumoId || !isFinite(raw) || raw <= 0) return;
+    let cant = raw;
+    if (unit === 'kg') {
+      const divisor = parseFloat(sel.selectedOptions[0]?.dataset.divisor) || 1;
+      cant = Number((raw / divisor).toFixed(6));
+    }
     deposito[it.insumoId] = (deposito[it.insumoId] || 0) + cant;
     depositoMovs.push({
       id: crypto.randomUUID(),
