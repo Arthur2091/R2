@@ -2270,6 +2270,7 @@ body.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert
 
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal('modalInsumo')">Cancelar</button>
+      <button id="btnAgregarAArea" class="btn btn-outline" style="display:none" onclick="saveInsumo(true)">Guardar y agregar a área</button>
       <button class="btn btn-primary" onclick="saveInsumo()">Guardar</button>
     </div>
   </div>
@@ -3253,6 +3254,7 @@ function openAddModal() {
   document.getElementById('fPresUnitWeightWrap').style.display = 'none';
   document.getElementById('fBuscadorBoleta').value = '';
   document.getElementById('fBoletaResultados').innerHTML = '';
+  document.getElementById('btnAgregarAArea').style.display = 'none';
   _poblarSelectProveedor(null);
   openModal('modalInsumo');
 }
@@ -3275,12 +3277,13 @@ function openEditModal(id) {
   document.getElementById('fEditId').value    = id;
   document.getElementById('fBuscadorBoleta').value = '';
   document.getElementById('fBoletaResultados').innerHTML = '';
+  document.getElementById('btnAgregarAArea').style.display = 'inline-flex';
   _poblarSelectProveedor(id);
   _updatePresEquiv();
   openModal('modalInsumo');
 }
 
-function saveInsumo() {
+function saveInsumo(abrirArea = false) {
   const nombre = document.getElementById('fNombre').value.trim();
   if (!nombre) { toast('El nombre es obligatorio', 'error'); return; }
 
@@ -3332,8 +3335,13 @@ function saveInsumo() {
   persist();
   closeModal('modalInsumo');
   toast('Insumo guardado', 'success');
-  if (_currentVerRecetaId) _reRenderReceta(_currentVerRecetaId);
-  else renderInsumos();
+  if (abrirArea && typeof _areaAbrirTransfInsumoById === 'function') {
+    _areaAbrirTransfInsumoById(insumoId);
+  } else if (_currentVerRecetaId) {
+    _reRenderReceta(_currentVerRecetaId);
+  } else {
+    renderInsumos();
+  }
 }
 
 function deleteInsumo(id) {
@@ -16655,6 +16663,25 @@ function _areaTrFiltrar(q) {
     </div>`;
   }).join('');
   lista.style.display = 'block';
+}
+
+function _areaAbrirTransfInsumoById(insId) {
+  // Elige la primera locación disponible o pide elegir una
+  const locs = areaLocaciones;
+  if (!locs.length) { toast('Primero creá una ubicación (heladera, estante…)', 'error'); return; }
+
+  // Usar la primera locación como destino por defecto y abrir el modal de transferencia
+  const locId = locs[0].id;
+  _areaAbrirTransfInsumo(locId);
+
+  // Pre-seleccionar el insumo una vez que el modal esté abierto
+  setTimeout(() => {
+    const ins = insumos.find(i => i.id === insId);
+    if (!ins) return;
+    document.getElementById('areaTrBuscar').value = ins.nombre;
+    _areaTrFiltrar(ins.nombre);
+    setTimeout(() => _areaTrSeleccionar(insId), 50);
+  }, 100);
 }
 
 function _areaTrCrearRapido(nombre) {
