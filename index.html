@@ -16631,10 +16631,16 @@ function _areaTrSeleccionar(insId) {
 
   const uWrap = document.getElementById('areaTrUnidadWrap');
   const uSel  = document.getElementById('areaTrUnidad');
-  if (r.ins.presQty) {
-    const pUnit = r.ins.presUnit || 'u';
-    uSel.innerHTML = `<option value="pres">completo (1 = ${r.ins.presQty} ${pUnit})</option>
-                      <option value="__unit__">por ${pUnit} (÷ ${r.ins.presQty})</option>`;
+  if (r.ins.presQty || r.ins.presUnitWeight) {
+    const pUnit  = r.ins.presUnit || 'u';
+    const pQty   = r.ins.presQty  || 1;
+    let opts = `<option value="pres">completo (1 = ${pQty} ${pUnit})</option>
+                <option value="__unit__">por ${pUnit} (÷ ${pQty})</option>`;
+    if (r.ins.presUnitWeight && r.ins.presUnitWeightUnit) {
+      const divisorKg = pQty * r.ins.presUnitWeight;
+      opts += `<option value="__weight__" data-divisor="${divisorKg}">por ${r.ins.presUnitWeightUnit} (÷ ${divisorKg})</option>`;
+    }
+    uSel.innerHTML = opts;
     uWrap.style.display = 'block';
   } else {
     uSel.innerHTML = '<option value="pres">presentaciones</option>';
@@ -16648,13 +16654,20 @@ function _areaTrOnUnidadChange() {
   const insId = document.getElementById('areaTrInsumoId').value;
   const r = _areaTrInsumosList.find(x => x.insId === insId);
   if (!r) return;
-  const unidad = document.getElementById('areaTrUnidad').value;
+  const sel    = document.getElementById('areaTrUnidad');
+  const unidad = sel.value;
   const cant   = parseFloat(document.getElementById('areaTrCantidad').value);
-  if (unidad === 'pres' || !isFinite(cant) || !r.ins.presQty) {
+  if (unidad === 'pres' || !isFinite(cant)) {
     document.getElementById('areaTrConversion').textContent = '';
     return;
   }
-  const pres = cant / r.ins.presQty;
+  let divisor;
+  if (unidad === '__weight__') {
+    divisor = parseFloat(sel.selectedOptions[0]?.dataset.divisor) || 1;
+  } else {
+    divisor = r.ins.presQty || 1;
+  }
+  const pres = cant / divisor;
   document.getElementById('areaTrConversion').textContent = `= ${pres.toFixed(4)} presentaciones`;
 }
 
@@ -16667,8 +16680,12 @@ function _areaConfirmarTransfInsumo() {
   if (!isFinite(cantRaw) || cantRaw <= 0) { toast('Cantidad inválida', 'error'); return; }
 
   const ins = insumos.find(i => i.id === insId);
+  const sel = document.getElementById('areaTrUnidad');
   let cantPres = cantRaw;
-  if (unidad !== 'pres' && ins?.presQty) {
+  if (unidad === '__weight__') {
+    const divisor = parseFloat(sel?.selectedOptions[0]?.dataset.divisor) || 1;
+    cantPres = Number((cantRaw / divisor).toFixed(6));
+  } else if (unidad !== 'pres' && ins?.presQty) {
     cantPres = Number((cantRaw / ins.presQty).toFixed(6));
   }
 
