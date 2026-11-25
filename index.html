@@ -16554,6 +16554,7 @@ function _areaAbrirLoc(locId) {
         <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
         ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
       </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove();openEditModal('${insId}')" title="Editar insumo">✏️</button>
       <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
       <button class="btn btn-outline btn-sm" style="color:var(--danger);opacity:.7" onclick="_areaBajaInsumo('${locId}','${insId}','${ins?.nombre || insId}')">Baja</button>
     </div>`;
