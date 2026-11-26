@@ -16445,25 +16445,16 @@ function _locIcon(tipo, size = 32, color = 'currentColor') {
 let _areaCtx = null;
 
 function _areaLocStock(locId) {
-  if (!areaStock[locId]) areaStock[locId] = { insumos: {}, productos: {}, lotes: [] };
+  if (!areaStock[locId]) areaStock[locId] = { insumos: {}, productos: {} };
   if (!areaStock[locId].insumos)   areaStock[locId].insumos   = {};
   if (!areaStock[locId].productos) areaStock[locId].productos  = {};
-  if (!areaStock[locId].lotes)     areaStock[locId].lotes      = [];
-  // Migration: convert flat insumos to lotes on first access
-  const flat = areaStock[locId].insumos;
-  if (Object.keys(flat).some(k => (flat[k] || 0) > 0) && !areaStock[locId].lotes.length) {
-    Object.entries(flat).filter(([,q]) => q > 0).forEach(([insId, qty]) => {
-      areaStock[locId].lotes.push({ id: crypto.randomUUID(), insId, qty, label: 'cerrado', abierto: false });
-    });
-    areaStock[locId].insumos = {};
-  }
   return areaStock[locId];
 }
 
 function _areaTotalItems(locId) {
   const s = _areaLocStock(locId);
-  const nIns = new Set(s.lotes.filter(l => l.qty > 0).map(l => l.insId)).size;
-  return nIns + Object.values(s.productos).filter(q => q > 0).length;
+  return Object.values(s.insumos).filter(q => q > 0).length
+       + Object.values(s.productos).filter(q => q > 0).length;
 }
 
 /* ── RENDER ÁREA ─────────────────────────────────────────────────── */
@@ -16488,7 +16479,7 @@ function _areaRender(screen, area) {
   const cards = locs.map(loc => {
     const total    = _areaTotalItems(loc.id);
     const s        = _areaLocStock(loc.id);
-    const nIns     = new Set(s.lotes.filter(l => l.qty > 0).map(l => l.insId)).size;
+    const nIns     = Object.values(s.insumos).filter(q => q > 0).length;
     const nProd    = Object.values(s.productos).filter(q => q > 0).length;
     const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
     return `<button onclick="_areaAbrirLoc('${loc.id}')"
@@ -16550,36 +16541,23 @@ function _areaAbrirLoc(locId) {
   const tipoInfo = _LOC_TIPOS[loc.tipo] || _LOC_TIPOS.otro;
   const s        = _areaLocStock(locId);
 
-  const lotesPorIns = {};
-  (s.lotes || []).filter(l => l.qty > 0).forEach(l => {
-    if (!lotesPorIns[l.insId]) lotesPorIns[l.insId] = [];
-    lotesPorIns[l.insId].push(l);
-  });
-
-  const rowsIns = Object.entries(lotesPorIns).map(([insId, lotes]) => {
+  const rowsIns = Object.entries(s.insumos).filter(([,q]) => q > 0).map(([insId, qty]) => {
     const ins  = insumos.find(i => i.id === insId);
     const pres = _depPresentacionLabel(ins);
-    return lotes.map(lote => {
-      const qtyD = Number.isInteger(lote.qty) ? lote.qty : lote.qty.toFixed(3);
-      const badgeBg  = lote.abierto ? '#D1FAE5' : '#E5E7EB';
-      const badgeInk = lote.abierto ? '#065F46' : '#6B7280';
-      const badgeTxt = lote.abierto ? '🔓 abierto' : '🔒 cerrado';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border)">
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
-          ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
-        </div>
-        <span style="background:${badgeBg};color:${badgeInk};font-size:10px;padding:2px 7px;border-radius:999px;white-space:nowrap">${badgeTxt}</span>
-        <div style="text-align:right">
-          <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
-          ${_depKgLabel(ins, lote.qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, lote.qty)}</div>` : ''}
-        </div>
-        ${!lote.abierto ? `<button class="btn btn-outline btn-sm" style="color:var(--accent);font-size:11px" onclick="_areaAbrirLote('${locId}','${lote.id}')">Abrir</button>` : ''}
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove();openEditModal('${insId}')" title="Editar insumo">✏️</button>
-        <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarLote('${locId}','${lote.id}')">Sacar</button>
-        <button class="btn btn-outline btn-sm" style="color:var(--danger);opacity:.7" onclick="_areaBajaLote('${locId}','${lote.id}','${(ins?.nombre || insId).replace(/'/g,"\\'")}')">Baja</button>
-      </div>`;
-    }).join('');
+    const qtyD = Number.isInteger(qty) ? qty : qty.toFixed(2);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${ins?.nombre || insId.slice(0,8)}</div>
+        ${pres ? `<div style="font-size:11px;color:var(--ink3)">${pres}</div>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${cfg.ink};font-family:var(--mono)">${qtyD}</div>
+        ${_depKgLabel(ins, qty) ? `<div style="font-size:11px;color:var(--ink2);font-family:var(--mono)">${_depKgLabel(ins, qty)}</div>` : ''}
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('modalAreaLoc').remove();openEditModal('${insId}')" title="Editar insumo">✏️</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="_areaSacarInsumo('${locId}','${insId}')">Sacar</button>
+      <button class="btn btn-outline btn-sm" style="color:var(--danger);opacity:.7" onclick="_areaBajaInsumo('${locId}','${insId}','${ins?.nombre || insId}')">Baja</button>
+    </div>`;
   }).join('');
 
   const rowsProd = Object.entries(s.productos).filter(([,q]) => q > 0).map(([nombre, qty]) => {
@@ -16852,7 +16830,7 @@ function _areaConfirmarTransfInsumo() {
   }
 
   const s = _areaLocStock(_areaCtx.locId);
-  s.lotes.push({ id: crypto.randomUUID(), insId, qty: cantPres, label: 'cerrado', abierto: false });
+  s.insumos[insId] = Number(((s.insumos[insId] || 0) + cantPres).toFixed(6));
 
   const label = unidad === 'pres' ? `${cantPres} pres.` : `${cantRaw}${unidad}`;
   areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_in', locacionId: _areaCtx.locId,
@@ -16946,74 +16924,6 @@ function _areaConfirmarTransfProducto() {
   _areaCtx = null;
   toast(`${cant} ${opt.nombre} → ${loc?.nombre}`, 'success');
   _areaAbrirLoc(locId);
-}
-
-/* ── LOTES ───────────────────────────────────────────────────────── */
-
-function _areaAbrirLote(locId, loteId) {
-  const s = _areaLocStock(locId);
-  const lote = s.lotes.find(l => l.id === loteId);
-  if (!lote) return;
-  lote.abierto = true;
-  lote.label   = 'abierto';
-  persist();
-  document.getElementById('modalAreaLoc')?.remove();
-  _areaAbrirLoc(locId);
-  toast('Lote marcado como abierto', 'success');
-}
-
-function _areaBajaLote(locId, loteId, nombre) {
-  if (!confirm(`¿Dar de baja este lote de "${nombre}"? La cantidad se pierde.`)) return;
-  const s = _areaLocStock(locId);
-  s.lotes = s.lotes.filter(l => l.id !== loteId);
-  persist();
-  document.getElementById('modalAreaLoc')?.remove();
-  _areaAbrirLoc(locId);
-  toast('Lote dado de baja', 'success');
-}
-
-function _areaSacarLote(locId, loteId) {
-  document.getElementById('modalAreaLoc')?.remove();
-  const loc  = areaLocaciones.find(l => l.id === locId);
-  const s    = _areaLocStock(locId);
-  const lote = s.lotes.find(l => l.id === loteId);
-  if (!lote) return;
-  const ins  = insumos.find(i => i.id === lote.insId);
-  _areaCtx   = { locId, insId: lote.insId, loteId, tipo: 'insumo' };
-  const pres = _depPresentacionLabel(ins);
-  document.getElementById('areaSacarTitulo').textContent = `Sacar: ${ins?.nombre || '?'}`;
-  const kgLbl = _depKgLabel(ins, lote.qty);
-  document.getElementById('areaSacarSub').textContent =
-    `Lote (${lote.abierto ? 'abierto' : 'cerrado'}): ${lote.qty}${pres ? ' ' + pres : ''}${kgLbl ? ' (' + kgLbl + ')' : ''}`;
-  document.getElementById('areaSacarCantidad').value         = '';
-  document.getElementById('areaSacarMotivo').value           = '';
-  document.getElementById('areaSacarConversion').textContent = '';
-  _areaSacarRellenarRecetas();
-  document.getElementById('areaSacarReceta').value = '';
-
-  const dWrap = document.getElementById('areaSacarDestinoWrap');
-  const dSel  = document.getElementById('areaSacarDestino');
-  dSel.innerHTML = _areaSacarDestinoOpts(locId);
-  dSel.value = '';
-  dWrap.style.display = 'block';
-  document.getElementById('areaSacarBtn').textContent = 'Enviar';
-
-  const uWrap = document.getElementById('areaSacarUnidadWrap');
-  const uSel  = document.getElementById('areaSacarUnidad');
-  if (ins?.presQty) {
-    const pUnit    = ins.presUnit || 'u';
-    const subUnits = { kg: { unit: 'g', factor: 1000 }, l: { unit: 'ml', factor: 1000 },
-                       L:  { unit: 'ml', factor: 1000 }, KG: { unit: 'g', factor: 1000 } };
-    const sub = subUnits[pUnit];
-    uSel.innerHTML = `<option value="pres">completo (1 = ${ins.presQty} ${pUnit})</option>
-                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`
-      + (sub ? `<option value="__sub__" data-factor="${sub.factor}">por ${sub.unit} (÷ ${ins.presQty * sub.factor})</option>` : '');
-    uWrap.style.display = 'block';
-  } else {
-    uSel.innerHTML = '<option value="pres">pres.</option>';
-    uWrap.style.display = 'none';
-  }
-  openModal('modalAreaSacar');
 }
 
 /* ── SACAR ───────────────────────────────────────────────────────── */
@@ -17156,10 +17066,7 @@ function _areaConfirmarSacar() {
 
   if (tipo === 'insumo') {
     const insId     = _areaCtx.insId;
-    const loteId    = _areaCtx.loteId;
     const ins       = insumos.find(i => i.id === insId);
-    const lote      = s.lotes.find(l => l.id === loteId);
-    if (!lote) { toast('Lote no encontrado', 'error'); return; }
     const { unidad, factor } = _areaSacarGetFactor();
     const destLocId = document.getElementById('areaSacarDestino')?.value || '';
     if (!destLocId) { toast('Elegí un destino', 'error'); return; }
@@ -17168,14 +17075,15 @@ function _areaConfirmarSacar() {
       const divisor = unidad === '__sub__' ? ins.presQty * factor : ins.presQty;
       cant = Number((cantRaw / divisor).toFixed(6));
     }
-    if (cant > lote.qty + 0.0001) { toast('Cantidad mayor al stock del lote', 'error'); return; }
-    lote.qty = Number((lote.qty - cant).toFixed(6));
-    if (lote.qty <= 0.0001) s.lotes = s.lotes.filter(l => l.id !== loteId);
+    const actual = s.insumos[insId] || 0;
+    if (cant > actual + 0.0001) { toast('Cantidad mayor al stock', 'error'); return; }
+    s.insumos[insId] = Number((actual - cant).toFixed(6));
+    if (s.insumos[insId] <= 0.0001) delete s.insumos[insId];
     const ts = new Date().toISOString();
     if (destLocId !== '__merma__') {
       const destLoc = areaLocaciones.find(l => l.id === destLocId);
       const destS   = _areaLocStock(destLocId);
-      destS.lotes.push({ id: crypto.randomUUID(), insId, qty: cant, label: lote.abierto ? 'abierto' : 'cerrado', abierto: lote.abierto });
+      destS.insumos[insId] = Number(((destS.insumos[insId] || 0) + cant).toFixed(6));
       const moveMotivo = motivo || `${loc?.nombre} → ${destLoc?.nombre}`;
       areaMovs.push({ id: crypto.randomUUID(), tipo: 'transferencia_out', locacionId: locId,
         area, insumoId: insId, cantidad: cant, cantidadOriginal: cantRaw, unidadOriginal: unidad,
@@ -17283,9 +17191,6 @@ function _areaEliminarLoc(locId) {
   if (!confirm(`¿Eliminar "${loc?.nombre}"?\nLos insumos que tenía vuelven al Depósito. Los productos se pierden.`)) return;
 
   const s = _areaLocStock(locId);
-  s.lotes.filter(l => l.qty > 0).forEach(l => {
-    deposito[l.insId] = Number(((deposito[l.insId] || 0) + l.qty).toFixed(6));
-  });
   Object.entries(s.insumos).forEach(([insId, qty]) => {
     if (qty > 0) deposito[insId] = Number(((deposito[insId] || 0) + qty).toFixed(3));
   });
