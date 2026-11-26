@@ -17007,19 +17007,8 @@ function _areaSacarLote(locId, loteId) {
 
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
-  if (ins?.presQty) {
-    const pUnit    = ins.presUnit || 'u';
-    const subUnits = { kg: { unit: 'g', factor: 1000 }, l: { unit: 'ml', factor: 1000 },
-                       L:  { unit: 'ml', factor: 1000 }, KG: { unit: 'g', factor: 1000 } };
-    const sub = subUnits[pUnit];
-    uSel.innerHTML = `<option value="pres">completo (1 = ${ins.presQty} ${pUnit})</option>
-                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`
-      + (sub ? `<option value="__sub__" data-factor="${sub.factor}">por ${sub.unit} (÷ ${ins.presQty * sub.factor})</option>` : '');
-    uWrap.style.display = 'block';
-  } else {
-    uSel.innerHTML = '<option value="pres">pres.</option>';
-    uWrap.style.display = 'none';
-  }
+  _areaSacarFillUnidades(uSel, ins);
+  uWrap.style.display = (ins?.presQty || ins?.presUnitWeight) ? 'block' : 'none';
   openModal('modalAreaSacar');
 }
 
@@ -17087,19 +17076,8 @@ function _areaSacarInsumo(locId, insId) {
 
   const uWrap = document.getElementById('areaSacarUnidadWrap');
   const uSel  = document.getElementById('areaSacarUnidad');
-  if (ins?.presQty) {
-    const pUnit    = ins.presUnit || 'u';
-    const subUnits = { kg: { unit: 'g',  factor: 1000 }, l: { unit: 'ml', factor: 1000 },
-                       L:  { unit: 'ml', factor: 1000 }, KG: { unit: 'g',  factor: 1000 } };
-    const sub      = subUnits[pUnit];
-    uSel.innerHTML = `<option value="pres">completo (1 = ${ins.presQty} ${pUnit})</option>
-                      <option value="__unit__">por ${pUnit} (÷ ${ins.presQty})</option>`
-      + (sub ? `<option value="__sub__" data-factor="${sub.factor}">por ${sub.unit} (÷ ${ins.presQty * sub.factor})</option>` : '');
-    uWrap.style.display = 'block';
-  } else {
-    uSel.innerHTML = '<option value="pres">pres.</option>';
-    uWrap.style.display = 'none';
-  }
+  _areaSacarFillUnidades(uSel, ins);
+  uWrap.style.display = (ins?.presQty || ins?.presUnitWeight) ? 'block' : 'none';
   openModal('modalAreaSacar');
 }
 
@@ -17128,6 +17106,27 @@ function _areaSacarProducto(locId, nombreEnc) {
   openModal('modalAreaSacar');
 }
 
+function _areaSacarFillUnidades(uSel, ins) {
+  if (!ins?.presQty && !ins?.presUnitWeight) {
+    uSel.innerHTML = '<option value="pres">pres.</option>';
+    return;
+  }
+  const pUnit    = ins.presUnit || 'u';
+  const pQty     = ins.presQty  || 1;
+  const subUnits = { kg: { unit: 'g', factor: 1000 }, l: { unit: 'ml', factor: 1000 },
+                     L:  { unit: 'ml', factor: 1000 }, KG: { unit: 'g', factor: 1000 } };
+  const sub = subUnits[pUnit];
+  let opts = `<option value="pres">completo (1 = ${pQty} ${pUnit})</option>
+              <option value="__unit__">por ${pUnit} (÷ ${pQty})</option>`;
+  if (sub) opts += `<option value="__sub__" data-factor="${sub.factor}">por ${sub.unit} (÷ ${pQty * sub.factor})</option>`;
+  if (ins.presUnitWeight && ins.presUnitWeightUnit) {
+    const div = pQty * ins.presUnitWeight;
+    opts += `<option value="__weight__" data-factor="${div}">por ${ins.presUnitWeightUnit} (÷ ${div})</option>`;
+  }
+  uSel.innerHTML = opts;
+  if (ins.presUnitWeight) uSel.value = '__weight__';
+}
+
 function _areaSacarGetFactor() {
   const sel    = document.getElementById('areaSacarUnidad');
   const unidad = sel?.value || 'pres';
@@ -17140,11 +17139,14 @@ function _areaSacarOnCantChange() {
   const ins  = insumos.find(i => i.id === _areaCtx?.insId);
   const cant = parseFloat(document.getElementById('areaSacarCantidad').value);
   const { unidad, factor } = _areaSacarGetFactor();
-  if (unidad === 'pres' || !isFinite(cant) || !ins?.presQty) {
+  if (unidad === 'pres' || !isFinite(cant)) {
     document.getElementById('areaSacarConversion').textContent = '';
     return;
   }
-  const divisor = unidad === '__sub__' ? ins.presQty * factor : ins.presQty;
+  const pQty = ins?.presQty || 1;
+  const divisor = unidad === '__sub__' ? pQty * factor
+                : unidad === '__weight__' ? factor
+                : pQty;
   const pres    = cant / divisor;
   document.getElementById('areaSacarConversion').textContent = `= ${pres.toFixed(6)} pres.`;
 }
@@ -17170,8 +17172,11 @@ function _areaConfirmarSacar() {
     const destLocId = document.getElementById('areaSacarDestino')?.value || '';
     if (!destLocId) { toast('Elegí un destino', 'error'); return; }
     let cant = cantRaw;
-    if (unidad !== 'pres' && ins?.presQty) {
-      const divisor = unidad === '__sub__' ? ins.presQty * factor : ins.presQty;
+    if (unidad !== 'pres') {
+      const pQty    = ins?.presQty || 1;
+      const divisor = unidad === '__sub__'    ? pQty * factor
+                    : unidad === '__weight__' ? factor
+                    : pQty;
       cant = Number((cantRaw / divisor).toFixed(6));
     }
     if (lote) {
